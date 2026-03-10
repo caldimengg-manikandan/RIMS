@@ -13,28 +13,17 @@ from app.encryption import EncryptedText
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-<<<<<<< HEAD
-        CheckConstraint("role IN ('hr', 'admin')", name='check_users_role'),
-=======
         CheckConstraint("role IN ('admin', 'hr_manager', 'recruiter', 'interviewer', 'candidate', 'hr')", name='check_users_role'),
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     )
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
-<<<<<<< HEAD
-    role = Column(String(20), nullable=False, index=True)  # 'hr' or 'admin'
-    is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
-    otp_code = Column(String(255), nullable=True)  # Now stores bcrypt hash
-=======
     role = Column(String(20), nullable=False, index=True)  # 'admin', 'hr_manager', 'recruiter', 'interviewer', 'candidate'
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     otp_code = Column(String(255), nullable=True)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     otp_expiry = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
@@ -43,10 +32,7 @@ class User(Base):
     jobs = relationship("Job", back_populates="hr")
     hiring_decisions = relationship("HiringDecision", back_populates="hr")
     notifications = relationship("Notification", back_populates="user")
-<<<<<<< HEAD
-=======
     stages_handled = relationship("ApplicationStage", back_populates="evaluator")
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
 
 class Job(Base):
@@ -56,35 +42,15 @@ class Job(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-<<<<<<< HEAD
-    job_id = Column(String(50), unique=True, index=True, nullable=True) # Unique ID for identification
-    interview_token = Column(String(50), unique=True, index=True, nullable=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    experience_level = Column(String(50), nullable=False)  # 'junior', 'mid', 'senior'
-=======
     job_id = Column(String(50), unique=True, index=True, nullable=True)
     interview_token = Column(String(50), unique=True, index=True, nullable=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     experience_level = Column(String(50), nullable=False)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     location = Column(String(255), default='Remote')
     mode_of_work = Column(String(50), default='Remote')
     job_type = Column(String(50), default='Full-Time')
     domain = Column(String(100), default='Engineering')
-<<<<<<< HEAD
-    status = Column(String(50), default='open', index=True)  # 'open', 'closed', 'on_hold'
-    primary_evaluated_skills = Column(Text)  # JSON array of the top 5 core skills
-    aptitude_enabled = Column(Boolean, default=False)
-    aptitude_mode = Column(String(50), default='ai') # 'ai' or 'upload'
-    first_level_enabled = Column(Boolean, default=False)
-    interview_mode = Column(String(50), nullable=True)  # 'ai', 'mixed', 'upload'
-    behavioral_role = Column(String(50), default='general') # 'junior', 'mid', 'lead', 'general'
-    uploaded_question_file = Column(String(500), nullable=True)
-    aptitude_config = Column(Text, nullable=True)
-    aptitude_questions_file = Column(String(500), nullable=True)  # Path to uploaded MCQ JSON
-=======
     status = Column(String(50), default='open', index=True)
     primary_evaluated_skills = Column(Text)
     aptitude_enabled = Column(Boolean, default=False)
@@ -95,16 +61,11 @@ class Job(Base):
     uploaded_question_file = Column(String(500), nullable=True)
     aptitude_config = Column(Text, nullable=True)
     aptitude_questions_file = Column(String(500), nullable=True)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
     closed_at = Column(DateTime, nullable=True)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     # Relationships
     hr = relationship("User", back_populates="jobs")
     applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
@@ -114,13 +75,8 @@ class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (
         CheckConstraint(
-<<<<<<< HEAD
-            "status IN ('submitted', 'review_later', 'rejected', 'approved_for_interview', "
-            "'interview_completed', 'hired', 'rejected_post_interview')",
-=======
             "status IN ('submitted', 'resume_screening', 'aptitude_round', 'ai_interview', "
             "'technical_interview', 'hr_interview', 'final_decision', 'hired', 'rejected')",
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
             name='check_applications_status'
         ),
         UniqueConstraint('job_id', 'candidate_email', name='uq_application_job_email'),
@@ -137,12 +93,6 @@ class Application(Base):
     candidate_photo_path = Column(String(500), nullable=True)
     status = Column(String(50), default='submitted', index=True)
     hr_notes = Column(EncryptedText)
-<<<<<<< HEAD
-    applied_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
-
-
-=======
     
     # Composite Scores (Point 2)
     resume_score = Column(Float, default=0)
@@ -156,14 +106,11 @@ class Application(Base):
     applied_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
 
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     # Relationships
     job = relationship("Job", back_populates="applications")
     resume_extraction = relationship("ResumeExtraction", back_populates="application", uselist=False, cascade="all, delete-orphan")
     interview = relationship("Interview", back_populates="application", uselist=False, cascade="all, delete-orphan")
     hiring_decision = relationship("HiringDecision", back_populates="application", uselist=False, cascade="all, delete-orphan")
-<<<<<<< HEAD
-=======
     pipeline_stages = relationship("ApplicationStage", back_populates="application", cascade="all, delete-orphan")
 
 
@@ -184,7 +131,6 @@ class ApplicationStage(Base):
     # Relationships
     application = relationship("Application", back_populates="pipeline_stages")
     evaluator = relationship("User", back_populates="stages_handled")
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
 
 class ResumeExtraction(Base):
@@ -396,8 +342,6 @@ class InterviewFeedback(Base):
 
     # Relationships
     interview = relationship("Interview")
-<<<<<<< HEAD
-=======
 
 
 class AuditLog(Base):
@@ -414,4 +358,3 @@ class AuditLog(Base):
 
     # Relationships
     user = relationship("User")
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e

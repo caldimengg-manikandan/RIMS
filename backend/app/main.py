@@ -9,12 +9,8 @@ from app.routes import auth, jobs, applications, interviews, decisions, notifica
 from app.models import (
     User, Job, Application, ResumeExtraction, 
     Interview, InterviewQuestion, InterviewAnswer,
-<<<<<<< HEAD
-    InterviewReport, HiringDecision, Notification
-=======
     InterviewReport, HiringDecision, Notification,
     ApplicationStage, AuditLog
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 )
 
 from app.logging_config import setup_logging

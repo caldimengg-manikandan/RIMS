@@ -14,10 +14,7 @@ import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { useRouter } from 'next/navigation'
 import { Checkbox } from "@/components/ui/checkbox"
-<<<<<<< HEAD
-=======
 import { API_BASE_URL } from "@/lib/config"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
 type Application = {
     id: number
@@ -25,10 +22,7 @@ type Application = {
     candidate: {
         full_name: string
         email: string
-<<<<<<< HEAD
-=======
         photo_path?: string
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     }
     status: string
     skill_match_percentage?: number
@@ -58,12 +52,8 @@ export function PipelineBoard() {
         job_title: app.job?.title || "Unknown",
         candidate: {
             full_name: app.candidate_name || "Unknown",
-<<<<<<< HEAD
-            email: app.candidate_email || ""
-=======
             email: app.candidate_email || "",
             photo_path: app.candidate_photo_path
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         },
         status: app.status,
         skill_match_percentage: app.resume_extraction?.skill_match_percentage,
@@ -226,11 +216,6 @@ export function PipelineBoard() {
                                     <CardHeader className="p-3 pb-1.5 flex flex-row items-center space-y-0 relative pr-10">
                                         <div className="flex items-start space-x-2.5 flex-1 min-w-0">
                                             <Avatar className="h-8 w-8 border-2 border-background shadow-sm shrink-0">
-<<<<<<< HEAD
-                                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                                                    {app.candidate.full_name?.charAt(0)}
-                                                </AvatarFallback>
-=======
                                                 {app.candidate.photo_path ? (
                                                     <AvatarImage 
                                                         src={`${API_BASE_URL}/${app.candidate.photo_path.replace(/\\/g, '/')}`}
@@ -242,7 +227,6 @@ export function PipelineBoard() {
                                                         {app.candidate.full_name?.charAt(0)}
                                                     </AvatarFallback>
                                                 )}
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                             </Avatar>
                                             <div className="overflow-hidden min-w-0 pt-0.5">
                                                 <CardTitle className="text-[13px] font-bold text-foreground truncate leading-tight">{app.candidate.full_name}</CardTitle>

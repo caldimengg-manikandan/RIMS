@@ -25,8 +25,6 @@ PHOTO_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(prefix="/api/applications", tags=["applications"])
 
-<<<<<<< HEAD
-=======
 @router.get("/ranking/{job_id}")
 def get_candidate_ranking(
     job_id: int,
@@ -51,7 +49,6 @@ def get_candidate_ranking(
     return result
 
 
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 @router.post("/apply", response_model=ApplicationResponse)
 async def apply_for_job(
     job_id: int = Form(...),
@@ -120,15 +117,6 @@ async def apply_for_job(
     file_extension = resume_file.filename.split(".")[-1]
     safe_email = candidate_email.replace('@', '_').replace('.', '_')
     filename = f"{safe_email}_{job_id}_{datetime.now(timezone.utc).timestamp()}.{file_extension}"
-<<<<<<< HEAD
-    file_path = os.path.join(UPLOAD_DIR, filename).replace("\\", "/")
-    
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    # Save photo file if provided
-    photo_path = None
-=======
     
     # Absolute path for saving the file
     abs_file_path = os.path.join(UPLOAD_DIR, filename).replace("\\", "/")
@@ -140,7 +128,6 @@ async def apply_for_job(
     
     # Save photo file if provided
     rel_photo_path = None
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     if photo_file:
         photo_content = await photo_file.read()
         if len(photo_content) > MAX_FILE_SIZE:
@@ -151,10 +138,6 @@ async def apply_for_job(
         
         photo_ext = photo_file.filename.split(".")[-1]
         photo_filename = f"photo_{safe_email}_{job_id}_{datetime.now(timezone.utc).timestamp()}.{photo_ext}"
-<<<<<<< HEAD
-        photo_path = os.path.join(PHOTO_DIR, photo_filename).replace("\\", "/")
-        with open(photo_path, "wb") as f:
-=======
         
         # Absolute path for saving
         abs_photo_path = os.path.join(PHOTO_DIR, photo_filename).replace("\\", "/")
@@ -162,7 +145,6 @@ async def apply_for_job(
         rel_photo_path = f"uploads/photos/{photo_filename}"
         
         with open(abs_photo_path, "wb") as f:
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
             f.write(photo_content)
     
     # Create application
@@ -171,15 +153,9 @@ async def apply_for_job(
         candidate_name=candidate_name,
         candidate_email=candidate_email,
         candidate_phone=candidate_phone,
-<<<<<<< HEAD
-        resume_file_path=file_path,
-        resume_file_name=resume_file.filename,
-        candidate_photo_path=photo_path,
-=======
         resume_file_path=rel_file_path,
         resume_file_name=resume_file.filename,
         candidate_photo_path=rel_photo_path,
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         status="submitted"
     )
     
@@ -191,63 +167,6 @@ async def apply_for_job(
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save new application securely")
     
-<<<<<<< HEAD
-    # Parse resume with AI (async in background would be better)
-    try:
-        # Read resume file
-        # Parse resume text based on file type
-        try:
-            resume_text = ""
-            file_ext = file_path.lower().split('.')[-1]
-            
-            if file_ext == 'pdf':
-                try:
-                    from pypdf import PdfReader
-                    reader = PdfReader(file_path)
-                    for page in reader.pages:
-                        resume_text += page.extract_text() + "\n"
-                except Exception as e:
-                    print(f"PDF Error: {e}")
-                    # Fallback to binary decode if PDF read fails (unlikely to work but last resort)
-                    with open(file_path, "rb") as f:
-                        resume_text = f.read().decode('utf-8', errors='ignore')
-                        
-            elif file_ext in ['docx', 'doc']:
-                try:
-                    import docx
-                    doc = docx.Document(file_path)
-                    for para in doc.paragraphs:
-                        resume_text += para.text + "\n"
-                except Exception as e:
-                    print(f"DOCX Error: {e}")
-                    with open(file_path, "rb") as f:
-                        resume_text = f.read().decode('utf-8', errors='ignore')
-                        
-            else:
-                # Text file
-                with open(file_path, "rb") as f:
-                    resume_text = f.read().decode('utf-8', errors='ignore')
-                    
-            if not resume_text.strip():
-                resume_text = "No readable text found in resume."
-                
-        except Exception as e:
-            print(f"Text Extraction Error: {e}")
-            resume_text = "Error extracting text."
-        
-        # Parse with AI
-        extraction_data = await parse_resume_with_ai(
-            resume_text,
-            job.id,
-            job.description
-        )
-        
-        # Store extraction
-        resume_extraction = ResumeExtraction(
-            application_id=new_application.id,
-            extracted_text=resume_text,  # Store FULL extracted text
-            summary=extraction_data.get("summary", ""), # Store AI summary
-=======
     # Move all heavy processing to background task to prevent timeouts (Point 10 - Robustness)
     background_tasks.add_task(
         process_application_background, 
@@ -314,7 +233,6 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             application_id=application_id,
             extracted_text=resume_text,
             summary=extraction_data.get("summary", ""),
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
             extracted_skills=json.dumps(extraction_data.get("skills") or []),
             years_of_experience=extraction_data.get("experience"),
             education=json.dumps(extraction_data.get("education") or []),
@@ -325,124 +243,6 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         )
         db.add(resume_extraction)
         
-<<<<<<< HEAD
-        # --- Validation Logic ---
-        rejection_reasons = []
-        
-        # 0. Check if it's a resume
-        if extraction_data.get("is_resume") is False:
-             rejection_reasons.append("uploaded document is not a resume")
-        
-        # 1. Check for parsing failure
-        # Heuristic: If skills are empty or extracted text indicates failure
-        if not extraction_data.get("skills") and extraction_data.get("experience") == 0:
-             rejection_reasons.append("resume parsing failed")
-             
-        # 2. Check for experience level mismatch
-        # Normalize levels for comparison
-        job_level = job.experience_level.lower().strip() if job.experience_level else ""
-        candidate_level = str(extraction_data.get("experience_level", "")).lower().strip()
-        
-        # Define hierarchy
-        levels = {
-            "intern": 0,
-            "junior": 1,
-            "mid": 2, "mid-level": 2,
-            "senior": 3,
-            "lead": 4, "manager": 4, "lead / manager": 4
-        }
-        
-        job_level_rank = levels.get(job_level, -1)
-        candidate_level_rank = levels.get(candidate_level, -1)
-        
-        # If both levels are recognized, check if candidate is lower than required
-        if job_level_rank != -1 and candidate_level_rank != -1:
-            if candidate_level_rank < job_level_rank:
-                 rejection_reasons.append("experience level mismatch")
-        
-        # If rejected, update status
-        raw_access_key = None
-        if rejection_reasons:
-            new_application.status = "rejected"
-            new_application.hr_notes = f"Auto-rejected based on: {', '.join(rejection_reasons)}"
-        else:
-            new_application.status = "approved_for_interview"
-            new_application.hr_notes = "Auto-approved for interview."
-            
-            import uuid
-            raw_access_key = secrets.token_urlsafe(16)
-            hashed_key = pwd_context.hash(raw_access_key)
-            expiration = datetime.now(timezone.utc) + timedelta(hours=24)
-            unique_test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
-            
-            new_interview = Interview(
-                test_id=unique_test_id,
-                application_id=new_application.id,
-                status='not_started',
-                access_key_hash=hashed_key,
-                expires_at=expiration,
-                is_used=False
-            )
-            db.add(new_interview)
-            
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            print(f"Error committing auto-rejection or approval: {e}")
-
-        # Send notification to HR
-        from app.models import Notification
-        try:
-            notification_type = "new_application"
-            message = f"{candidate_name} has applied for the {job.title} position."
-            
-            if new_application.status == "rejected":
-                message += f" (Auto-rejected: {', '.join(rejection_reasons)})"
-                background_tasks.add_task(send_rejected_email, candidate_email, job.title, True)
-            else:
-                message += " (Auto-approved for interview)"
-                # Generate Interview Access Key
-                raw_access_key = secrets.token_urlsafe(16)
-                hashed_key = pwd_context.hash(raw_access_key)
-                expiration = datetime.now(timezone.utc)() + timedelta(hours=24)
-                
-                new_interview = Interview(
-                    application_id=new_application.id,
-                    status='not_started',
-                    access_key_hash=hashed_key,
-                    expires_at=expiration,
-                    is_used=False
-                )
-                db.add(new_interview)
-                db.commit()
-                
-                background_tasks.add_task(send_application_received_email, candidate_email, job.title)
-                background_tasks.add_task(send_approved_for_interview_email, candidate_email, job.title, raw_access_key)
-            
-            notification = Notification(
-                user_id=job.hr_id,
-                notification_type=notification_type,
-                title=f"New Application: {candidate_name}",
-                message=message,
-                related_application_id=new_application.id
-            )
-            db.add(notification)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            print(f"Error creating notification: {e}")
-
-    except Exception as e:
-        print(f"Error parsing resume: {e}")
-        # Application is still created, just resume parsing failed
-        background_tasks.add_task(send_application_received_email, candidate_email, job.title)
-    
-    return new_application
-
-@router.get("", response_model=list[ApplicationDetailResponse])
-def get_hr_applications(
-=======
         # Update Application summary fields
         application.resume_score = extraction_data.get("score", 0)
         db.commit()
@@ -510,18 +310,10 @@ def get_hr_applications(
 @router.get("", response_model=list[ApplicationDetailResponse])
 def get_hr_applications(
     job_id: int = None,
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
     """Get all applications for HR's jobs (HR only)"""
-<<<<<<< HEAD
-    applications = db.query(Application).join(Job).options(
-        joinedload(Application.job),
-        joinedload(Application.resume_extraction),
-        joinedload(Application.interview)
-    ).all()
-=======
     # Join with stages for visualization (Point 12)
     # Use outerjoin to ensure apps with missing jobs (shouldn't happen but safe) still show or at least don't crash
     query = db.query(Application).outerjoin(Job).options(
@@ -554,7 +346,6 @@ def get_hr_applications(
             idx = app.resume_file_path.find("uploads")
             if idx != -1:
                 app.resume_file_path = app.resume_file_path[idx:].replace("\\", "/")
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     
     return applications
 
@@ -568,12 +359,8 @@ def get_application(
     application = db.query(Application).options(
         joinedload(Application.job),
         joinedload(Application.resume_extraction),
-<<<<<<< HEAD
-        joinedload(Application.interview)
-=======
         joinedload(Application.interview),
         joinedload(Application.pipeline_stages)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     ).filter(Application.id == application_id).first()
     
     if not application:
@@ -582,8 +369,6 @@ def get_application(
             detail="Application not found"
         )
     
-<<<<<<< HEAD
-=======
     # Sanitize paths
     if application.candidate_photo_path and ":" in application.candidate_photo_path:
         idx = application.candidate_photo_path.find("uploads")
@@ -593,7 +378,6 @@ def get_application(
         idx = application.resume_file_path.find("uploads")
         if idx != -1:
             application.resume_file_path = application.resume_file_path[idx:].replace("\\", "/")
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     
     return application
 
@@ -605,26 +389,6 @@ def update_application_status(
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
-<<<<<<< HEAD
-    """Update application status (HR only)"""
-    application = db.query(Application).filter(Application.id == application_id).first()
-    
-    if not application:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found"
-        )
-    
-    
-    # Validate status
-    valid_statuses = ["approved_for_interview", "rejected", "review_later"]
-    if status_update.status not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid status. Must be one of: {valid_statuses}"
-        )
-    
-=======
     """Update application status & Advance Pipeline (Point 1)"""
     application = db.query(Application).filter(Application.id == application_id).first()
     if not application:
@@ -639,17 +403,10 @@ def update_application_status(
         raise HTTPException(status_code=400, detail=f"Invalid status.")
     
     old_status = application.status
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     application.status = status_update.status
     if status_update.hr_notes:
         application.hr_notes = status_update.hr_notes
     
-<<<<<<< HEAD
-    # Generate Interview Access Key if approved
-    raw_access_key = None
-    if application.status == "approved_for_interview":
-        # Check if interview already exists to prevent duplicates
-=======
     # Advance Pipeline Stages (Point 1)
     if status_update.status == "approved_for_interview":
         cand_service.advance_stage(application.id, "Resume Screening", "pass", notes=status_update.hr_notes, evaluator_id=current_user.id)
@@ -671,7 +428,6 @@ def update_application_status(
     # Generate Interview Access Key if approved
     raw_access_key = None
     if application.status == "approved_for_interview":
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         existing_interview = db.query(Interview).filter(Interview.application_id == application.id).first()
         if not existing_interview:
             import uuid
@@ -690,20 +446,6 @@ def update_application_status(
             )
             db.add(new_interview)
     
-<<<<<<< HEAD
-    try:
-        db.commit()
-        db.refresh(application)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to update application status securely")
-    
-    # Send email notification to candidate
-    candidate_email = application.candidate_email
-    job_title = application.job.title
-    if application.status == "approved_for_interview" and raw_access_key:
-        # Pass raw access key to email
-=======
     db.commit()
     db.refresh(application)
     
@@ -711,7 +453,6 @@ def update_application_status(
     candidate_email = application.candidate_email
     job_title = application.job.title
     if application.status == "approved_for_interview" and raw_access_key:
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         background_tasks.add_task(send_approved_for_interview_email, candidate_email, job_title, raw_access_key)
     elif application.status == "rejected":
         background_tasks.add_task(send_rejected_email, candidate_email, job_title, False)

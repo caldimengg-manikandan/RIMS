@@ -18,12 +18,8 @@ import {
   ArrowRight,
   Search,
   Filter,
-<<<<<<< HEAD
-  X
-=======
   X,
   Award
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -57,14 +53,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 
 interface DashboardData {
-<<<<<<< HEAD
-  stats: {
-    open_jobs: number
-    total_applications: number
-    pending_review: number
-    active_interviews: number
-    offers_made: number
-=======
   recruitment_metrics: {
     total_candidates: number
     shortlisted_candidates: number
@@ -77,7 +65,6 @@ interface DashboardData {
     avg_aptitude_score: number
     avg_interview_score: number
     avg_composite_score: number
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
   }
   chart_data: { name: string; value: number }[]
   recent_interviews: any[]
@@ -114,14 +101,6 @@ export default function HRDashboard() {
     { keepPreviousData: true }
   )
 
-<<<<<<< HEAD
-  const stats = dashboardData?.stats || {
-    open_jobs: 0,
-    total_applications: 0,
-    pending_review: 0,
-    active_interviews: 0,
-    offers_made: 0
-=======
   // ... helper calculations ...
   const r_metrics = dashboardData?.recruitment_metrics || {
     total_candidates: 0,
@@ -136,7 +115,6 @@ export default function HRDashboard() {
     avg_aptitude_score: 0,
     avg_interview_score: 0,
     avg_composite_score: 0
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
   }
 
   const chartData = dashboardData?.chart_data || []
@@ -169,15 +147,9 @@ export default function HRDashboard() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-<<<<<<< HEAD
-            Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Home &gt; Dashboard</p>
-=======
             Enterprise Recruitment Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">AI-Powered Hiring Intelligence</p>
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         </div>
         <Link href="/dashboard/hr/jobs/create">
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all">
@@ -187,46 +159,6 @@ export default function HRDashboard() {
         </Link>
       </div>
 
-<<<<<<< HEAD
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-0 fill-mode-both">
-          <StatsCard
-            title="Open Jobs"
-            value={stats.open_jobs}
-            icon={Briefcase}
-            color="text-primary"
-            bg="bg-primary/10"
-          />
-        </div>
-        <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-100 fill-mode-both">
-          <StatsCard
-            title="Pending Applications"
-            value={stats.pending_review}
-            icon={Users}
-            color="text-destructive"
-            bg="bg-destructive/10"
-          />
-        </div>
-        <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-200 fill-mode-both">
-          <StatsCard
-            title="Interviews Approved"
-            value={stats.active_interviews}
-            icon={Calendar}
-            color="text-indigo-600 dark:text-indigo-400"
-            bg="bg-indigo-500/10"
-          />
-        </div>
-        <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out delay-300 fill-mode-both">
-          <StatsCard
-            title="Offers Made"
-            value={stats.offers_made}
-            icon={CheckCircle}
-            color="text-primary"
-            bg="bg-primary/10"
-          />
-        </div>
-=======
       {/* Stats Cards AI Enhanced */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StatsCard
@@ -257,7 +189,6 @@ export default function HRDashboard() {
           color="text-blue-600"
           bg="bg-blue-500/10"
         />
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
       </div>
 
       {/* Charts & Tables Section */}
@@ -307,13 +238,8 @@ export default function HRDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-blue-50 leading-relaxed font-normal">
-<<<<<<< HEAD
-                {stats.pending_review > 5
-                  ? "You have a high volume of pending applications. Consider using AI Batch Analysis to prioritize candidates."
-=======
                 {r_metrics.total_candidates > 5
                   ? "You have a high volume of candidates. Consider using AI Leaderboards to prioritize the best matches."
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                   : "Your pipeline is healthy. The AI is continuously monitoring for strong matches."}
               </p>
               <Button variant="secondary" size="sm" className="mt-4 w-full bg-background/50 hover:bg-background/80 text-primary-foreground border border-background/10 transition-all">

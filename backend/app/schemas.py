@@ -135,8 +135,6 @@ class ApplicationResponse(BaseModel):
     candidate_photo_path: Optional[str] = None
     status: str
     hr_notes: Optional[str] = None
-<<<<<<< HEAD
-=======
     
     # Enterprise Scoring (Point 2)
     resume_score: Optional[float] = 0
@@ -145,15 +143,12 @@ class ApplicationResponse(BaseModel):
     composite_score: Optional[float] = 0
     recommendation: Optional[str] = None
     
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     applied_at: datetime
     updated_at: datetime
     
     class Config:
         from_attributes = True
 
-<<<<<<< HEAD
-=======
 class ApplicationStageResponse(BaseModel):
     id: int
     stage_name: str
@@ -167,13 +162,10 @@ class ApplicationStageResponse(BaseModel):
     class Config:
         from_attributes = True
 
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 class ApplicationDetailResponse(ApplicationResponse):
     job: JobResponse
     resume_extraction: Optional['ResumeExtractionResponse'] = None
     interview: Optional['InterviewResponse'] = None
-<<<<<<< HEAD
-=======
     pipeline_stages: List[ApplicationStageResponse] = []
 
 class AuditLogResponse(BaseModel):
@@ -186,7 +178,6 @@ class AuditLogResponse(BaseModel):
     
     class Config:
         from_attributes = True
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
 # ============================================================================
 # Resume Schemas
@@ -366,10 +357,7 @@ class GeneralGrievanceCreate(BaseModel):
 class InterviewIssueResolve(BaseModel):
     hr_response: str
     action: str  # 'reissue_key', 'dismiss', 'resolve'
-<<<<<<< HEAD
-=======
     send_email: bool = True
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
 class InterviewIssueResponse(BaseModel):
     id: int

@@ -140,14 +140,9 @@ async def send_rejected_email(to_email: str, job_title: str, is_ai_auto_reject: 
     """
     await send_email_async(to_email, subject, body)
 
-<<<<<<< HEAD
-async def send_ticket_resolved_email(to_email: str, issue_type: str, hr_response: str):
-    subject = f"Support Ticket Resolved: {issue_type.replace('_', ' ').title()}"
-=======
 async def send_ticket_resolved_email(to_email: str, issue_type: str, hr_response: str, job_title: str = "your applied position"):
     # Using the same subject as invitation with Re: prefix to encourage threading
     subject = f"Re: Congratulations! You're invited to interview for {job_title}"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     body = f"""
     <html>
       <body>
@@ -164,12 +159,8 @@ async def send_ticket_resolved_email(to_email: str, issue_type: str, hr_response
     await send_email_async(to_email, subject, body)
 
 async def send_key_reissued_email(to_email: str, job_title: str, new_key: str, hr_response: str):
-<<<<<<< HEAD
-    subject = f"Interview Access Key Re-issued: {job_title}"
-=======
     # Using the same subject as invitation with Re: prefix to encourage threading
     subject = f"Re: Congratulations! You're invited to interview for {job_title}"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
     body = f"""
     <html>
       <body>

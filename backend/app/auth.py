@@ -79,13 +79,6 @@ def get_current_user(
 
 
 def get_current_hr(current_user: User = Depends(get_current_user)) -> User:
-<<<<<<< HEAD
-    """Dependency to ensure user is HR"""
-    if current_user.role != "hr":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only HR can access this resource"
-=======
     """Dependency to ensure user is HR or Admin (Enterprise Roles)"""
     if current_user.role not in ["admin", "hr_manager", "recruiter", "hr"]: # Keeping 'hr' for legacy support
         raise HTTPException(
@@ -100,7 +93,6 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Admins can access this resource"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         )
     return current_user
 

@@ -7,11 +7,7 @@ import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-<<<<<<< HEAD
-import { Edit2, ChevronRight } from 'lucide-react'
-=======
 import { Edit2, ChevronRight, Activity, FileText } from 'lucide-react'
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 import useSWR, { useSWRConfig } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 
@@ -221,8 +217,6 @@ export default function HRJobsPage() {
                                 <div className="flex items-center gap-2">
                                     {job.status === 'open' && (
                                         <>
-<<<<<<< HEAD
-=======
                                             <Link href={`/dashboard/hr/pipelines/${job.id}`} onClick={(e) => e.stopPropagation()}>
                                                 <Button
                                                     variant="ghost"
@@ -241,7 +235,6 @@ export default function HRJobsPage() {
                                                     <FileText className="w-4 h-4 mr-1" /> Leaderboard
                                                 </Button>
                                             </Link>
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                             <Link href={`/dashboard/hr/jobs/${job.id}/edit`} onClick={(e) => e.stopPropagation()}>
                                                 <Button
                                                     variant="ghost"
@@ -254,11 +247,7 @@ export default function HRJobsPage() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-<<<<<<< HEAD
-                                                className="text-muted-foreground hover:text-foreground hover:bg-secondary border-border pl-2 pr-2"
-=======
                                                 className="text-muted-foreground hover:text-foreground hover:bg-secondary border-border h-8 pl-2 pr-2"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleClose(job.id);

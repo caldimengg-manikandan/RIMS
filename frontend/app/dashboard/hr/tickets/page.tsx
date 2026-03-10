@@ -19,10 +19,7 @@ import {
     MessageSquare,
     Send
 } from 'lucide-react'
-<<<<<<< HEAD
-=======
 import { Switch } from "@/components/ui/switch"
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 import Link from 'next/link'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import {
@@ -61,10 +58,7 @@ export default function HRTicketsPage() {
     const [hrResponse, setHrResponse] = useState('')
     const [isResolving, setIsResolving] = useState(false)
     const [filter, setFilter] = useState<'pending' | 'all'>('pending')
-<<<<<<< HEAD
-=======
     const [sendEmail, setSendEmail] = useState(true)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 
     useEffect(() => {
         fetchTickets()
@@ -83,11 +77,7 @@ export default function HRTicketsPage() {
         }
     }
 
-<<<<<<< HEAD
-    const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed') => {
-=======
     const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed' | 'reply') => {
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
         if (!hrResponse.trim() && action !== 'dismissed') {
             toast.error("Please provide a response for the candidate")
             return
@@ -97,11 +87,6 @@ export default function HRTicketsPage() {
             setIsResolving(true)
             await APIClient.put(`/api/tickets/${ticketId}/resolve`, {
                 hr_response: hrResponse,
-<<<<<<< HEAD
-                action: action
-            })
-            toast.success(action === 'reissue_key' ? "Key re-issued and ticket resolved" : "Ticket resolved")
-=======
                 action: action,
                 send_email: sendEmail
             })
@@ -110,7 +95,6 @@ export default function HRTicketsPage() {
             else if (action === 'reply') msg = "Reply sent to candidate";
             
             toast.success(msg)
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
             setSelectedTicket(null)
             setHrResponse('')
             fetchTickets()
@@ -303,8 +287,6 @@ export default function HRTicketsPage() {
                                             />
                                             <p className="text-[10px] text-muted-foreground italic">This response will be sent to the candidate's email.</p>
                                         </div>
-<<<<<<< HEAD
-=======
 
                                         <div className="flex items-center space-x-2 bg-primary/5 p-3 rounded-xl border border-primary/10">
                                             <Switch
@@ -316,7 +298,6 @@ export default function HRTicketsPage() {
                                                 Send email notification to candidate
                                             </Label>
                                         </div>
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                     </div>
                                 ) : (
                                     <div className="space-y-4 min-w-0">
@@ -343,8 +324,6 @@ export default function HRTicketsPage() {
                                 {selectedTicket.status === 'pending' ? (
                                     <div className="flex flex-wrap gap-3 w-full justify-end">
                                         <Button
-<<<<<<< HEAD
-=======
                                             className="font-bold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl h-12 px-8 text-white flex-1 sm:flex-none"
                                             onClick={() => handleResolve(selectedTicket.id, 'reply')}
                                             disabled={isResolving}
@@ -353,7 +332,6 @@ export default function HRTicketsPage() {
                                             Send Reply
                                         </Button>
                                         <Button
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                             variant="outline"
                                             className="font-bold border-2 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 rounded-xl h-12 px-6 flex-1 sm:flex-none"
                                             onClick={() => handleResolve(selectedTicket.id, 'dismissed')}

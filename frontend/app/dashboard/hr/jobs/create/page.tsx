@@ -485,15 +485,6 @@ export default function HRCreateJobPage() {
                                         setFormData({
                                             ...formData,
                                             mode_of_work: newMode,
-<<<<<<< HEAD
-                                            location: formData.location === 'Remote' ? '' : formData.location
-                                        });
-                                    }}
-                                >
-                                    <option value="Remote">Remote</option>
-                                    <option value="Hybrid">Hybrid</option>
-                                    <option value="On-Site">On-Site</option>
-=======
                                             location: formData.location === 'On-Site' ? '' : formData.location
                                         });
                                     }}
@@ -501,7 +492,6 @@ export default function HRCreateJobPage() {
                                     <option value="On-Site">On-Site</option>
                                     <option value="Remote">Remote</option>
                                     <option value="Hybrid">Hybrid</option>
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
                                 </select>
                             </div>
                             {formData.mode_of_work !== 'Remote' && (

@@ -16,15 +16,12 @@ _REQUIRED_COLUMNS = [
     ("resume_extractions", "summary", "TEXT"),
     ("jobs", "interview_token", "VARCHAR(50)"),
     ("interviews", "test_id", "VARCHAR(50)"),
-<<<<<<< HEAD
-=======
     # Enterprise Pipeline Columns
     ("applications", "resume_score", "FLOAT"),
     ("applications", "aptitude_score", "FLOAT"),
     ("applications", "interview_score", "FLOAT"),
     ("applications", "composite_score", "FLOAT"),
     ("applications", "recommendation", "VARCHAR(50)"),
->>>>>>> fc67732bae97f8da95fde30813676c1c6ceeb92e
 ]
 
 
