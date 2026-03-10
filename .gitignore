@@ -1,0 +1,43 @@
+# Common ignores
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.tmp
+*.bak
+*.db-shm
+*.db-wal
+
+# Frontend ignores
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env*
+frontend/*.tsbuildinfo
+
+# Backend ignores
+backend/__pycache__/
+backend/*.py[cod]
+backend/.venv/
+backend/venv/
+backend/env/
+backend/.env
+backend/.env.local
+backend/uploads/
+backend/interview_reports/
+backend/*.db
+backend/.pytest_cache/
+backend/logs/
+backend/sql_app.db
+backend/interview_process/__pycache__
+backend/services/__pycache__
+backend/routes/__pycache__
+
+# Miscellaneous
+/tmp/
+.gemini/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
