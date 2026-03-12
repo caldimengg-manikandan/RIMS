@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RejectDialog } from "@/components/reject-dialog"
 import useSWR, { useSWRConfig } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
+import { API_BASE_URL } from '@/lib/config'
 
 export default function HRApplicationDetailPage() {
     const params = useParams()
@@ -42,7 +43,7 @@ export default function HRApplicationDetailPage() {
             case 'review_later': return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
             case 'interview_scheduled':
             case 'approved_for_interview': return 'bg-accent/10 text-accent border-accent/20'
-            case 'interview_completed': return 'bg-secondary/10 text-secondary border-secondary/20'
+            case 'interview_completed': return 'bg-primary/10 text-primary border-primary/20'
             default: return 'bg-muted text-muted-foreground border-border'
         }
     }
@@ -120,7 +121,7 @@ export default function HRApplicationDetailPage() {
                     <Avatar className="h-24 w-24 border-2 border-border/50 shadow-sm">
                         {application.candidate_photo_path ? (
                             <AvatarImage
-                                src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/${application.candidate_photo_path.replace(/\\/g, '/')}`}
+                                src={`${API_BASE_URL}/uploads/${application.candidate_photo_path.replace(/\\/g, '/')}`}
                                 alt={application.candidate_name}
                                 className="object-cover"
                             />
@@ -182,7 +183,7 @@ export default function HRApplicationDetailPage() {
                                     onClick={() => makeDecision('hired')}
                                     disabled={isUpdating}
                                 >
-                                    HIRE CANDIDATE
+                                    CALL FOR FACE TO FACE INTERVIEW
                                 </Button>
                                 <RejectDialog
                                     candidateName={application.candidate_name}
@@ -271,7 +272,7 @@ export default function HRApplicationDetailPage() {
                         {application.resume_file_path ? (
                             <div className="pt-4">
                                 <a
-                                    href={`${process.env.NEXT_PUBLIC_API_BASE_URL}/${application.resume_file_path.replace(/\\/g, '/')}`}
+                                    href={`${API_BASE_URL}/uploads/${application.resume_file_path.replace(/\\/g, '/')}`}
                                     target="_blank"
                                     className="text-primary hover:underline text-sm font-medium flex items-center gap-2"
                                 >
@@ -347,6 +348,41 @@ export default function HRApplicationDetailPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Overall Interview Video Recording */}
+            {application.interview?.status === 'completed' && (
+                <Card className="animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both delay-300">
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center gap-2 text-primary">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            Interview Video Recording
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {interviewReport?.video_url ? (
+                            <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl aspect-video relative group border-4 border-muted">
+                                <video
+                                    src={`${API_BASE_URL}/${interviewReport.video_url.replace(/\\/g, '/')}`}
+                                    controls
+                                    className="w-full h-full"
+                                />
+                                <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs font-bold flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                        Verified Recording
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-muted/30 border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                                <svg className="w-12 h-12 text-muted-foreground/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                <p className="text-sm font-semibold text-muted-foreground">Video Session Not Found</p>
+                                <p className="text-xs text-muted-foreground/60 mt-1">This could be due to camera permissions being denied or the session starting before recording was enabled.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     )
 }

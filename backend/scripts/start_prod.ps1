@@ -18,4 +18,4 @@ $workers = ($cores * 2) + 1
 Write-Host "📦 Scaling to $workers worker processes..." -ForegroundColor Green
 
 # Start Uvicorn with multiple workers (Linux uses Gunicorn, Windows uses Uvicorn workers directly)
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $workers --no-access-log --log-level info
+uvicorn app.main:app --host 0.0.0.0 --port 10000 --workers $workers --no-access-log --log-level info

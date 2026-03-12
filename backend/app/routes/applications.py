@@ -93,13 +93,16 @@ async def apply_for_job(
     file_extension = resume_file.filename.split(".")[-1]
     safe_email = candidate_email.replace('@', '_').replace('.', '_')
     filename = f"{safe_email}_{job_id}_{datetime.now(timezone.utc).timestamp()}.{file_extension}"
-    file_path = os.path.join(UPLOAD_DIR, filename).replace("\\", "/")
     
-    with open(file_path, "wb") as f:
+    # Store relative path in DB, use absolute path for saving
+    relative_resume_path = f"resumes/{filename}"
+    absolute_resume_path = os.path.join(UPLOAD_DIR, filename).replace("\\", "/")
+    
+    with open(absolute_resume_path, "wb") as f:
         f.write(content)
     
     # Save photo file if provided
-    photo_path = None
+    relative_photo_path = None
     if photo_file:
         photo_content = await photo_file.read()
         if len(photo_content) > MAX_FILE_SIZE:
@@ -110,8 +113,11 @@ async def apply_for_job(
         
         photo_ext = photo_file.filename.split(".")[-1]
         photo_filename = f"photo_{safe_email}_{job_id}_{datetime.now(timezone.utc).timestamp()}.{photo_ext}"
-        photo_path = os.path.join(PHOTO_DIR, photo_filename).replace("\\", "/")
-        with open(photo_path, "wb") as f:
+        
+        relative_photo_path = f"photos/{photo_filename}"
+        absolute_photo_path = os.path.join(PHOTO_DIR, photo_filename).replace("\\", "/")
+        
+        with open(absolute_photo_path, "wb") as f:
             f.write(photo_content)
     
     # Create application
@@ -120,9 +126,9 @@ async def apply_for_job(
         candidate_name=candidate_name,
         candidate_email=candidate_email,
         candidate_phone=candidate_phone,
-        resume_file_path=file_path,
+        resume_file_path=relative_resume_path,
         resume_file_name=resume_file.filename,
-        candidate_photo_path=photo_path,
+        candidate_photo_path=relative_photo_path,
         status="submitted"
     )
     
@@ -140,12 +146,13 @@ async def apply_for_job(
         # Parse resume text based on file type
         try:
             resume_text = ""
-            file_ext = file_path.lower().split('.')[-1]
+            # Use absolute path for reading
+            file_ext = absolute_resume_path.lower().split('.')[-1]
             
             if file_ext == 'pdf':
                 try:
                     from pypdf import PdfReader
-                    reader = PdfReader(file_path)
+                    reader = PdfReader(absolute_resume_path)
                     for page in reader.pages:
                         resume_text += page.extract_text() + "\n"
                 except Exception as e:
@@ -157,17 +164,17 @@ async def apply_for_job(
             elif file_ext in ['docx', 'doc']:
                 try:
                     import docx
-                    doc = docx.Document(file_path)
+                    doc = docx.Document(absolute_resume_path)
                     for para in doc.paragraphs:
                         resume_text += para.text + "\n"
                 except Exception as e:
                     print(f"DOCX Error: {e}")
-                    with open(file_path, "rb") as f:
+                    with open(absolute_resume_path, "rb") as f:
                         resume_text = f.read().decode('utf-8', errors='ignore')
                         
             else:
                 # Text file
-                with open(file_path, "rb") as f:
+                with open(absolute_resume_path, "rb") as f:
                     resume_text = f.read().decode('utf-8', errors='ignore')
                     
             if not resume_text.strip():
@@ -275,23 +282,13 @@ async def apply_for_job(
                 background_tasks.add_task(send_rejected_email, candidate_email, job.title, True)
             else:
                 message += " (Auto-approved for interview)"
-                # Generate Interview Access Key
-                raw_access_key = secrets.token_urlsafe(16)
-                hashed_key = pwd_context.hash(raw_access_key)
-                expiration = datetime.now(timezone.utc)() + timedelta(hours=24)
-                
-                new_interview = Interview(
-                    application_id=new_application.id,
-                    status='not_started',
-                    access_key_hash=hashed_key,
-                    expires_at=expiration,
-                    is_used=False
-                )
-                db.add(new_interview)
-                db.commit()
+                # Emails were already queued if approved, or we queue them here now
+                # In the original code, raw_access_key was generated but not easily passed
+                # Let's ensure we use the raw_access_key generated during approval
                 
                 background_tasks.add_task(send_application_received_email, candidate_email, job.title)
-                background_tasks.add_task(send_approved_for_interview_email, candidate_email, job.title, raw_access_key)
+                if raw_access_key:
+                    background_tasks.add_task(send_approved_for_interview_email, candidate_email, job.title, raw_access_key)
             
             notification = Notification(
                 user_id=job.hr_id,

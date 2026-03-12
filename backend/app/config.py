@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     base_dir: Path = BASE_DIR
     logs_dir: Path = BASE_DIR / "logs"
     uploads_dir: Path = BASE_DIR / "uploads"
+    videos_dir: Path = BASE_DIR / "uploads" / "videos"
     # Database
     # To use PostgreSQL, add this to your .env file:
     # DATABASE_URL=postgresql://user:password@host:port/dbname

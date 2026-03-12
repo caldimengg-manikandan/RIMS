@@ -8,6 +8,8 @@ import { RejectDialog } from '@/components/reject-dialog'
 import useSWR, { useSWRConfig } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/lib/config'
+import { User, CheckCircle2, AlertTriangle, ListChecks, Clock, Brain, Mic, Loader2, ChevronLeft, ChevronRight, UserCircle } from 'lucide-react'
 
 interface Application {
     id: number
@@ -15,6 +17,7 @@ interface Application {
     applied_at: string
     candidate_name: string
     candidate_email: string
+    candidate_photo_path: string | null
     job: {
         id: number
         job_id: string | null
@@ -171,7 +174,7 @@ export default function HRApplicationsPage() {
             case 'submitted': return 'capsule-badge-primary'
             case 'review_later': return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
             case 'approved_for_interview': return 'capsule-badge-info'
-            case 'interview_completed': return 'capsule-badge-primary'
+            case 'interview_completed': return 'capsule-badge-success'
             case 'hired': return 'capsule-badge-success'
             case 'rejected':
             case 'rejected_post_interview': return 'capsule-badge-destructive'
@@ -294,179 +297,203 @@ export default function HRApplicationsPage() {
             ) : (
                 <div className="flex flex-col gap-4">
                     {filteredApplications.map((app, index) => (
-                        <Card 
+                        <Card
                             key={app.id}
                             onClick={() => router.push(`/dashboard/hr/applications/${app.id}`)}
-                            style={{ animationDelay: `${index * 50}ms` }} 
+                            style={{ animationDelay: `${index * 50}ms` }}
                             className="hover:shadow-md transition-all duration-300 bg-card border border-border hover:border-border/80 cursor-pointer group animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out fill-mode-both"
                         >
-                                <CardContent className="p-4 flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">{app.candidate_name}</h3>
-                                            {app.interview?.test_id && (
-                                                <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border">
-                                                    {app.interview.test_id}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-muted-foreground">Applied for <span className="font-medium text-foreground">{app.job.title}</span></p>
-                                        <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground items-center">
-                                            <span className="flex items-center gap-1 whitespace-nowrap">
-                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                </svg>
-                                                {new Date(app.applied_at).toLocaleDateString()}
-                                            </span>
-                                            {app.resume_extraction && (
-                                                <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
-                                                    Job Compatibility: {Number(app.resume_extraction.resume_score).toFixed(2)}/10
-                                                </span>
-                                            )}
-                                            {app.interview?.report && (
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {app.interview.report.aptitude_score !== null && (
-                                                        <span className="text-purple-600 font-medium bg-purple-100 px-2 py-0.5 rounded-sm border border-purple-200 whitespace-nowrap">
-                                                            Aptitude: {Number(app.interview.report.aptitude_score).toFixed(2)}/10
-                                                        </span>
-                                                    )}
-                                                    {app.interview.report.technical_skills_score !== null && (
-                                                        <span className="text-blue-600 font-medium bg-blue-100 px-2 py-0.5 rounded-sm border border-blue-200 whitespace-nowrap">
-                                                            Tech: {Number(app.interview.report.technical_skills_score).toFixed(2)}/10
-                                                        </span>
-                                                    )}
-                                                    {app.interview.report.behavioral_score !== null && (
-                                                        <span className="text-green-600 font-medium bg-green-100 px-2 py-0.5 rounded-sm border border-green-200 whitespace-nowrap">
-                                                            Behav: {Number(app.interview.report.behavioral_score).toFixed(2)}/10
-                                                        </span>
-                                                    )}
+                            <CardContent className="p-4 flex items-center justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        {/* Candidate Photo */}
+                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border-2 border-slate-200 shrink-0">
+                                            {app.candidate_photo_path ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={`${API_BASE_URL}/uploads/${app.candidate_photo_path}`}
+                                                    alt={app.candidate_name}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        // Fallback if image fails to load
+                                                        (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(app.candidate_name) + '&background=random';
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                    <UserCircle className="w-6 h-6" />
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Dynamic Action Buttons */}
-                                        <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
-                                            {(app.status === 'submitted' || app.status === 'review_later') && (
-                                                <>
-                                                    <Button
-                                                        size="sm"
-                                                        className="bg-primary hover:bg-primary/90 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            handleStatusUpdate(app.id, 'approved_for_interview');
-                                                        }}
-                                                    >
-                                                        APPROVE FOR INTERVIEW
-                                                    </Button>
-                                                    <RejectDialog
-                                                        candidateName={app.candidate_name}
-                                                        onConfirm={(reason, notes) => handleStatusUpdate(app.id, 'rejected', reason, notes)}
-                                                        trigger={
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                }}
-                                                            >
-                                                                REJECT
-                                                            </Button>
-                                                        }
-                                                    />
-                                                </>
-                                            )}
-
-                                            {/* Stage 2: Interview Completed */}
-                                            {app.status === 'interview_completed' && (
-                                                <>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all mr-2"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            handleStatusUpdate(app.id, 'review_later');
-                                                        }}
-                                                    >
-                                                        REVIEW LATER
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        className="bg-primary hover:bg-primary/90 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            handleDecision(app.id, 'hired');
-                                                        }}
-                                                    >
-                                                        HIRE CANDIDATE
-                                                    </Button>
-                                                    <RejectDialog
-                                                        candidateName={app.candidate_name}
-                                                        onConfirm={(reason, notes) => handleDecision(app.id, 'rejected', reason, notes)}
-                                                        trigger={
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                }}
-                                                            >
-                                                                REJECT
-                                                            </Button>
-                                                        }
-                                                    />
-                                                </>
-                                            )}
-
-                                            {/* Stage 3: Approved but not interviewed - can still Reject or Review Later */}
-                                            {app.status === 'approved_for_interview' && (
-                                                <>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all mr-2"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            handleStatusUpdate(app.id, 'review_later');
-                                                        }}
-                                                    >
-                                                        REVIEW LATER
-                                                    </Button>
-                                                    <RejectDialog
-                                                        candidateName={app.candidate_name}
-                                                        onConfirm={(reason, notes) => handleStatusUpdate(app.id, 'rejected', reason, notes)}
-                                                        trigger={
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                }}
-                                                            >
-                                                                REJECT APPLICATION
-                                                            </Button>
-                                                        }
-                                                    />
-                                                </>
-                                            )}
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">{app.candidate_name}</h3>
+                                                {app.interview?.test_id && (
+                                                    <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border">
+                                                        {app.interview.test_id}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                        <span className={`capsule-badge text-[10px] px-2 py-0.5 ${getStatusColor(app.status)}`}>
-                                            {app.status.replace(/_/g, ' ').toUpperCase()}
-                                        </span>
-                                        <span className="text-primary text-xs font-medium group-hover:underline flex items-center gap-1">
-                                            View Details
+                                    <p className="text-sm text-muted-foreground">Applied for <span className="font-medium text-foreground">{app.job.title}</span></p>
+                                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground items-center">
+                                        <span className="flex items-center gap-1 whitespace-nowrap">
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
+                                            {new Date(app.applied_at).toLocaleDateString()}
                                         </span>
+                                        {app.resume_extraction && (
+                                            <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
+                                                Job Compatibility: {Number(app.resume_extraction.resume_score).toFixed(2)}/10
+                                            </span>
+                                        )}
+                                        {app.interview?.report && (
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {app.interview.report.aptitude_score !== null && (
+                                                    <span className="text-purple-600 font-medium bg-purple-100 px-2 py-0.5 rounded-sm border border-purple-200 whitespace-nowrap">
+                                                        Aptitude: {Number(app.interview.report.aptitude_score).toFixed(2)}/10
+                                                    </span>
+                                                )}
+                                                {app.interview.report.technical_skills_score !== null && (
+                                                    <span className="text-blue-600 font-medium bg-blue-100 px-2 py-0.5 rounded-sm border border-blue-200 whitespace-nowrap">
+                                                        Tech: {Number(app.interview.report.technical_skills_score).toFixed(2)}/10
+                                                    </span>
+                                                )}
+                                                {app.interview.report.behavioral_score !== null && (
+                                                    <span className="text-green-600 font-medium bg-green-100 px-2 py-0.5 rounded-sm border border-green-200 whitespace-nowrap">
+                                                        Behav: {Number(app.interview.report.behavioral_score).toFixed(2)}/10
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                </CardContent>
-                            </Card>
+
+                                    {/* Dynamic Action Buttons */}
+                                    <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                                        {(app.status === 'submitted' || app.status === 'review_later') && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-primary hover:bg-primary/90 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleStatusUpdate(app.id, 'approved_for_interview');
+                                                    }}
+                                                >
+                                                    APPROVE FOR INTERVIEW
+                                                </Button>
+                                                <RejectDialog
+                                                    candidateName={app.candidate_name}
+                                                    onConfirm={(reason, notes) => handleStatusUpdate(app.id, 'rejected', reason, notes)}
+                                                    trigger={
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                            }}
+                                                        >
+                                                            REJECT
+                                                        </Button>
+                                                    }
+                                                />
+                                            </>
+                                        )}
+
+                                        {/* Stage 2: Interview Completed */}
+                                        {app.status === 'interview_completed' && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all mr-2"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleStatusUpdate(app.id, 'review_later');
+                                                    }}
+                                                >
+                                                    REVIEW LATER
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-primary hover:bg-primary/90 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleDecision(app.id, 'hired');
+                                                    }}
+                                                >
+                                                    CALL FOR FACE TO FACE INTERVIEW
+                                                </Button>
+                                                <RejectDialog
+                                                    candidateName={app.candidate_name}
+                                                    onConfirm={(reason, notes) => handleDecision(app.id, 'rejected', reason, notes)}
+                                                    trigger={
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                            }}
+                                                        >
+                                                            REJECT
+                                                        </Button>
+                                                    }
+                                                />
+                                            </>
+                                        )}
+
+                                        {/* Stage 3: Approved but not interviewed - can still Reject or Review Later */}
+                                        {app.status === 'approved_for_interview' && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all mr-2"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleStatusUpdate(app.id, 'review_later');
+                                                    }}
+                                                >
+                                                    REVIEW LATER
+                                                </Button>
+                                                <RejectDialog
+                                                    candidateName={app.candidate_name}
+                                                    onConfirm={(reason, notes) => handleStatusUpdate(app.id, 'rejected', reason, notes)}
+                                                    trigger={
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="bg-red-500 hover:bg-red-600 text-[10px] font-semibold px-3 py-1 h-7 rounded shadow-sm transition-all"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                            }}
+                                                        >
+                                                            REJECT APPLICATION
+                                                        </Button>
+                                                    }
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                    <span className={`capsule-badge text-[10px] px-2 py-0.5 ${getStatusColor(app.status)}`}>
+                                        {app.status.replace(/_/g, ' ').toUpperCase()}
+                                    </span>
+                                    <span className="text-primary text-xs font-medium group-hover:underline flex items-center gap-1">
+                                        View Details
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </span>
+                                </div>
+                            </CardContent>
+                        </Card>
                     ))}
                 </div>
             )}

@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import useSWR, { mutate } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
+import { API_BASE_URL } from '@/lib/config'
 import {
   Radar,
   RadarChart,
@@ -44,7 +45,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts'
-import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity } from 'lucide-react'
+import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity, Video, CameraOff } from 'lucide-react'
 
 import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
 import { StatusChart, DetailedMetricsChart, SkillProficiencyChart } from '@/components/reports/Charts'
@@ -117,6 +118,7 @@ interface Report {
   first_level_score?: number | null
   aptitude_question_evaluations?: QuestionEvaluation[]
   aptitude_questions_answered?: number
+  video_url?: string | null
 }
 
 // Helper to clean question text that may be stored as JSON array strings
@@ -887,6 +889,36 @@ export default function ReportsPage() {
               <Separator className="mb-2 shrink-0" />
 
               <div className="flex-1 overflow-y-auto pr-2 space-y-6 pb-6">
+
+                {/* Video Interview Recording */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2 text-blue-600">
+                    <Video className="h-5 w-5" />
+                    Interview Video Recording
+                  </h3>
+                  {viewingReport.video_url ? (
+                    <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-xl aspect-video relative group">
+                      <video
+                        src={`${API_BASE_URL}/${viewingReport.video_url}`}
+                        controls
+                        className="w-full h-full"
+                        poster="/video-placeholder.png"
+                      />
+                      <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Badge className="bg-black/50 backdrop-blur-md border-white/20 text-white flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                          Session Recorded
+                        </Badge>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-muted/30 border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                      <CameraOff className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                      <p className="text-sm font-medium text-muted-foreground">No video recording available for this session.</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">Recording might have been disabled or failed during the interview.</p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Section Score Breakdown */}
                 <div className="space-y-3">

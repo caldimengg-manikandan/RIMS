@@ -511,3 +511,60 @@ async def generate_interview_report(job_title: str, all_qa_pairs: list, overall_
             "technical_skills_score": 5, "communication_score": 5, "problem_solving_score": 5,
             "strengths": "[]", "weaknesses": "[]", "summary": "Report gen failed", "recommendation": "consider", "detailed_feedback": "N/A"
         }
+
+
+async def extract_questions_from_text(text: str) -> list:
+    """Extract a list of interview questions from unstructured text using AI."""
+    if not text.strip():
+        return []
+        
+    system_prompt = (
+        "You are an expert recruiter. You will be given raw text extracted from a document. "
+        "Your task is to identify and extract all interview questions mentioned in the text. "
+        "Return the questions as a CLEAN JSON list of strings. If no clear questions are found, return an empty list. "
+        "Important: Return ONLY the JSON list, no preamble."
+    )
+    
+    user_prompt = f"Text to extract questions from:\n\n{text[:5000]}"
+    
+    try:
+        response = await call_openai_direct(user_prompt, system_prompt)
+        cleaned = clean_json(response)
+        data = json.loads(cleaned)
+        if isinstance(data, list):
+            return [str(q).strip() for q in data if q]
+    except Exception as e:
+        logger.error(f"Error extracting questions from text: {e}")
+        
+    return []
+
+async def transcribe_audio(audio_file_path: str) -> str:
+    """
+    Transcribe audio file using Groq Whisper-large-v3.
+    """
+    if not settings.groq_keys:
+        raise Exception("GROQ_API_KEY is missing for transcription.")
+
+    api_key = settings.groq_keys[0]
+    base_url = "https://api.groq.com/openai/v1"
+    
+    # We use the standard AsyncOpenAI client as it's Groq-compatible
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        timeout=httpx.Timeout(30.0, connect=5.0)
+    )
+
+    try:
+        with open(audio_file_path, "rb") as audio_file:
+            transcript = await client.audio.transcriptions.create(
+                file=audio_file,
+                model="whisper-large-v3",
+                response_format="json",
+                language="en",
+                temperature=0.0
+            )
+            return transcript.text
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise e

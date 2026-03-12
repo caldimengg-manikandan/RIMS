@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import User, Job, Application, Interview, InterviewReport, InterviewQuestion, InterviewAnswer
 from app.auth import get_current_user
 import json
+import os
 from datetime import datetime
 
 router = APIRouter()
@@ -51,7 +52,10 @@ async def get_dashboard_analytics(
     for app_status, count in status_counts:
         status_label = "Unknown"
         if app_status:
-            status_label = app_status.replace("_", " ").title()
+            if app_status == "hired":
+                status_label = "CALL FOR FACE TO FACE INTERVIEW"
+            else:
+                status_label = app_status.replace("_", " ").title()
         
         chart_data.append({"name": status_label, "value": count})
 
@@ -240,6 +244,7 @@ async def get_interview_reports(
             "tech_score": report.technical_skills_score,
             "comm_score": report.communication_score,
             "evaluated_skills": report.evaluated_skills,
+            "video_url": interview.video_recording_path if interview else None,
         }
 
     # Process DB reports

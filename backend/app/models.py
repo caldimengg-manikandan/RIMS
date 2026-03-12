@@ -60,6 +60,7 @@ class Job(Base):
     uploaded_question_file = Column(String(500), nullable=True)
     aptitude_config = Column(Text, nullable=True)
     aptitude_questions_file = Column(String(500), nullable=True)  # Path to uploaded MCQ JSON
+    duration_minutes = Column(Integer, default=60) # Global interview duration
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
@@ -146,9 +147,11 @@ class Interview(Base):
     interview_stage = Column(String(50), default='first_level')  # 'aptitude', 'first_level'
     aptitude_score = Column(Float, nullable=True)
     aptitude_completed_at = Column(DateTime, nullable=True)
+    duration_minutes = Column(Integer, default=60) # Snapshot of job duration when started
     aptitude_completed = Column(Boolean, default=False)
     first_level_completed = Column(Boolean, default=False)
     first_level_score = Column(Float, nullable=True)
+    video_recording_path = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
 

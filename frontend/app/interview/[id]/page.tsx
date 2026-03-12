@@ -4,10 +4,17 @@ import React, { useEffect, useState, useRef, useMemo } from 'react'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+
+// Face Detection Imports
+import * as tf from '@tensorflow/tfjs-core';
+import '@tensorflow/tfjs-backend-webgl';
+import * as blazeface from '@tensorflow-models/blazeface';
+
 import {
     Mic, MicOff, Loader2, ChevronLeft, ChevronRight,
     CheckCircle2, Circle, Brain, BookOpen, AlertTriangle,
-    Clock, Target, ListChecks, Lock, Sidebar as SidebarIcon
+    Clock, Target, ListChecks, Lock, Sidebar as SidebarIcon,
+    Camera, CameraOff, Video
 } from 'lucide-react'
 import { IssueReportDialog, FeedbackDialog } from '@/components/interview-support'
 
@@ -25,6 +32,8 @@ interface InterviewData {
     locked_skill: string
     total_questions: number
     status: string
+    started_at: string
+    duration_minutes: number
 }
 
 export default function InterviewPage() {
@@ -40,16 +49,34 @@ export default function InterviewPage() {
     const [interviewStatus, setInterviewStatus] = useState('loading')
     const [interviewData, setInterviewData] = useState<InterviewData | null>(null)
     const [warnings, setWarnings] = useState(0)
+    const [timeLeft, setTimeLeft] = useState<number | null>(null)
+    const [visitedIds, setVisitedIds] = useState<Set<number>>(new Set())
+    const [isListening, setIsListening] = useState(false)
+    const [isTranscribing, setIsTranscribing] = useState(false)
+    const [isFaceDetected, setIsFaceDetected] = useState(true)
+    const [isCameraActive, setIsCameraActive] = useState(false)
 
     // Support States
     const [showIssueDialog, setShowIssueDialog] = useState(false)
     const [showFeedbackDialog, setShowFeedbackDialog] = useState(false)
+    const [sectionMessage, setSectionMessage] = useState<string | null>(null)
+    const [lastSection, setLastSection] = useState<string | null>(null)
+    const [isFullscreen, setIsFullscreen] = useState(false)
 
     // Refs to always have live values inside event listeners (avoid stale closures)
     const warningsRef = useRef(0)
     const interviewStatusRef = useRef('loading')
     const hiddenSinceRef = useRef<number | null>(null)
-    const recognitionRef = useRef<any>(null)
+    const mediaRecorderRef = useRef<any>(null)
+    const audioChunksRef = useRef<any[]>([])
+
+    // Overall Video Recording Refs
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const streamRef = useRef<MediaStream | null>(null)
+    const overallMediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const overallVideoChunksRef = useRef<Blob[]>([])
+    const detectorRef = useRef<any>(null)
+    const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
     // Derived Sections
     const aptitudeQuestions = useMemo(() => questions.filter(q => q.question_type === 'aptitude'), [questions])
@@ -63,6 +90,175 @@ export default function InterviewPage() {
     // Keep refs in sync with state so event handlers always see fresh values
     useEffect(() => { warningsRef.current = warnings }, [warnings])
     useEffect(() => { interviewStatusRef.current = interviewStatus }, [interviewStatus])
+
+    // Track visited questions and section transitions
+    useEffect(() => {
+        // No auto-init for MediaRecorder, we start it on click
+        return () => {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop()
+            }
+        }
+    }, [])
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const mediaRecorder = new MediaRecorder(stream)
+            mediaRecorderRef.current = mediaRecorder
+            audioChunksRef.current = []
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data)
+                }
+            }
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+                await handleTranscribe(audioBlob)
+                // Clean up stream
+                stream.getTracks().forEach(track => track.stop())
+            }
+
+            mediaRecorder.start()
+            setIsListening(true)
+        } catch (err) {
+            console.error("Mic access failed", err)
+            alert("Could not access microphone. Please check permissions.")
+        }
+    }
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop()
+            setIsListening(false)
+        }
+    }
+
+    const handleTranscribe = async (audioBlob: Blob) => {
+        setIsTranscribing(true)
+        try {
+            const formData = new FormData()
+            formData.append('file', audioBlob, 'recording.webm')
+            const res = await APIClient.postMultipart<{ text: string }>(`/api/interviews/${interviewId}/transcribe`, formData)
+            if (res.text) {
+                setAnswer(prev => {
+                    const trimmedPrev = prev.trim()
+                    return trimmedPrev ? `${trimmedPrev} ${res.text.trim()}` : res.text.trim()
+                })
+            }
+        } catch (err) {
+            console.error("Transcription failed", err)
+            alert("Voice transcription failed. You can still type your answer manually.")
+        } finally {
+            setIsTranscribing(false)
+        }
+    }
+
+    const initOverallRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true })
+            streamRef.current = stream
+            setIsCameraActive(true)
+
+            // Standard Video Recording
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
+            overallMediaRecorderRef.current = mediaRecorder
+            overallVideoChunksRef.current = []
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    overallVideoChunksRef.current.push(event.data)
+                }
+            }
+
+            mediaRecorder.start(1000) // Capture in 1s chunks to avoid large data loss
+
+            // Start Face Detection
+            await startFaceDetection()
+        } catch (err) {
+            console.error("Overall recording failed", err)
+            alert("Could not access camera/mic for recording. Please ensure permissions are granted.")
+        }
+    }
+
+    const startFaceDetection = async () => {
+        try {
+            await tf.ready();
+            const model = await blazeface.load();
+            detectorRef.current = model;
+
+            faceCheckIntervalRef.current = setInterval(async () => {
+                if (videoRef.current && detectorRef.current && interviewStatusRef.current === 'active' && videoRef.current.readyState === 4) {
+                    try {
+                        const returnTensors = false;
+                        const predictions = await detectorRef.current.estimateFaces(videoRef.current, returnTensors);
+                        setIsFaceDetected(predictions.length > 0);
+                    } catch (e) {
+                        console.error("Detection error", e);
+                    }
+                }
+            }, 3000); // Check every 3 seconds
+        } catch (err) {
+            console.error("Face detection init failed", err);
+        }
+    }
+
+    const stopOverallRecording = async () => {
+        if (faceCheckIntervalRef.current) {
+            clearInterval(faceCheckIntervalRef.current);
+        }
+
+        return new Promise<void>((resolve) => {
+            if (overallMediaRecorderRef.current && overallMediaRecorderRef.current.state !== 'inactive') {
+                overallMediaRecorderRef.current.onstop = async () => {
+                    const videoBlob = new Blob(overallVideoChunksRef.current, { type: 'video/webm' });
+                    await uploadOverallVideo(videoBlob);
+                    resolve();
+                }
+                overallMediaRecorderRef.current.stop();
+            } else {
+                resolve();
+            }
+
+            // Stop camera stream
+            if (videoRef.current && videoRef.current.srcObject) {
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+                setIsCameraActive(false);
+            }
+        });
+    }
+
+    const uploadOverallVideo = async (videoBlob: Blob) => {
+        try {
+            const formData = new FormData()
+            formData.append('file', videoBlob, `interview_${interviewId}.webm`)
+            await APIClient.postMultipart(`/api/interviews/${interviewId}/upload-video`, formData)
+            console.log("Overall video uploaded successfully")
+        } catch (err) {
+            console.error("Video upload failed", err)
+        }
+    }
+
+    useEffect(() => {
+        if (questions.length > 0 && questions[currentIndex]) {
+            const currentQ = questions[currentIndex]
+            setVisitedIds(prev => new Set(prev).add(currentQ.id))
+
+            // Stop listening when moving between questions
+            if (isListening) {
+                stopRecording()
+            }
+
+            if (lastSection && lastSection !== currentQ.question_type) {
+                setSectionMessage(`${lastSection.replace('_', ' ')} round completed. Moving to ${currentQ.question_type.replace('_', ' ')} round.`)
+                setTimeout(() => setSectionMessage(null), 5000)
+            }
+            setLastSection(currentQ.question_type)
+        }
+    }, [currentIndex, questions])
 
     useEffect(() => {
         const handleVisibilityChange = async () => {
@@ -108,10 +304,92 @@ export default function InterviewPage() {
 
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange)
-            if (recognitionRef.current) recognitionRef.current.stop()
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop()
+            }
+            stopOverallRecording()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [interviewId])
+
+    useEffect(() => {
+        if (isCameraActive && streamRef.current && videoRef.current) {
+            videoRef.current.srcObject = streamRef.current
+        }
+    }, [isCameraActive])
+
+    useEffect(() => {
+        if (interviewStatus === 'active') {
+            initOverallRecording()
+        } else if (interviewStatus === 'completed') {
+            stopOverallRecording()
+        }
+    }, [interviewStatus])
+
+    useEffect(() => {
+        if (!interviewData?.started_at || interviewStatus !== 'active') return
+
+        const dateStr = interviewData.started_at.includes('Z')
+            ? interviewData.started_at
+            : (interviewData.started_at.replace(' ', 'T') + (interviewData.started_at.includes('T') ? 'Z' : 'Z'))
+
+        const startTime = new Date(dateStr).getTime()
+        const durationMs = (interviewData.duration_minutes || 60) * 60 * 1000
+        const endTime = startTime + durationMs
+
+        const updateTimer = () => {
+            const now = Date.now()
+            const diff = endTime - now
+            const remaining = Math.max(0, Math.floor(diff / 1000))
+            setTimeLeft(remaining)
+
+            if (remaining <= 0 && interviewStatusRef.current === 'active') {
+                console.log("Time is up! Auto-finishing interview.")
+                finishInterview()
+            }
+        }
+
+        updateTimer()
+        const timerInterval = setInterval(updateTimer, 1000)
+
+        return () => clearInterval(timerInterval)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [interviewData, interviewStatus])
+
+    // Fullscreen and Tab Management
+    useEffect(() => {
+        if (interviewStatus === 'active') {
+            const handleFullscreenChange = () => {
+                setIsFullscreen(!!document.fullscreenElement)
+            }
+
+            document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+            // Initial check
+            setIsFullscreen(!!document.fullscreenElement)
+
+            const enterFullscreen = async () => {
+                try {
+                    if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen()
+                    }
+                } catch (err) {
+                    console.error("Fullscreen failed:", err)
+                }
+            }
+            enterFullscreen()
+
+            return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+        }
+    }, [interviewStatus])
+
+    const formatTime = (seconds: number | null) => {
+        if (seconds === null) return '--:--'
+        const h = Math.floor(seconds / 3600)
+        const m = Math.floor((seconds % 3600) / 60)
+        const s = seconds % 60
+        return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    }
 
     const loadData = async () => {
         try {
@@ -129,7 +407,9 @@ export default function InterviewPage() {
             } else {
                 // Find first unanswered
                 const firstUnanswered = qs.findIndex(q => !q.is_answered)
-                setCurrentIndex(firstUnanswered !== -1 ? firstUnanswered : 0)
+                const startIdx = firstUnanswered !== -1 ? firstUnanswered : 0
+                setCurrentIndex(startIdx)
+                setVisitedIds(new Set([qs[startIdx].id]))
                 setInterviewStatus('active')
             }
         } catch (err) {
@@ -143,11 +423,23 @@ export default function InterviewPage() {
     const handleSubmit = async () => {
         if (!answer.trim() || !currentQuestion) return
         setIsSubmitting(true)
+
+        // Stop listening on submit
+        if (isListening) {
+            stopRecording()
+        }
+
         try {
-            await APIClient.post(`/api/interviews/${interviewId}/submit-answer`, {
+            const res = await APIClient.post<any>(`/api/interviews/${interviewId}/submit-answer`, {
                 question_id: currentQuestion.id,
                 answer_text: answer
             })
+
+            if (res.terminated) {
+                alert(res.message || "This interview session has been terminated.");
+                setInterviewStatus('completed');
+                return;
+            }
 
             // Update local state
             const updatedQuestions = questions.map((q, idx) =>
@@ -176,6 +468,7 @@ export default function InterviewPage() {
 
     const finishInterview = async () => {
         try {
+            await stopOverallRecording()
             await APIClient.post(`/api/interviews/${interviewId}/end`, {})
             setInterviewStatus('completed')
             setShowFeedbackDialog(true)
@@ -281,8 +574,10 @@ export default function InterviewPage() {
                                         ${currentIndex === questions.findIndex(item => item.id === q.id)
                                             ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30 scale-110 z-10'
                                             : q.is_answered
-                                                ? 'bg-blue-50 border-blue-200 text-blue-600'
-                                                : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                                                ? 'bg-green-500 border-green-600 text-white shadow-sm'
+                                                : visitedIds.has(q.id)
+                                                    ? 'bg-red-500 border-red-600 text-white shadow-sm'
+                                                    : 'bg-blue-50 border-blue-200 text-blue-600'
                                         }`}
                                 >
                                     {index + 1}
@@ -312,8 +607,10 @@ export default function InterviewPage() {
                                         ${currentIndex === questions.findIndex(item => item.id === q.id)
                                             ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30 scale-110 z-10'
                                             : q.is_answered
-                                                ? 'bg-blue-50 border-blue-200 text-blue-600'
-                                                : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                                                ? 'bg-green-500 border-green-600 text-white shadow-sm'
+                                                : visitedIds.has(q.id)
+                                                    ? 'bg-red-500 border-red-600 text-white shadow-sm'
+                                                    : 'bg-blue-50 border-blue-200 text-blue-600'
                                         }`}
                                 >
                                     {index + 1}
@@ -343,8 +640,10 @@ export default function InterviewPage() {
                                         ${currentIndex === questions.findIndex(item => item.id === q.id)
                                             ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30 scale-110 z-10'
                                             : q.is_answered
-                                                ? 'bg-blue-50 border-blue-200 text-blue-600'
-                                                : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'
+                                                ? 'bg-green-500 border-green-600 text-white shadow-sm'
+                                                : visitedIds.has(q.id)
+                                                    ? 'bg-red-500 border-red-600 text-white shadow-sm'
+                                                    : 'bg-blue-50 border-blue-200 text-blue-600'
                                         }`}
                                 >
                                     {index + 1}
@@ -370,21 +669,104 @@ export default function InterviewPage() {
                 {/* Background Grid */}
                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none opacity-[0.4]"></div>
 
-                {/* Header */}
-                <header className="h-24 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-20">
-                    <div className="flex items-center gap-6">
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">AI Interview Assistant</h1>
-                        {interviewData?.locked_skill && (
-                            <div className="bg-slate-900 text-white px-5 py-2 rounded-full flex items-center gap-2 shadow-lg shadow-slate-900/20">
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Skill:</span>
-                                <span className="text-xs font-bold tracking-wider">{interviewData.locked_skill.toUpperCase()}</span>
-                                <Lock className="w-3 h-3 text-amber-400" />
+                {/* Section Transition Popup (Smaller) */}
+                {sectionMessage && (
+                    <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top-4 fade-in duration-500">
+                        <div className="bg-white/90 backdrop-blur-md px-8 py-4 rounded-[2rem] shadow-2xl border border-blue-100 flex items-center gap-4 min-w-[300px]">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                                <ListChecks className="w-5 h-5 text-blue-600" />
                             </div>
-                        )}
+                            <div className="text-left">
+                                <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Round Completed</h4>
+                                <p className="text-slate-600 font-bold text-sm leading-tight">
+                                    {sectionMessage}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Mandatory Fullscreen Warning */}
+                {!isFullscreen && interviewStatus === 'active' && (
+                    <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6 text-center">
+                        <div className="max-w-md w-full bg-white rounded-[3rem] p-12 shadow-2xl border border-blue-100 flex flex-col items-center">
+                            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 border border-blue-100 animate-pulse">
+                                <AlertTriangle className="w-10 h-10 text-amber-500" />
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Fullscreen Required</h2>
+                            <p className="text-slate-600 font-bold mb-8 leading-relaxed">
+                                To ensure interview integrity, you must be in fullscreen mode to continue the test.
+                            </p>
+                            <Button
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-14 rounded-2xl shadow-xl shadow-blue-500/30 transition-all hover:scale-105"
+                                onClick={async () => {
+                                    try {
+                                        if (!document.fullscreenElement) {
+                                            await document.documentElement.requestFullscreen()
+                                        }
+                                    } catch (e) {
+                                        alert("Please enable fullscreen manually to continue (F11 or Browser menu).")
+                                    }
+                                }}
+                            >
+                                Re-enable Fullscreen
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Face Detection Warning */}
+                {!isFaceDetected && interviewStatus === 'active' && (
+                    <div className="fixed inset-0 z-[400] bg-red-950/40 backdrop-blur-sm flex items-center justify-center p-6 pointer-events-none">
+                        <div className="max-w-sm w-full bg-white rounded-3xl p-8 shadow-2xl border-4 border-red-500 animate-bounce flex flex-col items-center pointer-events-auto">
+                            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 border border-red-100">
+                                <CameraOff className="w-8 h-8 text-red-500" />
+                            </div>
+                            <h2 className="text-xl font-black text-red-600 mb-2 uppercase tracking-tight text-center">Face Not Detected</h2>
+                            <p className="text-slate-600 font-bold text-center text-sm">
+                                Please ensure your face is clearly visible in the camera frame to avoid session termination.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Fixed Camera Preview */}
+                {isCameraActive && (
+                    <div className="fixed bottom-6 right-6 z-[100] w-48 h-36 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 bg-slate-900 group transition-all hover:scale-110">
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            muted
+                            playsInline
+                            onLoadedMetadata={(e) => (e.target as HTMLVideoElement).play()}
+                            className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 right-2 flex gap-1">
+                            <div className={`w-2 h-2 rounded-full ${isFaceDetected ? 'bg-green-500' : 'bg-red-500'} shadow-sm animate-pulse`}></div>
+                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                            <span className="text-[8px] font-black text-white uppercase tracking-wider flex items-center gap-1">
+                                <Video className="w-2 h-2" /> Live Proctoring
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Question Info Bar (Replacing Header) */}
+                <div className="h-20 flex items-center justify-between px-10 relative z-20">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-slate-900 text-white px-5 py-2 rounded-full flex items-center gap-2 shadow-lg">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Locked:</span>
+                            <span className="text-xs font-bold tracking-wider">{interviewData?.locked_skill?.toUpperCase() || 'GENERAL'}</span>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm text-slate-600 font-bold text-sm">
+                        <div className={`px-5 py-2 rounded-2xl shadow-xl font-black text-sm flex items-center gap-2 transition-all duration-500 border-2 ${timeLeft && timeLeft < 300 ? 'bg-red-500 border-red-400 text-white animate-pulse' : 'bg-white border-slate-100 text-slate-600'}`}>
+                            <Clock className={`w-4 h-4 ${timeLeft && timeLeft < 300 ? 'animate-spin-slow' : ''}`} />
+                            <span className="tabular-nums">{formatTime(timeLeft)}</span>
+                        </div>
+                        <div className="bg-white border-2 border-slate-100 px-4 py-2 rounded-2xl text-slate-400 font-bold text-xs">
                             Q {
                                 isAptitude
                                     ? (aptitudeQuestions.findIndex(q => q.id === currentQuestion?.id) + 1)
@@ -396,12 +778,8 @@ export default function InterviewPage() {
                                     currentQuestion?.question_type === 'technical' ? technicalQuestions.length : behavioralQuestions.length
                             }
                         </div>
-                        <div className="bg-green-500 text-white px-5 py-2 rounded-2xl shadow-lg shadow-green-500/20 font-bold text-sm">
-                            {answeredCount}/{totalQuestions} total answered
-                        </div>
                     </div>
-                </header>
-
+                </div>
                 {/* Question Area */}
                 <main className="flex-1 overflow-y-auto p-12">
                     <div className="max-w-4xl mx-auto space-y-8">
@@ -416,7 +794,7 @@ export default function InterviewPage() {
                                     <span className="text-sm font-black text-blue-600 uppercase tracking-widest">Current Question</span>
                                 </div>
                                 <div className="bg-purple-100 text-purple-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] border border-purple-200">
-                                    {currentQuestion?.question_type.replace('_', ' ')} ROUND
+                                    {currentQuestion?.question_type?.replace('_', ' ')} ROUND
                                 </div>
                             </div>
 
@@ -479,11 +857,18 @@ export default function InterviewPage() {
                                         </div>
                                         <Button
                                             variant="ghost"
-                                            className="text-slate-400 hover:text-blue-600 font-bold"
-                                            onClick={() => { }} // Handle Voice transcription here if needed
+                                            disabled={isTranscribing}
+                                            className={`font-bold transition-all duration-300 ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-400 hover:text-blue-600'}`}
+                                            onClick={() => {
+                                                if (isListening) {
+                                                    stopRecording()
+                                                } else {
+                                                    startRecording()
+                                                }
+                                            }}
                                         >
-                                            <Mic className="w-5 h-5 mr-2" />
-                                            Use Voice
+                                            {isTranscribing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : (isListening ? <MicOff className="w-5 h-5 mr-2" /> : <Mic className="w-5 h-5 mr-2" />)}
+                                            {isTranscribing ? 'Converting to Text...' : (isListening ? 'Stop & Convert' : 'Use Voice (High Accuracy)')}
                                         </Button>
                                     </div>
                                 </div>

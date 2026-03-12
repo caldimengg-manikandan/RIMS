@@ -877,8 +877,9 @@ class ResponseAnalyzer:
         
         # Check for extremely poor responses
         # SKIP THIS for aptitude stage — short answers (e.g., "42", "Paris") are common and valid.
-        if question_type != "aptitude" and len(response.split()) < 5 and "skip" not in response_lower:
-            return True, "poor_response"
+        # DISABLED: Too aggressive for single short responses. AI will handle scoring.
+        # if question_type != "aptitude" and len(response.split()) < 5 and "skip" not in response_lower:
+        #     return True, "poor_response"
         
         return False, ""
     

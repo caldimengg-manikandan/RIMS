@@ -56,6 +56,7 @@ export default function HRCreateJobPage() {
         include_aptitude: false,
         include_technical: true,
         include_behavioral: false,
+        duration_minutes: 60,
     })
 
     const [isUploadingAptitude, setIsUploadingAptitude] = useState(false)
@@ -559,6 +560,25 @@ export default function HRCreateJobPage() {
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                     Configure the evaluation stages for candidates applying to this role.
                                 </p>
+                            </div>
+
+                            {/* Interview Duration */}
+                            <div className="space-y-2">
+                                <label htmlFor="duration_minutes" className="block text-sm font-medium text-foreground">
+                                    Total Interview Duration (minutes)
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        id="duration_minutes"
+                                        type="number"
+                                        min="10"
+                                        max="300"
+                                        className="w-32 h-10 px-3 border-2 border-input rounded-lg focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary bg-background text-foreground transition-all"
+                                        value={formData.duration_minutes}
+                                        onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 60 })}
+                                    />
+                                    <span className="text-sm text-muted-foreground">Sets the timer for all rounds combined.</span>
+                                </div>
                             </div>
 
                             {/* Aptitude Round — Junior / Intern only */}

@@ -16,6 +16,7 @@ _REQUIRED_COLUMNS = [
     ("resume_extractions", "summary", "TEXT"),
     ("jobs", "interview_token", "VARCHAR(50)"),
     ("interviews", "test_id", "VARCHAR(50)"),
+    ("interviews", "video_recording_path", "VARCHAR(500)"),
 ]
 
 

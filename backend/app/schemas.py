@@ -53,6 +53,7 @@ class JobCreate(BaseModel):
     interview_token: Optional[str] = None
     uploaded_question_file: Optional[str] = None
     aptitude_questions_file: Optional[str] = None
+    duration_minutes: Optional[int] = 60
 
 class JobUpdate(BaseModel):
     title: Optional[str] = None
@@ -71,6 +72,7 @@ class JobUpdate(BaseModel):
     uploaded_question_file: Optional[str] = None
     aptitude_config: Optional[dict] = None
     aptitude_questions_file: Optional[str] = None
+    duration_minutes: Optional[int] = None
 
 class JobResponse(BaseModel):
     id: int
@@ -96,6 +98,7 @@ class JobResponse(BaseModel):
     uploaded_question_file: Optional[str] = None
     aptitude_config: Optional[str] = None
     aptitude_questions_file: Optional[str] = None
+    duration_minutes: int = 60
     is_applied: bool = False
     hr_id: int
     created_at: datetime
@@ -216,6 +219,7 @@ class InterviewQuestionResponse(BaseModel):
     question_number: int
     question_text: str
     question_type: Optional[str]
+    question_options: Optional[str] = None
     options: Optional[str] = None
     
     class Config:
@@ -261,6 +265,7 @@ class InterviewResponse(BaseModel):
     interview_stage: Optional[str] = 'first_level'
     aptitude_score: Optional[float] = None
     aptitude_completed_at: Optional[datetime] = None
+    duration_minutes: int = 60
     report: Optional[InterviewReportResponse] = None
     
     class Config:

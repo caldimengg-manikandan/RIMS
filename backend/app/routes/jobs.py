@@ -86,6 +86,7 @@ def _validate_interview_pipeline(job_data, experience_level: str):
         "aptitude_questions_file": getattr(job_data, 'aptitude_questions_file', None),
         "aptitude_mode": getattr(job_data, 'aptitude_mode', "ai"),
         "behavioral_role": getattr(job_data, 'behavioral_role', "general"),
+        "duration_minutes": getattr(job_data, 'duration_minutes', 60) or 60,
     }
 
 
@@ -266,6 +267,7 @@ def create_job(
         uploaded_question_file=pipeline["uploaded_question_file"],
         aptitude_config=pipeline["aptitude_config"],
         aptitude_questions_file=pipeline["aptitude_questions_file"],
+        duration_minutes=pipeline["duration_minutes"],
     )
     
     try:
@@ -406,6 +408,8 @@ def update_job(
             job.aptitude_config = pipeline["aptitude_config"]
         if pipeline["aptitude_questions_file"] is not None:
             job.aptitude_questions_file = pipeline["aptitude_questions_file"]
+        if pipeline["duration_minutes"] is not None:
+            job.duration_minutes = pipeline["duration_minutes"]
 
     try:
         db.commit()

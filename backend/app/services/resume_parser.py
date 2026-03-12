@@ -58,3 +58,25 @@ def parse_resume(uploaded_file) -> str:
             return ""
         except Exception as e:
             return f"Error parsing file: {str(e)}"
+def parse_content_from_path(file_path: str) -> str:
+    """Extract text from a file on disk (PDF, DOCX, or TXT)."""
+    import os
+    if not os.path.exists(file_path):
+        return ""
+    
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.pdf':
+        with open(file_path, 'rb') as f:
+            return parse_pdf(f)
+    elif ext in ['.docx', '.doc']:
+        with open(file_path, 'rb') as f:
+            return parse_docx(f)
+    else:
+        # Default to text reading with fallback encodings
+        for encoding in ['utf-8', 'utf-8-sig', 'latin-1']:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    return f.read()
+            except Exception:
+                continue
+    return ""

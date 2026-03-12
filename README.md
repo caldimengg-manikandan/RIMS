@@ -151,11 +151,11 @@ cp .env.example .env
 pip install -r requirements.txt
 
 # Run server (tables auto-created)
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 10000
 ```
 
-Server: `http://localhost:8000`
-API Docs: `http://localhost:8000/docs`
+Server: `http://localhost:10000`
+API Docs: `http://localhost:10000/docs`
 
 ### 3. Frontend Setup
 
@@ -166,7 +166,7 @@ API Docs: `http://localhost:8000/docs`
 npm install
 
 # Create .env.local
-echo "NEXT_PUBLIC_API_BASE_URL=http://localhost:8000" > .env.local
+echo "NEXT_PUBLIC_API_BASE_URL=http://localhost:10000" > .env.local
 
 # Run dev server
 npm run dev
@@ -195,7 +195,7 @@ HR Manager:
 - **System Architecture**: See `SYSTEM_ARCHITECTURE.md`
 - **Database Schema**: See `DATABASE_SCHEMA.sql`
 - **Backend Setup**: See `backend/SETUP.md`
-- **API Documentation**: `http://localhost:8000/docs` (Swagger UI)
+- **API Documentation**: `http://localhost:10000/docs` (Swagger UI)
 
 ---
 

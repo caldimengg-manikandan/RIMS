@@ -35,7 +35,8 @@ export default function HREditJobPage({ params }: PageProps) {
         mode_of_work: 'Remote',
         location: '',
         status: 'open',
-        primary_evaluated_skills: [] as string[]
+        primary_evaluated_skills: [] as string[],
+        duration_minutes: 60,
     })
 
     // Location auto-complete state
@@ -45,9 +46,9 @@ export default function HREditJobPage({ params }: PageProps) {
 
     // Domain auto-complete state
     const [domainsList, setDomainsList] = useState<string[]>([
-        "Engineering", "Software", "Support", "Design", 
-        "Structural Engineering", "Civil Engineering", 
-        "Electrical Engineering", "Mechanical Engineering", 
+        "Engineering", "Software", "Support", "Design",
+        "Structural Engineering", "Civil Engineering",
+        "Electrical Engineering", "Mechanical Engineering",
         "Automobile Engineering", "HR"
     ])
     const [showDomainSuggestions, setShowDomainSuggestions] = useState(false)
@@ -112,7 +113,8 @@ export default function HREditJobPage({ params }: PageProps) {
                 status: data.status,
                 primary_evaluated_skills: typeof data.primary_evaluated_skills === 'string'
                     ? JSON.parse(data.primary_evaluated_skills)
-                    : (data.primary_evaluated_skills || [])
+                    : (data.primary_evaluated_skills || []),
+                duration_minutes: data.duration_minutes || 60
             })
         } catch (err) {
             setError('Failed to fetch job details')
@@ -225,7 +227,7 @@ export default function HREditJobPage({ params }: PageProps) {
                                             const searchLower = formData.domain.toLowerCase()
                                             const filtered = domainsList.filter(d => d.toLowerCase().includes(searchLower))
                                             const exactMatch = domainsList.some(d => d.toLowerCase() === searchLower)
-                                            
+
                                             return (
                                                 <>
                                                     {filtered.map((suggestion, idx) => (
@@ -300,7 +302,7 @@ export default function HREditJobPage({ params }: PageProps) {
                                     <option value="On-Site">On-Site</option>
                                 </select>
                             </div>
-                            
+
                             {formData.mode_of_work !== 'Remote' && (
                                 <div className="relative" ref={suggestionRef}>
                                     <label htmlFor="location" className="block text-sm font-medium text-foreground mb-1">
@@ -351,6 +353,19 @@ export default function HREditJobPage({ params }: PageProps) {
                                     <option value="open">Open</option>
                                     <option value="closed">Closed</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label htmlFor="duration_minutes" className="block text-sm font-medium text-foreground mb-1">
+                                    Interview Duration (min)
+                                </label>
+                                <input
+                                    id="duration_minutes"
+                                    type="number"
+                                    min="10"
+                                    className="w-full px-4 py-2 border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-background/50"
+                                    value={formData.duration_minutes}
+                                    onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 60 })}
+                                />
                             </div>
                         </div>
 

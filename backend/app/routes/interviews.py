@@ -26,8 +26,13 @@ from app.services.ai_service import (
     generate_domain_questions,
     generate_behavioral_question,
     generate_custom_domain_questions,
-    generate_behavioral_batch
+    generate_behavioral_batch,
+    extract_questions_from_text,
+    transcribe_audio
 )
+import tempfile
+import shutil
+from app.services.resume_parser import parse_content_from_path
 
 # Import termination checker (reuse analyzer singleton from ai_service)
 try:
@@ -81,9 +86,24 @@ async def _generate_aptitude_questions(interview: Interview, job: Job, db: Sessi
         try:
             file_path = settings.base_dir / job.aptitude_questions_file
             if file_path.exists():
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    uploaded_questions = json.load(f)
-                if isinstance(uploaded_questions, list) and len(uploaded_questions) > 0:
+                # Robust reading for potential encoding issues
+                uploaded_questions = None
+                for encoding in ['utf-8-sig', 'latin-1']:
+                    try:
+                        with open(file_path, 'r', encoding=encoding) as f:
+                            uploaded_questions = json.load(f)
+                        break
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        continue
+                
+                if uploaded_questions is None:
+                    # Fallback: Extract text and use AI to structure it
+                    raw_text = parse_content_from_path(str(file_path))
+                    if raw_text:
+                        print(f"Non-JSON aptitude file detected. Extracting via AI...")
+                        uploaded_questions = await extract_questions_from_text(raw_text)
+                
+                if uploaded_questions and isinstance(uploaded_questions, list) and len(uploaded_questions) > 0:
                     # Shuffle and pick N
                     random.shuffle(uploaded_questions)
                     selected = uploaded_questions[:APTITUDE_QUESTION_COUNT]
@@ -185,8 +205,8 @@ async def _generate_aptitude_questions(interview: Interview, job: Job, db: Sessi
                 interview_id=interview.id,
                 question_number=i + 1,
                 question_text=q_text,
-                question_options=options,
-                correct_option=correct,
+                options=options,
+                correct_answer=str(correct) if correct is not None else None,
                 question_type="aptitude"
             )
             db.add(q)
@@ -253,8 +273,24 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
                 
             try:
                 import json
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                # Robust reading for potential encoding issues
+                data = None
+                for encoding in ['utf-8-sig', 'latin-1']:
+                    try:
+                        with open(file_path, 'r', encoding=encoding) as f:
+                            data = json.load(f)
+                        break
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        continue
+                
+                if data is None:
+                     # Fallback: Extract text and use AI to structure it
+                     raw_text = parse_content_from_path(str(file_path))
+                     if raw_text:
+                         print(f"Non-JSON question file detected. Extracting via AI...")
+                         data = await extract_questions_from_text(raw_text)
+                     else:
+                         raise ValueError("File is not a valid JSON list or has invalid encoding, and text extraction failed.")
                 
                 if not isinstance(data, list):
                     raise ValueError("File content is not a list")
@@ -350,14 +386,14 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
         # Save all questions to DB with proper numbering
         for i, q_text in enumerate(all_questions):
             q_num = q_offset + i + 1
-            q_type = "behavioral" if i >= 15 else "technical"
+            q_type = "behavioral" if i >= (len(all_questions) - 5) else "technical"
             q = InterviewQuestion(
                 interview_id=interview.id,
                 question_number=q_num,
-                question_text=q_data["text"],
-                question_type=q_data["type"],
-                correct_answer=q_data["answer"],
-                options=q_data.get("options")
+                question_text=q_text,
+                question_type=q_type,
+                options=None,
+                correct_answer=None
             )
             db.add(q)
 
@@ -498,6 +534,7 @@ async def access_interview(
 
         if not interview.started_at:
             interview.started_at = datetime.now(timezone.utc)
+            interview.duration_minutes = job.duration_minutes or 60
             
         print(f"Starting interview session for ID {interview.id} (atomic transaction)")
     except Exception as e:
@@ -566,6 +603,8 @@ async def get_interview_stage(
         "first_level_enabled": job.first_level_enabled if job else True,
         "aptitude_score": interview_session.aptitude_score,
         "aptitude_completed_at": interview_session.aptitude_completed_at,
+        "started_at": interview_session.started_at,
+        "duration_minutes": interview_session.duration_minutes,
     }
 
 
@@ -599,7 +638,7 @@ async def get_all_questions(
             "question_number": q.question_number,
             "question_text": q.question_text,
             "question_type": q.question_type,
-            "question_options": q.question_options,
+            "question_options": q.options,
             "is_answered": q.id in answered_ids
         })
     return result
@@ -644,7 +683,16 @@ async def get_current_question(
     
     for question in questions:
         if question.id not in answered_ids:
-            return question
+            # Manually map to schema to avoid AttributeError if model lacks question_options
+            return {
+                "id": question.id,
+                "interview_id": question.interview_id,
+                "question_number": question.question_number,
+                "question_text": question.question_text,
+                "question_type": question.question_type,
+                "question_options": question.options,
+                "options": question.options
+            }
             
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="All questions in this stage answered")
 
@@ -725,21 +773,22 @@ async def submit_answer(
             submitted_at=datetime.now(timezone.utc)
         )
 
-        # Auto-grade aptitude MCQs if correct_option is set
-        if current_question.question_type == "aptitude" and current_question.correct_option is not None:
+        # Auto-grade aptitude MCQs if correct_answer is set
+        if current_question.question_type == "aptitude" and current_question.correct_answer is not None:
             # Assume answer_text is the option index (0, 1, 2, 3) or the text
             submitted_val = data.answer_text.strip()
             is_correct = False
             try:
-                if int(submitted_val) == current_question.correct_option:
+                if int(submitted_val) == int(current_question.correct_answer):
                     is_correct = True
-            except ValueError:
+            except (ValueError, TypeError):
                 # If they submitted text instead of index, try to match it
-                if current_question.question_options:
+                if current_question.options:
                     try:
-                        options = json.loads(current_question.question_options)
-                        if isinstance(options, list) and current_question.correct_option < len(options):
-                            if submitted_val.lower() == options[current_question.correct_option].lower():
+                        options = json.loads(current_question.options)
+                        correct_idx = int(current_question.correct_answer)
+                        if isinstance(options, list) and correct_idx < len(options):
+                            if submitted_val.lower() == options[correct_idx].lower():
                                 is_correct = True
                     except:
                         pass
@@ -1223,4 +1272,77 @@ def get_interview_report(
             detail="Report not yet available"
         )
     
-    return report
+    # Return report data plus video_url from interview
+    report_dict = {column.name: getattr(report, column.name) for column in report.__table__.columns}
+    report_dict['video_url'] = interview.video_recording_path
+    
+    return report_dict
+
+@router.post("/{interview_id}/transcribe")
+async def transcribe_interview_audio(
+    interview_id: int,
+    file: UploadFile = File(...),
+    interview_session: Interview = Depends(get_current_interview),
+    db: Session = Depends(get_db)
+):
+    """
+    Transcribe audio recorded during an interview.
+    """
+    if interview_session.id != interview_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    
+    # Secure temporary file handling
+    suffix = os.path.splitext(file.filename)[1] if file.filename else ".webm"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        try:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        finally:
+            file.file.close()
+
+    try:
+        text = await transcribe_audio(tmp_path)
+        return {"text": text}
+    except Exception as e:
+        print(f"Transcription failure: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process voice audio.")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@router.post("/{interview_id}/upload-video")
+async def upload_interview_video(
+    interview_id: int,
+    file: UploadFile = File(...),
+    interview_session: Interview = Depends(get_current_interview),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload the recorded video for the interview session.
+    """
+    if interview_session.id != interview_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Generate a unique filename: interview_{id}_{timestamp}.webm
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    filename = f"interview_{interview_id}_{timestamp}.webm"
+    file_path = settings.videos_dir / filename
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Save relative path to DB
+        # Note: We store the path that will be used by the static server
+        relative_path = f"uploads/videos/{filename}"
+        interview_session.video_recording_path = relative_path
+        db.add(interview_session)
+        db.commit()
+
+        return {"success": True, "path": relative_path}
+    except Exception as e:
+        print(f"Video upload failure: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save video recording.")
+    finally:
+        file.file.close()
