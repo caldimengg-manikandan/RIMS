@@ -1,0 +1,21 @@
+﻿2026-03-11 08:53:51,314 INFO sqlalchemy.engine.Engine SELECT CAST(SERVERPROPERTY('ProductVersion') AS VARCHAR)
+2026-03-11 08:53:51,314 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-03-11 08:53:51,316 INFO sqlalchemy.engine.Engine SELECT schema_name()
+2026-03-11 08:53:51,316 INFO sqlalchemy.engine.Engine [generated in 0.00020s] ()
+2026-03-11 08:53:51,318 INFO sqlalchemy.engine.Engine SELECT CAST('test max support' AS NVARCHAR(max))
+2026-03-11 08:53:51,318 INFO sqlalchemy.engine.Engine [generated in 0.00024s] ()
+2026-03-11 08:53:51,319 INFO sqlalchemy.engine.Engine SELECT 1 FROM fn_listextendedproperty(default, default, default, default, default, default, default)
+2026-03-11 08:53:51,319 INFO sqlalchemy.engine.Engine [generated in 0.00018s] ()
+2026-03-11 08:53:51,321 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 08:53:51,324 INFO sqlalchemy.engine.Engine SELECT TOP 1 users.id AS users_id, users.email AS users_email, users.password_hash AS users_password_hash, users.full_name AS users_full_name, users.role AS users_role, users.is_active AS users_is_active, users.is_verified AS users_is_verified, users.otp_code AS users_otp_code, users.otp_expiry AS users_otp_expiry, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.email = ?
+2026-03-11 08:53:51,324 INFO sqlalchemy.engine.Engine [generated in 0.00023s] ('vigneshgovardhan5163@gmail.com',)
+Using HR user: vigneshgovardhan5163@gmail.com
+2026-03-11 08:53:51,329 INFO sqlalchemy.engine.Engine INSERT INTO jobs (job_id, interview_token, title, description, experience_level, location, mode_of_work, job_type, domain, status, primary_evaluated_skills, aptitude_enabled, aptitude_mode, first_level_enabled, interview_mode, behavioral_role, upload ... 570 characters truncated ... , p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, sen_counter) ORDER BY sen_counter
+2026-03-11 08:53:51,329 INFO sqlalchemy.engine.Engine [generated in 0.00031s (insertmanyvalues) 1/1 (ordered)] ('d3d6a1c2', None, 'Senior Frontend Engineer (Test)', 'We are looking for an experienced React developer to build stunning user interfaces with modern frontend tooling.', 'Senior', 'Remote', 'Remote', 'Full-Time', 'Engineering', 'open', '["React", "TypeScript", "Tailwind CSS", "Next.js"]', 0, 'ai', 1, 'ai', 'general', None, None, None, 3, None, '4a24b20c', None, 'Backend Data Engineer (Test)', 'Join our team to build scalable FastAPI services and robust data pipelines with Python and PostgreSQL.', 'Mid-Level', 'New York', 'Remote', 'Full-Time', 'Engineering', 'open', '["Python", "FastAPI", "SQLAlchemy", "PostgreSQL", "Docker"]', 1, 'ai', 1, 'ai', 'general', None, None, None, 3, None)
+2026-03-11 08:53:51,335 INFO sqlalchemy.engine.Engine ROLLBACK
+Error seeding data: (pyodbc.IntegrityError) ('23000', "[23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot insert duplicate key row in object 'dbo.jobs' with unique index 'ix_jobs_interview_token'. The duplicate key value is (<NULL>). (2601) (SQLFetch); [23000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]The statement has been terminated. (3621)")
+[SQL: INSERT INTO jobs (job_id, interview_token, title, description, experience_level, location, mode_of_work, job_type, domain, status, primary_evaluated_skills, aptitude_enabled, aptitude_mode, first_level_enabled, interview_mode, behavioral_role, upload ... 570 characters truncated ... , p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, sen_counter) ORDER BY sen_counter]
+[parameters: ('d3d6a1c2', None, 'Senior Frontend Engineer (Test)', 'We are looking for an experienced React developer to build stunning user interfaces with modern frontend tooling.', 'Senior', 'Remote', 'Remote', 'Full-Time', 'Engineering', 'open', '["React", "TypeScript", "Tailwind CSS", "Next.js"]', 0, 'ai', 1, 'ai', 'general', None, None, None, 3, None, '4a24b20c', None, 'Backend Data Engineer (Test)', 'Join our team to build scalable FastAPI services and robust data pipelines with Python and PostgreSQL.', 'Mid-Level', 'New York', 'Remote', 'Full-Time', 'Engineering', 'open', '["Python", "FastAPI", "SQLAlchemy", "PostgreSQL", "Docker"]', 1, 'ai', 1, 'ai', 'general', None, None, None, 3, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

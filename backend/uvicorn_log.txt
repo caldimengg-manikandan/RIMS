@@ -1,0 +1,217 @@
+﻿2026-03-11 01:27:36,288 - root - INFO - Logging initialized in 10 mode. Logs saved to D:\Caldim\RIMS-main\RIMS-main\backend\app\logs
+2026-03-11 01:27:36,393 INFO sqlalchemy.engine.Engine SELECT CAST(SERVERPROPERTY('ProductVersion') AS VARCHAR)
+2026-03-11 01:27:36,393 - sqlalchemy.engine.Engine - INFO - SELECT CAST(SERVERPROPERTY('ProductVersion') AS VARCHAR)
+2026-03-11 01:27:36,393 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-03-11 01:27:36,393 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2026-03-11 01:27:36,397 INFO sqlalchemy.engine.Engine SELECT schema_name()
+2026-03-11 01:27:36,397 - sqlalchemy.engine.Engine - INFO - SELECT schema_name()
+2026-03-11 01:27:36,398 INFO sqlalchemy.engine.Engine [generated in 0.00098s] ()
+2026-03-11 01:27:36,398 - sqlalchemy.engine.Engine - INFO - [generated in 0.00098s] ()
+2026-03-11 01:27:36,402 INFO sqlalchemy.engine.Engine SELECT CAST('test max support' AS NVARCHAR(max))
+2026-03-11 01:27:36,402 - sqlalchemy.engine.Engine - INFO - SELECT CAST('test max support' AS NVARCHAR(max))
+2026-03-11 01:27:36,402 INFO sqlalchemy.engine.Engine [generated in 0.00083s] ()
+2026-03-11 01:27:36,402 - sqlalchemy.engine.Engine - INFO - [generated in 0.00083s] ()
+2026-03-11 01:27:36,404 INFO sqlalchemy.engine.Engine SELECT 1 FROM fn_listextendedproperty(default, default, default, default, default, default, default)
+2026-03-11 01:27:36,404 - sqlalchemy.engine.Engine - INFO - SELECT 1 FROM fn_listextendedproperty(default, default, default, default, default, default, default)
+2026-03-11 01:27:36,405 INFO sqlalchemy.engine.Engine [generated in 0.00069s] ()
+2026-03-11 01:27:36,405 - sqlalchemy.engine.Engine - INFO - [generated in 0.00069s] ()
+2026-03-11 01:27:36,408 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 01:27:36,408 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2026-03-11 01:27:36,418 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,418 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,418 INFO sqlalchemy.engine.Engine [generated in 0.00133s] ('BASE TABLE', 'VIEW', 'users', 'dbo')
+2026-03-11 01:27:36,418 - sqlalchemy.engine.Engine - INFO - [generated in 0.00133s] ('BASE TABLE', 'VIEW', 'users', 'dbo')
+2026-03-11 01:27:36,422 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,422 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,422 INFO sqlalchemy.engine.Engine [cached since 0.00511s ago] ('BASE TABLE', 'VIEW', 'jobs', 'dbo')
+2026-03-11 01:27:36,422 - sqlalchemy.engine.Engine - INFO - [cached since 0.00511s ago] ('BASE TABLE', 'VIEW', 'jobs', 'dbo')
+2026-03-11 01:27:36,425 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,425 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,426 INFO sqlalchemy.engine.Engine [cached since 0.008578s ago] ('BASE TABLE', 'VIEW', 'applications', 'dbo')
+2026-03-11 01:27:36,426 - sqlalchemy.engine.Engine - INFO - [cached since 0.008578s ago] ('BASE TABLE', 'VIEW', 'applications', 'dbo')
+2026-03-11 01:27:36,429 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,429 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,430 INFO sqlalchemy.engine.Engine [cached since 0.01241s ago] ('BASE TABLE', 'VIEW', 'application_stages', 'dbo')
+2026-03-11 01:27:36,430 - sqlalchemy.engine.Engine - INFO - [cached since 0.01241s ago] ('BASE TABLE', 'VIEW', 'application_stages', 'dbo')
+2026-03-11 01:27:36,432 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,432 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,433 INFO sqlalchemy.engine.Engine [cached since 0.01549s ago] ('BASE TABLE', 'VIEW', 'resume_extractions', 'dbo')
+2026-03-11 01:27:36,433 - sqlalchemy.engine.Engine - INFO - [cached since 0.01549s ago] ('BASE TABLE', 'VIEW', 'resume_extractions', 'dbo')
+2026-03-11 01:27:36,435 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,435 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,436 INFO sqlalchemy.engine.Engine [cached since 0.01844s ago] ('BASE TABLE', 'VIEW', 'interviews', 'dbo')
+2026-03-11 01:27:36,436 - sqlalchemy.engine.Engine - INFO - [cached since 0.01844s ago] ('BASE TABLE', 'VIEW', 'interviews', 'dbo')
+2026-03-11 01:27:36,439 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,439 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,439 INFO sqlalchemy.engine.Engine [cached since 0.02229s ago] ('BASE TABLE', 'VIEW', 'interview_questions', 'dbo')
+2026-03-11 01:27:36,439 - sqlalchemy.engine.Engine - INFO - [cached since 0.02229s ago] ('BASE TABLE', 'VIEW', 'interview_questions', 'dbo')
+2026-03-11 01:27:36,442 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,442 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,443 INFO sqlalchemy.engine.Engine [cached since 0.02539s ago] ('BASE TABLE', 'VIEW', 'interview_answers', 'dbo')
+2026-03-11 01:27:36,443 - sqlalchemy.engine.Engine - INFO - [cached since 0.02539s ago] ('BASE TABLE', 'VIEW', 'interview_answers', 'dbo')
+2026-03-11 01:27:36,445 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,445 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,446 INFO sqlalchemy.engine.Engine [cached since 0.02864s ago] ('BASE TABLE', 'VIEW', 'interview_reports', 'dbo')
+2026-03-11 01:27:36,446 - sqlalchemy.engine.Engine - INFO - [cached since 0.02864s ago] ('BASE TABLE', 'VIEW', 'interview_reports', 'dbo')
+2026-03-11 01:27:36,448 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,448 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,449 INFO sqlalchemy.engine.Engine [cached since 0.03177s ago] ('BASE TABLE', 'VIEW', 'hiring_decisions', 'dbo')
+2026-03-11 01:27:36,449 - sqlalchemy.engine.Engine - INFO - [cached since 0.03177s ago] ('BASE TABLE', 'VIEW', 'hiring_decisions', 'dbo')
+2026-03-11 01:27:36,451 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,451 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,452 INFO sqlalchemy.engine.Engine [cached since 0.03485s ago] ('BASE TABLE', 'VIEW', 'notifications', 'dbo')
+2026-03-11 01:27:36,452 - sqlalchemy.engine.Engine - INFO - [cached since 0.03485s ago] ('BASE TABLE', 'VIEW', 'notifications', 'dbo')
+2026-03-11 01:27:36,455 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,455 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,455 INFO sqlalchemy.engine.Engine [cached since 0.03814s ago] ('BASE TABLE', 'VIEW', 'interview_issues', 'dbo')
+2026-03-11 01:27:36,455 - sqlalchemy.engine.Engine - INFO - [cached since 0.03814s ago] ('BASE TABLE', 'VIEW', 'interview_issues', 'dbo')
+2026-03-11 01:27:36,458 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,458 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,459 INFO sqlalchemy.engine.Engine [cached since 0.04162s ago] ('BASE TABLE', 'VIEW', 'interview_feedbacks', 'dbo')
+2026-03-11 01:27:36,459 - sqlalchemy.engine.Engine - INFO - [cached since 0.04162s ago] ('BASE TABLE', 'VIEW', 'interview_feedbacks', 'dbo')
+2026-03-11 01:27:36,462 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,462 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,462 INFO sqlalchemy.engine.Engine [cached since 0.0452s ago] ('BASE TABLE', 'VIEW', 'audit_logs', 'dbo')
+2026-03-11 01:27:36,462 - sqlalchemy.engine.Engine - INFO - [cached since 0.0452s ago] ('BASE TABLE', 'VIEW', 'audit_logs', 'dbo')
+2026-03-11 01:27:36,466 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,466 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,466 INFO sqlalchemy.engine.Engine [cached since 0.04922s ago] ('BASE TABLE', 'VIEW', 'interview_sessions', 'dbo')
+2026-03-11 01:27:36,466 - sqlalchemy.engine.Engine - INFO - [cached since 0.04922s ago] ('BASE TABLE', 'VIEW', 'interview_sessions', 'dbo')
+2026-03-11 01:27:36,469 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,469 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,470 INFO sqlalchemy.engine.Engine [cached since 0.0528s ago] ('BASE TABLE', 'VIEW', 'interview_events', 'dbo')
+2026-03-11 01:27:36,470 - sqlalchemy.engine.Engine - INFO - [cached since 0.0528s ago] ('BASE TABLE', 'VIEW', 'interview_events', 'dbo')
+2026-03-11 01:27:36,472 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,472 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,473 INFO sqlalchemy.engine.Engine [cached since 0.05581s ago] ('BASE TABLE', 'VIEW', 'question_bank', 'dbo')
+2026-03-11 01:27:36,473 - sqlalchemy.engine.Engine - INFO - [cached since 0.05581s ago] ('BASE TABLE', 'VIEW', 'question_bank', 'dbo')
+2026-03-11 01:27:36,476 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,476 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,477 INFO sqlalchemy.engine.Engine [cached since 0.05966s ago] ('BASE TABLE', 'VIEW', 'candidate_skills', 'dbo')
+2026-03-11 01:27:36,477 - sqlalchemy.engine.Engine - INFO - [cached since 0.05966s ago] ('BASE TABLE', 'VIEW', 'candidate_skills', 'dbo')
+2026-03-11 01:27:36,480 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,480 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE ([INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) OR [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max))) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max))
+2026-03-11 01:27:36,481 INFO sqlalchemy.engine.Engine [cached since 0.06338s ago] ('BASE TABLE', 'VIEW', 'ai_evaluations', 'dbo')
+2026-03-11 01:27:36,481 - sqlalchemy.engine.Engine - INFO - [cached since 0.06338s ago] ('BASE TABLE', 'VIEW', 'ai_evaluations', 'dbo')
+2026-03-11 01:27:36,482 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-11 01:27:36,482 - sqlalchemy.engine.Engine - INFO - COMMIT
+2026-03-11 01:27:36,488 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 01:27:36,488 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2026-03-11 01:27:36,502 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 01:27:36,502 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2026-03-11 01:27:36,502 INFO sqlalchemy.engine.Engine SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) ORDER BY [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME]
+2026-03-11 01:27:36,502 - sqlalchemy.engine.Engine - INFO - SELECT [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME] 
+FROM [INFORMATION_SCHEMA].[TABLES] 
+WHERE [INFORMATION_SCHEMA].[TABLES].[TABLE_SCHEMA] = CAST(? AS NVARCHAR(max)) AND [INFORMATION_SCHEMA].[TABLES].[TABLE_TYPE] = CAST(? AS NVARCHAR(max)) ORDER BY [INFORMATION_SCHEMA].[TABLES].[TABLE_NAME]
+2026-03-11 01:27:36,503 INFO sqlalchemy.engine.Engine [generated in 0.00166s] ('dbo', 'BASE TABLE')
+2026-03-11 01:27:36,503 - sqlalchemy.engine.Engine - INFO - [generated in 0.00166s] ('dbo', 'BASE TABLE')
+2026-03-11 01:27:36,515 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-03-11 01:27:36,515 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2026-03-11 01:27:36,536 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 01:27:36,536 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2026-03-11 01:27:36,537 INFO sqlalchemy.engine.Engine SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id
+2026-03-11 01:27:36,537 - sqlalchemy.engine.Engine - INFO - SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id
+2026-03-11 01:27:36,538 INFO sqlalchemy.engine.Engine [generated in 0.00244s] (1, 'MS_Description', '[dbo].jobs')
+2026-03-11 01:27:36,538 - sqlalchemy.engine.Engine - INFO - [generated in 0.00244s] (1, 'MS_Description', '[dbo].jobs')
+2026-03-11 01:27:36,543 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-03-11 01:27:36,543 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2026-03-11 01:27:36,550 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-11 01:27:36,550 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2026-03-11 01:27:36,551 INFO sqlalchemy.engine.Engine SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id
+2026-03-11 01:27:36,551 - sqlalchemy.engine.Engine - INFO - SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id
+2026-03-11 01:27:36,551 INFO sqlalchemy.engine.Engine [cached since 0.01595s ago] (1, 'MS_Description', '[dbo].interview_questions')
+2026-03-11 01:27:36,551 - sqlalchemy.engine.Engine - INFO - [cached since 0.01595s ago] (1, 'MS_Description', '[dbo].interview_questions')
+2026-03-11 01:27:36,555 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-03-11 01:27:36,555 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2026-03-11 01:27:36,557 INFO sqlalchemy.engine.Engine ALTER TABLE interview_questions ADD COLUMN question_options TEXT
+2026-03-11 01:27:36,557 - sqlalchemy.engine.Engine - INFO - ALTER TABLE interview_questions ADD COLUMN question_options TEXT
+2026-03-11 01:27:36,557 INFO sqlalchemy.engine.Engine [generated in 0.00061s] ()
+2026-03-11 01:27:36,557 - sqlalchemy.engine.Engine - INFO - [generated in 0.00061s] ()
+2026-03-11 01:27:36,559 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-03-11 01:27:36,559 - sqlalchemy.engine.Engine - INFO - ROLLBACK
