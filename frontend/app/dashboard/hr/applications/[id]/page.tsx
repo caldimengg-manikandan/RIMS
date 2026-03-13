@@ -121,11 +121,7 @@ export default function HRApplicationDetailPage() {
                     <Avatar className="h-24 w-24 border-2 border-border/50 shadow-sm">
                         {application.candidate_photo_path ? (
                             <AvatarImage
-<<<<<<< HEAD
                                 src={`${API_BASE_URL}/uploads/${application.candidate_photo_path.replace(/\\/g, '/')}`}
-=======
-                                src={`${API_BASE_URL}/${application.candidate_photo_path.replace(/\\/g, '/')}`}
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
                                 alt={application.candidate_name}
                                 className="object-cover"
                             />
@@ -280,11 +276,7 @@ export default function HRApplicationDetailPage() {
                         {application.resume_file_path ? (
                             <div className="pt-4">
                                 <a
-<<<<<<< HEAD
                                     href={`${API_BASE_URL}/uploads/${application.resume_file_path.replace(/\\/g, '/')}`}
-=======
-                                    href={`${API_BASE_URL}/${application.resume_file_path.replace(/\\/g, '/')}`}
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
                                     target="_blank"
                                     className="text-primary hover:underline text-sm font-medium flex items-center gap-2"
                                 >

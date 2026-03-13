@@ -5,11 +5,7 @@ import os
 # No source code modification required.
 
 # Server socket
-<<<<<<< HEAD
 bind = "0.0.0.0:10000"
-=======
-bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
 backlog = 2048
 
 # Worker processes

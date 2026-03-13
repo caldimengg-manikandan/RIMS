@@ -229,27 +229,6 @@ export default function HRDashboard() {
             </CardContent>
           </Card>
 
-<<<<<<< HEAD
-=======
-          <Card className="bg-primary text-primary-foreground border-none rounded-2xl shadow-sm relative overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg font-medium flex items-center gap-2">
-                <span className="text-xl">✨</span> AI Insights
-              </CardTitle>
-              <CardDescription className="text-blue-100">System Suggestions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-blue-50 leading-relaxed font-normal">
-                {r_metrics.total_candidates > 5
-                  ? "You have a high volume of candidates. Consider using AI Leaderboards to prioritize the best matches."
-                  : "Your pipeline is healthy. The AI is continuously monitoring for strong matches."}
-              </p>
-              <Button variant="secondary" size="sm" className="mt-4 w-full bg-background/50 hover:bg-background/80 text-primary-foreground border border-background/10 transition-all">
-                Run Batch Analysis
-              </Button>
-            </CardContent>
-          </Card>
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
         </div>
       </div>
 

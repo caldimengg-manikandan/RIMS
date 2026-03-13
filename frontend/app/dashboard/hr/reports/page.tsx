@@ -904,7 +904,6 @@ export default function ReportsPage() {
 
               <div className="flex-1 overflow-y-auto pr-2 space-y-6 pb-6">
 
-<<<<<<< HEAD
                 {/* Video Interview Recording */}
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold flex items-center gap-2 text-blue-600">
@@ -950,8 +949,6 @@ export default function ReportsPage() {
 
                 </div>
 
-=======
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
                 <div className="space-y-4 mb-8">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Activity className="h-5 w-5 text-primary" />

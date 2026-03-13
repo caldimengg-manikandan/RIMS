@@ -16,16 +16,7 @@ _REQUIRED_COLUMNS = [
     ("resume_extractions", "summary", "TEXT"),
     ("jobs", "interview_token", "VARCHAR(50)"),
     ("interviews", "test_id", "VARCHAR(50)"),
-<<<<<<< HEAD:backend/app/migrations.py
     ("interviews", "video_recording_path", "VARCHAR(500)"),
-=======
-    # Enterprise Pipeline Columns
-    ("applications", "resume_score", "FLOAT"),
-    ("applications", "aptitude_score", "FLOAT"),
-    ("applications", "interview_score", "FLOAT"),
-    ("applications", "composite_score", "FLOAT"),
-    ("applications", "recommendation", "VARCHAR(50)"),
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec:backend/app/core/migrations.py
 ]
 
 

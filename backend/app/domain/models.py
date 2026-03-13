@@ -60,14 +60,9 @@ class Job(Base):
     behavioral_role = Column(String(50), default='general')
     uploaded_question_file = Column(String(500), nullable=True)
     aptitude_config = Column(Text, nullable=True)
-<<<<<<< HEAD:backend/app/models.py
     aptitude_questions_file = Column(String(500), nullable=True)  # Path to uploaded MCQ JSON
     duration_minutes = Column(Integer, default=60) # Global interview duration
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-=======
-    aptitude_questions_file = Column(String(500), nullable=True)
-    hr_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec:backend/app/domain/models.py
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
     closed_at = Column(DateTime, nullable=True)

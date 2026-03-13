@@ -1,6 +1,5 @@
 "use client";
 
-<<<<<<< HEAD
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,48 +36,6 @@ interface Application {
         resume_score: number
         skill_match_percentage: number
     } | null
-=======
-import React, { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { APIClient } from "@/app/dashboard/lib/api-client";
-import { RejectDialog } from "@/components/reject-dialog";
-import useSWR, { useSWRConfig } from "swr";
-import { fetcher } from "@/app/dashboard/lib/swr-fetcher";
-import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/config";
-
-interface Application {
-  id: number;
-  status: string;
-  applied_at: string;
-  candidate_name: string;
-  candidate_email: string;
-  job: {
-    id: number;
-    job_id: string | null;
-    title: string;
-  };
-  interview: {
-    id: number;
-    test_id: string | null;
-    report: {
-      aptitude_score: number | null;
-      technical_skills_score: number | null;
-      behavioral_score: number | null;
-    } | null;
-  } | null;
-  resume_extraction: {
-    resume_score: number;
-    skill_match_percentage: number;
-  } | null;
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
 }
 
 export default function HRApplicationsPage() {
@@ -220,7 +177,6 @@ export default function HRApplicationsPage() {
       );
     });
 
-<<<<<<< HEAD
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'submitted': return 'capsule-badge-primary'
@@ -232,25 +188,6 @@ export default function HRApplicationsPage() {
             case 'rejected_post_interview': return 'capsule-badge-destructive'
             default: return 'capsule-badge-neutral'
         }
-=======
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "submitted":
-        return "capsule-badge-primary";
-      case "review_later":
-        return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-      case "approved_for_interview":
-        return "capsule-badge-info";
-      case "interview_completed":
-        return "capsule-badge-primary";
-      case "hired":
-        return "capsule-badge-success";
-      case "rejected":
-      case "rejected_post_interview":
-        return "capsule-badge-destructive";
-      default:
-        return "capsule-badge-neutral";
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
     }
   };
 
@@ -292,7 +229,6 @@ export default function HRApplicationsPage() {
             </div>
           </div>
 
-<<<<<<< HEAD
             {isLoading ? (
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
@@ -504,36 +440,6 @@ export default function HRApplicationsPage() {
                     ))}
                 </div>
             )}
-=======
-          {/* Date Filter */}
-          <div className="w-[200px]">
-            <input
-              type="date"
-              className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div className="w-[200px]">
-            <select
-              className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">All Statuses</option>
-              <option value="submitted">Submitted</option>
-              <option value="review_later">Review Later</option>
-              <option value="approved_for_interview">
-                Approved for Interview
-              </option>
-              <option value="interview_completed">Interview Completed</option>
-              <option value="hired">Hired</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
->>>>>>> 983f8d04613418765571aee448519ec838d8c6ec
         </div>
       </div>
 
