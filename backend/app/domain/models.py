@@ -61,7 +61,7 @@ class Job(Base):
     uploaded_question_file = Column(String(500), nullable=True)
     aptitude_config = Column(Text, nullable=True)
     aptitude_questions_file = Column(String(500), nullable=True)
-    hr_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    hr_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
     closed_at = Column(DateTime, nullable=True)
@@ -84,7 +84,7 @@ class Application(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey('jobs.id'), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey('jobs.id', ondelete="CASCADE"), nullable=False, index=True)
     candidate_name = Column(String(255), nullable=False)
     candidate_email = Column(String(255), nullable=False, index=True)
     candidate_phone = Column(EncryptedText)
@@ -121,12 +121,12 @@ class ApplicationStage(Base):
     __tablename__ = "application_stages"
     
     id = Column(Integer, primary_key=True, index=True)
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=False, index=True)
     stage_name = Column(String(100), nullable=False) # e.g., 'Aptitude Round'
     stage_status = Column(String(50), default='pending') # 'pending', 'pass', 'fail', 'hold'
     score = Column(Float, nullable=True)
     evaluation_notes = Column(EncryptedText)
-    evaluator_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    evaluator_id = Column(Integer, ForeignKey('users.id', ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
@@ -163,7 +163,7 @@ class Interview(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     test_id = Column(String(50), unique=True, index=True, nullable=True)  # New Test ID field
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=False, unique=True, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=False, unique=True, index=True)
     status = Column(String(50), default='not_started', index=True)  # 'not_started', 'in_progress', 'completed', 'cancelled'
     locked_skill = Column(String(50))  # e.g. 'backend', 'frontend'
     total_questions = Column(Integer, default=20)
@@ -190,15 +190,13 @@ class Interview(Base):
     questions = relationship(
         "InterviewQuestion",
         back_populates="interview",
-        cascade="all, delete-orphan",
-        passive_deletes=True
+        cascade="all, delete-orphan"
     )
     report = relationship(
         "InterviewReport",
         back_populates="interview",
         uselist=False,
-        cascade="all, delete-orphan",
-        passive_deletes=True
+        cascade="all, delete-orphan"
     )
     issues = relationship("InterviewIssue", back_populates="interview", cascade="all, delete-orphan")
     feedback = relationship("InterviewFeedback", back_populates="interview", cascade="all, delete-orphan")
@@ -208,7 +206,7 @@ class InterviewQuestion(Base):
     __tablename__ = "interview_questions"
 
     id = Column(Integer, primary_key=True, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id'), nullable=False, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, index=True)
     question_number = Column(Integer, nullable=False)
     question_text = Column(Text, nullable=False)
     question_type = Column(String(50))  # 'aptitude', 'behavioral', 'technical', 'follow_up'
@@ -221,7 +219,7 @@ class InterviewQuestion(Base):
     
     # Relationships
     interview = relationship("Interview", back_populates="questions")
-    answers = relationship("InterviewAnswer", back_populates="question")
+    answers = relationship("InterviewAnswer", back_populates="question", cascade="all, delete-orphan")
 
 
 class InterviewAnswer(Base):
@@ -231,8 +229,8 @@ class InterviewAnswer(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey('interview_questions.id'), nullable=False, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id'), index=True, nullable=True)
+    question_id = Column(Integer, ForeignKey('interview_questions.id', ondelete="CASCADE"), nullable=False, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), index=True, nullable=True)
     answer_text = Column(EncryptedText, nullable=False)
     answer_score = Column(Float)  # 1-10
     answer_evaluation = Column(EncryptedText)  # AI evaluation
@@ -248,15 +246,16 @@ class InterviewAnswer(Base):
     # Relationships
     question = relationship("InterviewQuestion", back_populates="answers")
     interview = relationship("Interview")
+    evaluation = relationship("AIEvaluation", back_populates="answer", uselist=False, cascade="all, delete-orphan")
 
 
 class InterviewReport(Base):
     __tablename__ = "interview_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id'), nullable=False, unique=True, index=True)
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=True, index=True)
-    job_id = Column(Integer, ForeignKey('jobs.id'), nullable=True, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=True, index=True)
+    job_id = Column(Integer, ForeignKey('jobs.id', ondelete="CASCADE"), nullable=True, index=True)
     overall_score = Column(Float)
     technical_skills_score = Column(Float)
     communication_score = Column(Float)
@@ -288,8 +287,8 @@ class HiringDecision(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=False, unique=True, index=True)
-    hr_id = Column(Integer, ForeignKey('users.id'), index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    hr_id = Column(Integer, ForeignKey('users.id', ondelete="SET NULL"), index=True)
     decision = Column(String(20), nullable=False)  # 'hired', 'rejected'
     decision_comments = Column(EncryptedText)
     decided_at = Column(DateTime, default=func.now(), server_default=func.now())
@@ -309,8 +308,8 @@ class Notification(Base):
     title = Column(String(255), nullable=False)
     message = Column(EncryptedText, nullable=False)
     is_read = Column(Boolean, default=False, index=True)
-    related_application_id = Column(Integer, ForeignKey('applications.id'))
-    related_interview_id = Column(Integer, ForeignKey('interviews.id'))
+    related_application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"))
+    related_interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"))
     created_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
     read_at = Column(DateTime)
 
@@ -326,7 +325,7 @@ class InterviewIssue(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id'), nullable=False, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, index=True)
     candidate_name = Column(String(255))
     candidate_email = Column(String(255))
     issue_type = Column(String(100))  # 'interruption', 'technical', 'misconduct_appeal'
@@ -345,7 +344,7 @@ class InterviewFeedback(Base):
     __tablename__ = "interview_feedbacks"
 
     id = Column(Integer, primary_key=True, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id'), nullable=False, unique=True, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, unique=True, index=True)
     ui_ux_rating = Column(Integer)  # 1-5
     feedback_text = Column(Text)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
@@ -374,9 +373,9 @@ class InterviewSession(Base):
     __tablename__ = "interview_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    candidate_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    job_id = Column(Integer, ForeignKey('jobs.id'), nullable=False, index=True)
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=True, index=True)
+    candidate_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey('jobs.id', ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=True, index=True)
     start_time = Column(DateTime(timezone=True), default=func.now())
     end_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default='pending', index=True)  # 'pending', 'active', 'completed', 'aborted'
@@ -419,7 +418,7 @@ class CandidateSkill(Base):
     __tablename__ = "candidate_skills"
 
     id = Column(Integer, primary_key=True, index=True)
-    application_id = Column(Integer, ForeignKey('applications.id'), nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=False, index=True)
     skill_name = Column(String(100), nullable=False, index=True)
     proficiency_score = Column(Float, nullable=True) # 0-10 based on AI analysis
     years_experience = Column(Float, nullable=True)
@@ -432,9 +431,12 @@ class AIEvaluation(Base):
     __tablename__ = "ai_evaluations"
 
     id = Column(Integer, primary_key=True, index=True)
-    answer_id = Column(Integer, ForeignKey('interview_answers.id'), nullable=False, index=True)
+    answer_id = Column(Integer, ForeignKey('interview_answers.id', ondelete="CASCADE"), nullable=False, index=True)
     technical_score = Column(Float)
     communication_score = Column(Float)
     reasoning_score = Column(Float)
     feedback_text = Column(Text)
     created_at = Column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    answer = relationship("InterviewAnswer", back_populates="evaluation")

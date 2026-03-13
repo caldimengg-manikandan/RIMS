@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session, joinedload
 import os
 import json
 from datetime import datetime, timezone
-from app.infrastructure.database import get_db
+from app.infrastructure.database import get_db, SessionLocal
 from app.domain.models import User, Application, Job, ResumeExtraction, Interview, InterviewAnswer
-from app.domain.schemas import ApplicationCreate, ApplicationStatusUpdate, ApplicationResponse, ApplicationDetailResponse
+from app.domain.schemas import ApplicationCreate, ApplicationStatusUpdate, ApplicationResponse, ApplicationDetailResponse, ApplicationNotesUpdate
 from app.core.auth import get_current_user, get_current_hr
 from app.services.ai_service import parse_resume_with_ai
 from app.services.email_service import send_application_received_email, send_rejected_email, send_approved_for_interview_email
@@ -653,8 +653,8 @@ async def delete_application(
     """
     Delete an application along with associated data. HR only.
     """
-    if current_user.role != "hr":
-        raise HTTPException(status_code=403, detail="Only HR can delete applications")
+    if current_user.role not in ["admin", "hr_manager", "recruiter", "hr"]:
+        raise HTTPException(status_code=403, detail="Only HR or Admins can delete applications")
 
     app = db.query(Application).filter(Application.id == application_id).first()
     if not app:
@@ -668,3 +668,19 @@ async def delete_application(
         print(f"Error deleting application {application_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete application. It might have complex dependencies.")
     return {"message": "Application deleted successfully"}
+@router.put("/{application_id}/notes", response_model=ApplicationResponse)
+async def update_hr_notes(
+    application_id: int,
+    notes_update: ApplicationNotesUpdate,
+    current_user: User = Depends(get_current_hr),
+    db: Session = Depends(get_db)
+):
+    """Update HR notes for an application"""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    application.hr_notes = notes_update.hr_notes
+    db.commit()
+    db.refresh(application)
+    return application

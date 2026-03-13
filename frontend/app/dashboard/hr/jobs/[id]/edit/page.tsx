@@ -148,12 +148,18 @@ export default function HREditJobPage({ params }: PageProps) {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <Link href="/dashboard/hr/jobs" className="flex items-center text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors w-fit">
-                <ArrowLeft className="w-4 h-4 mr-1" /> Back to Job Listings
-            </Link>
-
             <Card className="border-border backdrop-blur-md bg-card/70 shadow-xl rounded-3xl animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both">
                 <CardHeader>
+                    <div className="mb-4">
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.back()}
+                            className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group"
+                        >
+                            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                            <span className="text-sm font-bold">Back to Job Listings</span>
+                        </Button>
+                    </div>
                     <CardTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent ">
                         Edit Job Position
                     </CardTitle>

@@ -90,7 +90,7 @@ export default function LoginPage() {
             </h1>
 
             <p className="text-lg xl:text-xl text-slate-300 max-w-lg mb-8 leading-relaxed">
-              Experience the world's most advanced AI-driven talent acquisition platform.
+              Experience the advanced AI-driven talent acquisition platform.
             </p>
 
             <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-700/50">

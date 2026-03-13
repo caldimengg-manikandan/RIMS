@@ -113,3 +113,49 @@ export const SkillProficiencyChart = React.memo(({ report }: { report: Report })
         </ResponsiveContainer>
     )
 })
+
+export const AllReportsMetricsChart = React.memo(({ reports }: { reports: any[] }) => {
+    let sums = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
+    let count = 0;
+
+    reports.forEach(report => {
+        report.question_evaluations?.forEach((q: any) => {
+            if (q.evaluation) {
+                sums.technical += q.evaluation.technical_accuracy || 0;
+                sums.clarity += q.evaluation.clarity || 0;
+                sums.completeness += q.evaluation.completeness || 0;
+                sums.depth += q.evaluation.depth || 0;
+                sums.practicality += q.evaluation.practicality || 0;
+                count++;
+            }
+        });
+    });
+
+    const data = count > 0 ? [
+        { name: 'Technical', score: sums.technical / count },
+        { name: 'Clarity', score: sums.clarity / count },
+        { name: 'Completeness', score: sums.completeness / count },
+        { name: 'Depth', score: sums.depth / count },
+        { name: 'Practicality', score: sums.practicality / count }
+    ] : [];
+
+    return (
+        <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 0 }} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--border)" />
+                <XAxis type="number" domain={[0, 10]} hide />
+                <YAxis dataKey="name" type="category" tick={{ fill: 'currentColor', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                <Tooltip
+                    cursor={{ fill: 'var(--muted)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--background)', color: 'var(--foreground)' }}
+                    formatter={(value: number) => value.toFixed(1)}
+                />
+                <Bar dataKey="score" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]}>
+                    {data.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(var(--primary))`} fillOpacity={0.4 + (index * 0.15)} />
+                    ))}
+                </Bar>
+            </BarChart>
+        </ResponsiveContainer>
+    )
+})

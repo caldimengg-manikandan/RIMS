@@ -37,7 +37,7 @@ const STATUS_COLUMNS = [
     { id: "applied", label: "Applied" },
     { id: "aptitude_round", label: "Aptitude" },
     { id: "ai_interview", label: "AI Interview" },
-    { id: "ai_interview_completed", label: "AI Completed" },
+    { id: "ai_interview_completed", label: "Interview Completed" },
     { id: "review_later", label: "Review Later" },
     { id: "physical_interview", label: "Physical Interview" },
     { id: "hired", label: "Hired" },

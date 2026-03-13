@@ -17,7 +17,7 @@ import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle } from 'lucide-react'
+import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/config'
 
 const MAX_QUESTION_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -314,12 +314,18 @@ export default function HRCreateJobPage() {
 
     return (
         <div className="p-8 max-w-3xl mx-auto">
-            <Link href="/dashboard/hr/jobs" className="text-muted-foreground hover:text-foreground text-sm mb-6 inline-block">
-                ← Back to Job Listings
-            </Link>
-
             <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm rounded-xl animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both">
                 <CardHeader>
+                    <div className="mb-4">
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.back()}
+                            className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group"
+                        >
+                            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                            <span className="text-sm font-bold">Back to Job Listings</span>
+                        </Button>
+                    </div>
                     <CardTitle className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                         Create New Job Position
                     </CardTitle>

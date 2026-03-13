@@ -775,7 +775,7 @@ class ResponseAnalyzer:
 
     def _fallback_evaluation(self, question: str, answer: str, word_count: int, metrics: Dict) -> Dict:
         """Fallback evaluation when AI fails"""
-        base_score = 5
+        base_score = 0
         
         # Adjust based on word count
         if 100 <= word_count <= 250:

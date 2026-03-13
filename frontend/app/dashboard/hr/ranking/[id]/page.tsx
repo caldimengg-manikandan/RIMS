@@ -7,7 +7,9 @@ import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Trophy, Medal, Award, User } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Trophy, Medal, Award, User, ArrowLeft, Users } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface RankedCandidate {
     rank: number
@@ -19,6 +21,7 @@ interface RankedCandidate {
 }
 
 export default function LeaderboardPage() {
+    const router = useRouter()
     const params = useParams()
     const jobId = params.id
     const { data: ranked = [], isLoading } = useSWR<RankedCandidate[]>(`/api/applications/ranking/${jobId}`, fetcher)
@@ -42,10 +45,20 @@ export default function LeaderboardPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-extrabold tracking-tight">AI Candidate Ranking</h1>
-                    <p className="text-muted-foreground mt-2">Ranked by weighted composite score: 40% Resume + 30% Aptitude + 30% AI Interview</p>
+            <div className="flex flex-col gap-4">
+                <Button 
+                    variant="ghost" 
+                    onClick={() => router.push('/dashboard/hr/jobs')} 
+                    className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group w-fit"
+                >
+                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                    <span className="text-sm font-bold">Back to Jobs</span>
+                </Button>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-extrabold tracking-tight uppercase">AI Candidate Ranking</h1>
+                        <p className="text-xs font-bold text-muted-foreground mt-2 uppercase tracking-widest opacity-60">Weighted composite score: 40% Resume + 30% Aptitude + 30% AI Interview</p>
+                    </div>
                 </div>
             </div>
 
@@ -104,4 +117,3 @@ export default function LeaderboardPage() {
     )
 }
 
-import { Users } from 'lucide-react'

@@ -19,7 +19,9 @@ import {
   Search,
   Filter,
   X,
-  Award
+  Award,
+  RotateCw,
+  RotateCcw
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -74,26 +76,29 @@ export default function HRDashboard() {
   const { data: dashboardData, error: dashboardError, isLoading: dashboardLoading } = useSWR<DashboardData>('/api/analytics/dashboard', (url: string) => fetcher<DashboardData>(url))
 
   // Filter States
-  const [filters, setFilters] = useState({
-    candidate_name: '',
-    candidate_email: '',
-    test_id: '',
-    role_applied: '',
+  const [filters, setFilters] = useState<any>({
+    search: '',
     date: '',
     status: 'all'
   })
+  
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [filters.search])
 
   // We use SWR for the initial filtered interviews as well
   const filterQuery = useMemo(() => {
     const params = new URLSearchParams()
-    if (filters.candidate_name) params.append('candidate_name', filters.candidate_name)
-    if (filters.candidate_email) params.append('candidate_email', filters.candidate_email)
-    if (filters.test_id) params.append('test_id', filters.test_id)
-    if (filters.role_applied) params.append('role_applied', filters.role_applied)
+    if (debouncedSearch) params.append('search', debouncedSearch)
     if (filters.date) params.append('date', filters.date)
     if (filters.status && filters.status !== 'all') params.append('status', filters.status)
     return params.toString()
-  }, [filters])
+  }, [debouncedSearch, filters.date, filters.status])
 
   const { data: filteredInterviews, isValidating: isFiltering, mutate: mutateInterviews } = useSWR<any[]>(
     `/api/analytics/interviews${filterQuery ? `?${filterQuery}` : ''}`,
@@ -122,10 +127,7 @@ export default function HRDashboard() {
 
   const handleReset = () => {
     setFilters({
-      candidate_name: '',
-      candidate_email: '',
-      test_id: '',
-      role_applied: '',
+      search: '',
       date: '',
       status: 'all'
     })
@@ -203,7 +205,7 @@ export default function HRDashboard() {
                   <CardTitle className="text-slate-800 dark:text-slate-200">Application Pipeline</CardTitle>
                   <CardDescription className="text-muted-foreground">Distribution of candidates by status</CardDescription>
                 </div>
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <div className=" bg-blue-50 text-blue-600 rounded-lg">
                   <TrendingUp className="h-5 w-5" />
                 </div>
               </div>
@@ -265,51 +267,27 @@ export default function HRDashboard() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Filter Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-1">Candidate Name</label>
+          <div className="flex flex-col md:flex-row gap-4 p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 items-center">
+            <div className="flex-1 w-full relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search name..."
-                value={filters.candidate_name}
-                onChange={(e) => setFilters({ ...filters, candidate_name: e.target.value })}
-                className="bg-background/50 h-9"
+                placeholder="Search candidates, roles, or IDs..."
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                className="bg-white dark:bg-slate-950 h-10 pl-10 pr-10 border-slate-200 focus:ring-primary shadow-sm"
               />
+              {isFiltering && (
+                <RotateCw className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+              )}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-1">Candidate Email</label>
-              <Input
-                placeholder="Search email..."
-                value={filters.candidate_email}
-                onChange={(e) => setFilters({ ...filters, candidate_email: e.target.value })}
-                className="bg-background/50 h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-1">Candidate ID</label>
-              <Input
-                placeholder="Ex: CAND-..."
-                value={filters.test_id}
-                onChange={(e) => setFilters({ ...filters, test_id: e.target.value })}
-                className="bg-background/50 h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-1">Role</label>
-              <Input
-                placeholder="Ex: Software..."
-                value={filters.role_applied}
-                onChange={(e) => setFilters({ ...filters, role_applied: e.target.value })}
-                className="bg-background/50 h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-1">Status</label>
+
+            <div className="w-full md:w-48">
               <Select
                 value={filters.status}
                 onValueChange={(value) => setFilters({ ...filters, status: value })}
               >
-                <SelectTrigger className="bg-background/50 h-9">
-                  <SelectValue placeholder="Select Status" />
+                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                  <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
@@ -320,30 +298,16 @@ export default function HRDashboard() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end gap-2">
-              <Button
-                onClick={() => mutateInterviews()} // Revalidate SWR data
-                className="flex-1 h-9 bg-primary/90 hover:bg-primary"
-                disabled={isFiltering}
-              >
-                {isFiltering ? (
-                  <div className="h-4 w-4 border-2 border-background border-t-transparent animate-spin rounded-full" />
-                ) : (
-                  <>
-                    <Search className="h-4 w-4 mr-1.5" />
-                    Refresh
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                className="h-9 px-3"
-                disabled={isFiltering}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleReset}
+              className="h-10 w-10 shrink-0 border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-sm"
+              title="Reset all filters"
+            >
+              <RotateCcw className="h-4 w-4 text-muted-foreground" />
+            </Button>
           </div>
 
           {recentInterviews.length > 0 ? (

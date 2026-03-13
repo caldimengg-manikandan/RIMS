@@ -124,6 +124,9 @@ class ApplicationStatusUpdate(BaseModel):
     action: str  # FSM action: 'approve_for_interview', 'reject', 'call_for_interview', 'review_later', 'hire'
     hr_notes: Optional[str] = None
 
+class ApplicationNotesUpdate(BaseModel):
+    hr_notes: str
+
 class TransitionResponse(BaseModel):
     application_id: int
     from_state: str

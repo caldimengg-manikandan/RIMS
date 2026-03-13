@@ -12,6 +12,17 @@ from datetime import datetime
 
 router = APIRouter()
 
+@router.get("/config/skills")
+async def get_skills_config():
+    """Expose the canonical skill categories from the interview engine (Point 1)"""
+    try:
+        from interview_process.config import SKILL_CATEGORIES
+        return list(SKILL_CATEGORIES.keys())
+    except Exception as e:
+        print(f"Error loading skill categories: {e}")
+        # Fallback to a basic list if import fails
+        return ["backend", "frontend", "fullstack", "devops", "hr"]
+
 @router.get("/dashboard")
 async def get_dashboard_analytics(
     current_user: User = Depends(get_current_user),
@@ -30,12 +41,14 @@ async def get_dashboard_analytics(
         analytics = service.get_enterprise_metrics(hr_id=current_user.id if current_user.role != "admin" else None)
         
         # 2. Application Status Distribution (for Charts)
-        # Use outerjoin to ensure we see counts even if jobs table is weird
-        status_counts = db.query(
+        status_query = db.query(
             Application.status, func.count(Application.id)
-        ).outerjoin(Job).group_by(Application.status).all()
+        ).join(Job)
         
-        print(f"DEBUG: Status counts from DB: {status_counts}")
+        if current_user.role != "admin":
+            status_query = status_query.filter(Job.hr_id == current_user.id)
+            
+        status_counts = status_query.group_by(Application.status).all()
         
         chart_data = []
         for app_status, count in status_counts:
@@ -64,7 +77,7 @@ async def get_dashboard_analytics(
 
         return {
             **analytics,
-            "status_distribution": chart_data,
+            "chart_data": chart_data,
             "recent_activity": recent_interviews_data
         }
     except Exception as e:
@@ -225,7 +238,7 @@ async def get_interview_reports(
                 "timestamp": created.isoformat() if created else "",
                 "display_date": created.strftime("%Y-%m-%d %H:%M:%S") if created else "",
                 "display_date_short": created.strftime("%b %d, %Y") if created else "",
-                "status": interview.status if interview else "completed",
+                "status": application.status if application else (interview.status if interview else "completed"),
                 "overall_score": report.overall_score or 0,
                 "final_score": report.combined_score or report.overall_score or 0,
                 "technical_score": tech_avg if tech_avg > 0 else (report.technical_skills_score or 0),
@@ -327,6 +340,7 @@ async def get_filtered_interviews(
     candidate_email: Optional[str] = None,
     test_id: Optional[str] = None,
     role_applied: Optional[str] = None,
+    search: Optional[str] = None,
     date: Optional[str] = None,
     status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
@@ -343,7 +357,17 @@ async def get_filtered_interviews(
 
     query = db.query(Interview).join(Application).join(Job)
 
-    # Apply filters
+    # Apply global search if present
+    if search:
+        from sqlalchemy import or_
+        query = query.filter(or_(
+            Application.candidate_name.ilike(f"%{search}%"),
+            Application.candidate_email.ilike(f"%{search}%"),
+            Interview.test_id.ilike(f"%{search}%"),
+            Job.title.ilike(f"%{search}%")
+        ))
+
+    # Apply specific filters
     if candidate_name:
         query = query.filter(Application.candidate_name.ilike(f"%{candidate_name}%"))
     

@@ -17,15 +17,15 @@ class AnalyticsService:
 
         total_candidates = query_base.count()
         
-        # Shortlisted = Approved for interview, AI interview, Tech interview, HR interview, etc.
+        # Shortlisted = Success in initial screening (Aptitude, AI Int, etc.)
         shortlisted = query_base.filter(Application.status.in_([
-            'approved_for_interview', 'aptitude_round', 'ai_interview', 
-            'technical_interview', 'hr_interview', 'final_decision'
+            'aptitude_round', 'ai_interview', 'ai_interview_completed', 
+            'review_later', 'physical_interview', 'hired', 'rejected'
         ])).count()
         
-        # Interviewed = Status is ai_interview or beyond
+        # Interviewed = Participated in at least one interview stage
         interviewed = query_base.filter(Application.status.in_([
-            'ai_interview', 'technical_interview', 'hr_interview', 'final_decision', 'hired'
+            'ai_interview', 'ai_interview_completed', 'physical_interview', 'hired'
         ])).count()
         
         offers_released = query_base.filter(Application.status == 'hired').count()

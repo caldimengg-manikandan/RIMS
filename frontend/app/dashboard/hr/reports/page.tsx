@@ -47,15 +47,9 @@ import {
 import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity } from 'lucide-react'
 
 import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
-import { StatusChart, DetailedMetricsChart, SkillProficiencyChart } from '@/components/reports/Charts'
+import { StatusChart, DetailedMetricsChart, SkillProficiencyChart, AllReportsMetricsChart } from '@/components/reports/Charts'
 import { MetricCard } from '@/components/reports/MetricCard'
 import { ReportCard } from '@/components/reports/ReportCard'
-
-// Constants
-const SKILL_CATEGORIES = [
-  "backend", "frontend", "fullstack", "devops", "networking",
-  "data", "mobile", "aec_bim", "hr", "qa_testing", "ui_ux", "cybersecurity"
-]
 
 // Types
 interface Evaluation {
@@ -83,6 +77,7 @@ interface QuestionEvaluation {
   question_number?: number
   question_type?: 'technical' | 'behavioral' | 'aptitude'
   correct?: boolean
+  score?: number
 }
 
 interface CandidateProfile {
@@ -97,6 +92,7 @@ interface CandidateProfile {
 }
 
 interface Report {
+  id: number;
   filename: string
   timestamp: string
   display_date: string
@@ -143,8 +139,43 @@ function cleanQuestionText(text: string): string {
   return cleaned.trim();
 }
 
+/**
+ * Resolves aptitude answer text. 
+ * If the answer is a numeric index and the question is a JSON array containing options,
+ * it returns the actual option text.
+ */
+function resolveAptitudeAnswer(questionText: string, answerText: string): string {
+  if (!answerText) return '';
+  const trimmedAnswer = answerText.trim();
+  
+  // If not a simple numeric index, return as is
+  if (!/^\d+$/.test(trimmedAnswer)) return answerText;
+
+  try {
+    const parsed = JSON.parse(questionText);
+    if (Array.isArray(parsed) && parsed.length > 1) {
+      const optionIndex = parseInt(trimmedAnswer, 10);
+      // MCQ format: [Question, Opt0, Opt1, Opt2, Opt3]
+      // Answer "0" -> Opt0 (parsed[1])
+      const actualOption = parsed[optionIndex + 1];
+      if (actualOption) return actualOption;
+    }
+  } catch (e) {
+    // If parsing fails or not an array, just return the raw answer
+  }
+
+  return answerText;
+}
+
 export default function ReportsPage() {
   const { data: rawReports = [], error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<Report[]>('/api/analytics/reports', (url: string) => fetcher<Report[]>(url))
+  const { data: serverSkills = [] } = useSWR<string[]>('/api/analytics/config/skills', (url: string) => fetcher<string[]>(url))
+
+  const skillCategories = useMemo(() => {
+    return serverSkills.length > 0 ? serverSkills : [
+      "frontend", "backend", "fullstack", "devops", "hr", "qa_testing", "ui_ux", "cybersecurity"
+    ]
+  }, [serverSkills])
 
   // Read ?search= from URL on mount (supports "View Full Report" navigation from application detail)
   const [initialSearchApplied, setInitialSearchApplied] = useState(false)
@@ -177,14 +208,24 @@ export default function ReportsPage() {
       // Aptitude Calculation
       const aptQty = report.aptitude_question_evaluations?.length || 0;
       const aptCorrect = report.aptitude_question_evaluations?.filter(q => q.correct).length || 0;
-      const aptScore = aptQty > 0 ? (aptCorrect / aptQty) * 10 : report.aptitude_score;
+      const aptScore = aptQty > 0 ? (aptCorrect / aptQty) * 10 : (report.aptitude_score || 0);
+
+      // Normalize status for analytics categories
+      let mappedStatus = 'Hold';
+      const s = (report.status || '').toLowerCase();
+      if (['selected', 'hired', 'hire'].includes(s)) mappedStatus = 'Selected';
+      else if (['rejected', 'reject'].includes(s)) mappedStatus = 'Rejected';
+      else if (['hold', 'on hold', 'review_later'].includes(s)) mappedStatus = 'Hold';
+      else if (s.includes('interview') || s.includes('round') || s.includes('completed')) mappedStatus = 'Hold';
+      else mappedStatus = 'Other';
 
       return {
         ...report,
-        tech_score: techCount > 0 ? techSum / techCount : report.tech_score,
-        behavioral_score: behCount > 0 ? behSum / behCount : report.behavioral_score,
+        mappedStatus,
+        tech_score: techCount > 0 ? techSum / techCount : (report.tech_score || 0),
+        behavioral_score: behCount > 0 ? behSum / behCount : (report.behavioral_score || 0),
         aptitude_score: aptScore,
-        comm_score: commCount > 0 ? commSum / commCount : report.comm_score,
+        comm_score: commCount > 0 ? commSum / commCount : (report.comm_score || 0),
       };
     });
   }, [rawReports])
@@ -223,17 +264,27 @@ export default function ReportsPage() {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Initialize searchQuery from URL ?search= parameter (one-time on mount)
+  // Initialize searchQuery and direct report view from URL parameters
   useEffect(() => {
-    if (!initialSearchApplied) {
+    if (reports.length > 0 && !initialSearchApplied) {
       const params = new URLSearchParams(window.location.search)
       const searchParam = params.get('search')
+      const reportId = params.get('reportId')
+
       if (searchParam) {
         setSearchQuery(searchParam)
       }
+
+      if (reportId) {
+        const reportToView = reports.find(r => r.id.toString() === reportId || r.filename?.includes(reportId))
+        if (reportToView) {
+          setViewingReport(reportToView)
+        }
+      }
+      
       setInitialSearchApplied(true)
     }
-  }, [initialSearchApplied])
+  }, [reports, initialSearchApplied])
 
   // Derived Data for Filters
   const uniqueExperiences = useMemo(() => Array.from(new Set(reports.map(r => r.candidate_profile.experience_level || 'N/A'))).sort(), [reports])
@@ -286,13 +337,16 @@ export default function ReportsPage() {
   // Metrics
   const metrics = useMemo(() => {
     const total = filteredReports.length
-    const selectedCount = filteredReports.filter(r => r.status === 'Selected').length
-    const holdCount = filteredReports.filter(r => r.status === 'Hold').length
-    const rejectedCount = filteredReports.filter(r => r.status === 'Rejected').length
-    const avgScore = total > 0 ? (filteredReports.reduce((acc, r) => acc + r.overall_score, 0) / total).toFixed(2) : '0.00'
-    const avgQuestions = total > 0 ? (filteredReports.reduce((acc, r) => acc + r.total_questions_answered, 0) / total).toFixed(1) : '0.0'
+    const selectedCount = filteredReports.filter(r => r.mappedStatus === 'Selected').length
+    const holdCount = filteredReports.filter(r => r.mappedStatus === 'Hold').length
+    const rejectedCount = filteredReports.filter(r => r.mappedStatus === 'Rejected').length
+    const inProgressCount = filteredReports.filter(r => r.mappedStatus === 'In Progress').length
+    const otherCount = filteredReports.filter(r => r.mappedStatus === 'Other').length
+    
+    const avgScore = total > 0 ? (filteredReports.reduce((acc, r) => acc + (r.overall_score || 0), 0) / total).toFixed(2) : '0.00'
+    const avgQuestions = total > 0 ? (filteredReports.reduce((acc, r) => acc + (r.total_questions_answered || 0), 0) / total).toFixed(1) : '0.0'
 
-    return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
+    return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, inProgress: inProgressCount, other: otherCount, avgScore, avgQuestions }
   }, [filteredReports])
 
   // Chart Data for Report Modal
@@ -550,7 +604,7 @@ export default function ReportsPage() {
               - On desktop (lg), it's a 4-column grid.
               - On mobile, it stacks naturally.
             */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
+      <div className="flex-1 min-h-full grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
 
         {/*
                   LEFT COMPONENT (Filter Panel)
@@ -559,7 +613,7 @@ export default function ReportsPage() {
                   - It stays "sticky"/fixed effectively because the container doesn't scroll,
                     only the content inside this Card (if needed) and the Right Component.
                 */}
-        <div className="lg:col-span-1 max-h-full lg:max-h-[calc(100vh-10rem)] animate-in fade-in slide-in-from-left-8 duration-700 ease-out fill-mode-both">
+        <div className="lg:col-span-1 max-h-full lg:max-h-[calc(100vh-10rem)] h-auto animate-in fade-in slide-in-from-left-8 duration-700 ease-out fill-mode-both">
           <Card className="h-full flex flex-col shadow-md border-slate-200 !py-0 !gap-0">
             <CardHeader className="p-3 !pb-0 shrink-0">
               <div className="flex items-center justify-between">
@@ -583,7 +637,7 @@ export default function ReportsPage() {
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="search">Search</Label>
                 <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500 dark:text-slate-400" />
+                  <Search className="absolute left-2 top-3 h-4 w-4 text-slate-500 dark:text-slate-400" />
                   <Input
                     id="search"
                     placeholder="Filename or skill..."
@@ -621,7 +675,7 @@ export default function ReportsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All</SelectItem>
-                      {SKILL_CATEGORIES.map(skill => (
+                      {skillCategories.map(skill => (
                         <SelectItem key={skill} value={skill}>
                           {skill.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                         </SelectItem>
@@ -653,7 +707,7 @@ export default function ReportsPage() {
               {/* Calendar */}
               <div className="space-y-2">
                 <Label>Interview Dates</Label>
-                <div className="flex justify-center bg-primary/5 rounded-xl p-2 border border-primary/10">
+                <div className="flex justify-center bg-primary/5 rounded-lg p-2 border border-primary/10">
                   <Calendar
                     mode="single"
                     selected={dateFilter}
@@ -804,11 +858,18 @@ export default function ReportsPage() {
                           <TableCell className="text-right font-bold text-primary">{report.overall_score.toFixed(1)}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className={`
-                                                            ${report.status === 'Selected' ? 'bg-primary/10 text-primary border-primary/20' : ''}
-                                                            ${report.status === 'Hold' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : ''}
-                                                            ${report.status === 'Rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' : ''}
+                                                            ${(['selected', 'hired', 'hire'].includes(report.status?.toLowerCase())) ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : ''}
+                                                            ${(['rejected', 'reject'].includes(report.status?.toLowerCase())) ? 'bg-destructive/10 text-destructive border-destructive/20' : ''}
+                                                            ${(!['selected', 'hired', 'hire', 'rejected', 'reject'].includes(report.status?.toLowerCase())) ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : ''}
                                                         `}>
-                              {report.status === 'Selected' ? 'Select' : report.status === 'Rejected' ? 'Reject' : report.status}
+                              {(() => {
+                                const s = (report.status || '').toLowerCase();
+                                if (['selected', 'hired', 'hire'].includes(s)) return 'Select';
+                                if (['rejected', 'reject'].includes(s)) return 'Reject';
+                                if (['hold', 'on hold', 'review_later'].includes(s)) return 'Hold';
+                                if (s.includes('completed') || s.includes('interview')) return 'Review';
+                                return s.charAt(0).toUpperCase() + s.slice(1);
+                              })()}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -833,28 +894,50 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-col lg:flex-row gap-8 items-start">
-                    <div className="flex-1 w-full h-[250px]">
-                      <StatusChart data={[
-                        { name: 'Selected', value: metrics.selected, color: '#10b981' },
-                        { name: 'Hold', value: metrics.hold, color: '#f59e0b' },
-                        { name: 'Rejected', value: metrics.rejected, color: '#ef4444' }
-                      ].filter(d => d.value > 0)} />
+                    <div className="flex-1 w-full space-y-6">
+                      <div className="h-[250px] flex flex-col">
+                        <span className="text-sm font-semibold text-muted-foreground mb-2">Status Distribution</span>
+                        <div className="flex-1 flex items-center justify-center bg-muted/10 rounded-xl border border-dashed">
+                          {metrics.total > 0 ? (
+                            <StatusChart data={[
+                              { name: 'Selected', value: metrics.selected, color: '#10b981' },
+                              { name: 'Hold', value: metrics.hold, color: '#f59e0b' },
+                              { name: 'Rejected', value: metrics.rejected, color: '#ef4444' },
+                              { name: 'In Progress', value: metrics.inProgress, color: '#0ea5e9' },
+                              { name: 'Other', value: metrics.other, color: '#94a3b8' }
+                            ].filter(d => d.value > 0)} />
+                          ) : (
+                            <div className="text-muted-foreground text-sm italic">No status data available</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="h-[250px] flex flex-col">
+                        <span className="text-sm font-semibold text-muted-foreground mb-2">Aggregate Evaluation Averages</span>
+                        <div className="flex-1 bg-muted/10 rounded-xl border border-dashed p-4">
+                          {metrics.total > 0 ? (
+                            <AllReportsMetricsChart reports={filteredReports} />
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-muted-foreground text-sm italic">No evaluation data available</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="w-full lg:w-1/3 grid grid-cols-2 gap-4">
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
+                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center min-h-[120px]">
                         <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.avgScore}</div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">Average Overall Score</div>
                       </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
+                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center min-h-[120px]">
                         <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.total}</div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">Total Interviews</div>
                       </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
+                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center min-h-[120px]">
                         <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.avgQuestions}</div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">Avg Questions Answered</div>
                       </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
+                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center min-h-[120px]">
                         <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">
                           {metrics.total > 0 ? Math.round((metrics.selected / metrics.total) * 100) : 0}%
                         </div>
@@ -879,9 +962,13 @@ export default function ReportsPage() {
                   <div className="flex flex-col items-start gap-1">
                     <DialogTitle className="text-2xl flex items-center gap-3">
                       {viewingReport.candidate_profile.candidate_name || viewingReport.display_date_short}
-                      {viewingReport.status === 'Selected' && <Badge className="capsule-badge capsule-badge-success border-none shadow-none text-sm">Suggestion: Select</Badge>}
-                      {viewingReport.status === 'Hold' && <Badge className="capsule-badge capsule-badge-warning border-none shadow-none text-sm">Suggestion: Hold</Badge>}
-                      {viewingReport.status === 'Rejected' && <Badge className="capsule-badge capsule-badge-destructive border-none shadow-none text-sm">Suggestion: Reject</Badge>}
+                      {(() => {
+                        const s = (viewingReport.status || '').toLowerCase();
+                        if (['selected', 'hired', 'hire'].includes(s)) return <Badge className="capsule-badge capsule-badge-success border-none shadow-none text-sm">Suggestion: Select</Badge>;
+                        if (['rejected', 'reject'].includes(s)) return <Badge className="capsule-badge capsule-badge-destructive border-none shadow-none text-sm">Suggestion: Reject</Badge>;
+                        if (s.includes('completed') || s.includes('interview')) return <Badge className="capsule-badge capsule-badge-warning border-none shadow-none text-sm">Suggestion: Review</Badge>;
+                        return <Badge className="capsule-badge capsule-badge-warning border-none shadow-none text-sm">Suggestion: Hold</Badge>;
+                      })()}
                     </DialogTitle>
                     <DialogDescription className="text-base text-muted-foreground mt-1">
                       {viewingReport.candidate_profile.applied_role || viewingReport.filename} &middot; {viewingReport.display_date}
@@ -1066,7 +1153,9 @@ export default function ReportsPage() {
                               <tr key={i} className="hover:bg-muted/30 transition-colors">
                                 <td className="px-4 py-4 text-center font-medium text-muted-foreground">{i + 1}</td>
                                 <td className="px-4 py-4">{cleanQuestionText(q.question)}</td>
-                                <td className="px-4 py-4 text-muted-foreground">{q.answer || <span className="italic text-muted-foreground/50">No answer provided</span>}</td>
+                                <td className="px-4 py-4 text-slate-700 font-medium">
+                                  {q.answer ? resolveAptitudeAnswer(q.question, q.answer) : <span className="italic text-muted-foreground/50">No answer provided</span>}
+                                </td>
                                 <td className="px-4 py-4 text-center">
                                   {q.correct ? (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 font-medium">

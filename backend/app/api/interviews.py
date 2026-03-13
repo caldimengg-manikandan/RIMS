@@ -824,12 +824,12 @@ async def submit_answer(
         except Exception as e:
             print(f"Error evaluating detailed answer: {e}")
             # Fallback scores
-            answer_score = 5.0
-            technical_score = 5.0
-            completeness_score = 5.0
-            clarity_score = 5.0
-            depth_score = 5.0
-            practicality_score = 5.0
+            answer_score = 0.0
+            technical_score = 0.0
+            completeness_score = 0.0
+            clarity_score = 0.0
+            depth_score = 0.0
+            practicality_score = 0.0
             answer_evaluation = json.dumps({"error": "Evaluation failed"})
 
         answer.answer_score = float(answer_score)

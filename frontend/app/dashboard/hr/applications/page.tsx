@@ -262,7 +262,7 @@ export default function HRApplicationsPage() {
               <option value="applied">Applied</option>
               <option value="aptitude_round">Aptitude Round</option>
               <option value="ai_interview">AI Interview</option>
-              <option value="ai_interview_completed">AI Completed</option>
+              <option value="ai_interview_completed">Interview Completed</option>
               <option value="review_later">Review Later</option>
               <option value="physical_interview">Physical Interview</option>
               <option value="hired">Hired</option>
@@ -348,9 +348,7 @@ export default function HRApplicationsPage() {
                         return null;
                       })()}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground line-clamp-1 leading-normal">
-                      {app.resume_extraction?.summary || "No summary available."}
-                    </div>
+                    
                     <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-muted-foreground items-center">
                       <span className="flex items-center gap-1 whitespace-nowrap">
                         <svg

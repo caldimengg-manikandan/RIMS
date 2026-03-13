@@ -47,11 +47,18 @@ const ReportCardImpl = ({ report, onClick }: ReportCardProps) => (
                 <div className="text-right w-16">
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Suggestion</div>
                     <div className={`w-full justify-center font-bold text-xl
-                                          ${report.status === 'Selected' ? 'text-primary' : ''}
-                                          ${report.status === 'Hold' ? 'text-amber-600 dark:text-amber-400' : ''}
-                                          ${report.status === 'Rejected' ? 'text-destructive' : ''}
+                                          ${(['selected', 'hired', 'hire'].includes(report.status?.toLowerCase())) ? 'text-primary' : ''}
+                                          ${(['rejected', 'reject'].includes(report.status?.toLowerCase())) ? 'text-destructive' : ''}
+                                          ${(['hold', 'on hold', 'review_later'].includes(report.status?.toLowerCase())) ? 'text-amber-600 dark:text-amber-400' : ''}
                                       `}>
-                        {report.status === 'Selected' ? 'Select' : report.status === 'Rejected' ? 'Reject' : `Hold`}
+                        {(() => {
+                            const s = (report.status || '').toLowerCase();
+                            if (['selected', 'hired', 'hire'].includes(s)) return 'Select';
+                            if (['rejected', 'reject'].includes(s)) return 'Reject';
+                            if (['hold', 'on hold', 'review_later'].includes(s)) return 'Hold';
+                            if (s.includes('completed') || s.includes('interview')) return 'Review';
+                            return s.charAt(0).toUpperCase() + s.slice(1);
+                        })()}
                     </div>
                 </div>
             </div>

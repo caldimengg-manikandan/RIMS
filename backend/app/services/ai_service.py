@@ -521,6 +521,6 @@ async def generate_interview_report(job_title: str, all_qa_pairs: list, overall_
         print(f"Report Gen Error: {e}")
         return {
             "overall_score": overall_score,
-            "technical_skills_score": 5, "communication_score": 5, "problem_solving_score": 5,
+            "technical_skills_score": 0.0, "communication_score": 0.0, "problem_solving_score": 0.0,
             "strengths": "[]", "weaknesses": "[]", "summary": "Report gen failed", "recommendation": "consider", "detailed_feedback": "N/A"
         }
