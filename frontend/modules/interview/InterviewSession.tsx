@@ -19,6 +19,8 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
   const [currentQuestion, setCurrentQuestion] = useState<{question: string, difficulty: string} | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [latestFeedback, setLatestFeedback] = useState<{score: number, text: string} | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evalHistory, setEvalHistory] = useState<any[]>([]);
   
   const ws = useRef<WebSocket | null>(null);
 
@@ -44,9 +46,16 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         case 'question':
           setCurrentQuestion({ question: data.question, difficulty: data.difficulty });
           setLatestFeedback(null); // Clear feedback when new question arrives
+          setIsEvaluating(false); // Stop loading when new question arrives
           break;
         case 'evaluation':
           setLatestFeedback({ score: data.score, text: data.feedback });
+          setEvalHistory(prev => [...prev, { 
+              question: currentQuestion?.question, 
+              score: data.score, 
+              feedback: data.feedback,
+              timestamp: new Date().toLocaleTimeString()
+          }]);
           break;
         case 'system':
           setMessages(prev => [...prev, { text: data.message, type: 'system' }]);
@@ -57,6 +66,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
           break;
         case 'error':
           setMessages(prev => [...prev, { text: data.message, type: 'error' }]);
+          setIsEvaluating(false); // Stop loading on error
           break;
       }
     };
@@ -73,6 +83,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
 
   const handleSubmitAnswer = (answerText: string) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      setIsEvaluating(true);
       ws.current.send(JSON.stringify({
         action: 'submit_answer',
         answer: answerText
@@ -112,8 +123,35 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         
         <AnswerInput 
           onSubmit={handleSubmitAnswer} 
-          disabled={!currentQuestion || latestFeedback !== null}
+          disabled={!currentQuestion || isEvaluating || latestFeedback !== null}
         />
+
+        {/* Debug Evaluation Log inside Main Area */}
+        <div className="mt-8 p-4 border-t border-dashed bg-slate-50 border-slate-200 rounded-lg shadow-inner">
+           <h3 className="text-sm font-bold text-slate-600 mb-2 flex items-center">
+              <span className="w-2 h-2 bg-amber-500 rounded-full mr-2"></span>
+              [Debug] Evaluation History Log
+           </h3>
+           {evalHistory.length === 0 ? (
+             <p className="text-xs text-muted-foreground italic">No evaluations logged yet. Submit an answer to view analysis in real-time.</p>
+           ) : (
+             <div className="space-y-4 max-h-96 overflow-y-auto">
+               {evalHistory.map((item, idx) => (
+                 <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                   <div className="flex justify-between items-center text-xs text-slate-400">
+                      <span className="font-semibold text-slate-500">Question {idx + 1}</span>
+                      <span>{item.timestamp}</span>
+                   </div>
+                   <p className="text-sm font-medium text-slate-700">Q: {item.question}</p>
+                   <div className="flex items-center space-x-2">
+                      <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full font-bold">Score: {item.score}/10</span>
+                   </div>
+                   <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">Feedback: {item.feedback}</p>
+                 </div>
+               ))}
+             </div>
+           )}
+        </div>
       </div>
 
       {/* Sidebar / HUD */}
@@ -133,7 +171,6 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 }

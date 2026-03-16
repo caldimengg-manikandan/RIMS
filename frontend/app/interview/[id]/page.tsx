@@ -62,6 +62,7 @@ export default function InterviewPage() {
     const [sectionMessage, setSectionMessage] = useState<string | null>(null)
     const [lastSection, setLastSection] = useState<string | null>(null)
     const [isFullscreen, setIsFullscreen] = useState(false)
+    const [evalHistory, setEvalHistory] = useState<any[]>([])
 
     // Refs to always have live values inside event listeners (avoid stale closures)
     const warningsRef = useRef(0)
@@ -458,6 +459,15 @@ export default function InterviewPage() {
                 answer_text: answer
             })
 
+            // Log evaluation for debugging
+            if (res.evaluation) {
+                setEvalHistory(prev => [...prev, {
+                    question_id: currentQuestion.id,
+                    question_text: currentQuestion.question_text,
+                    evaluation: res.evaluation
+                }])
+            }
+
             if (res.terminated) {
                 alert(res.message || "This interview session has been terminated.");
                 setInterviewStatus('completed');
@@ -695,6 +705,42 @@ export default function InterviewPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Debug Evaluation Log Component */}
+                <div className="flex-1 overflow-y-auto mt-4 px-6 border-t border-slate-100 pt-4 bg-slate-50/50">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <Brain className="w-3 h-3 text-blue-500" /> AI Evaluation Debug Log
+                    </h3>
+                    {evalHistory.length === 0 ? (
+                        <p className="text-slate-400 text-[10px] italic">No evaluations logged yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {evalHistory.map((item, idx) => (
+                                <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-[10px] font-bold text-slate-500 mb-1 truncate">Q: {item.question_text}</p>
+                                    {item.evaluation.error ? (
+                                        <p className="text-red-500 text-[10px] font-bold">{item.evaluation.error}</p>
+                                    ) : (
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-bold text-slate-700">Overall Score:</span>
+                                                <span className="text-xs font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100">
+                                                    {item.evaluation.overall || 0}
+                                                </span>
+                                            </div>
+                                            {item.evaluation.strengths && item.evaluation.strengths.length > 0 && (
+                                                <p className="text-[9px] text-green-600 truncate">
+                                                    + {item.evaluation.strengths[0]}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
 
                 <div className="mt-auto p-6 border-t border-slate-100">
                     <button
