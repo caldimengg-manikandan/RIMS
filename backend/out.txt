@@ -1,0 +1,375 @@
+2026-03-12 17:01:42,978 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-12 17:01:42,981 INFO sqlalchemy.engine.Engine SELECT interviews.id AS interviews_id, interviews.test_id AS interviews_test_id, interviews.application_id AS interviews_application_id, interviews.status AS interviews_status, interviews.locked_skill AS interviews_locked_skill, interviews.total_questions AS interviews_total_questions, interviews.questions_asked AS interviews_questions_asked, interviews.overall_score AS interviews_overall_score, interviews.started_at AS interviews_started_at, interviews.ended_at AS interviews_ended_at, interviews.access_key_hash AS interviews_access_key_hash, interviews.expires_at AS interviews_expires_at, interviews.is_used AS interviews_is_used, interviews.used_at AS interviews_used_at, interviews.interview_stage AS interviews_interview_stage, interviews.aptitude_score AS interviews_aptitude_score, interviews.aptitude_completed_at AS interviews_aptitude_completed_at, interviews.aptitude_completed AS interviews_aptitude_completed, interviews.first_level_completed AS interviews_first_level_completed, interviews.first_level_score AS interviews_first_level_score, interviews.created_at AS interviews_created_at, interviews.updated_at AS interviews_updated_at 
+FROM interviews ORDER BY interviews.id DESC
+ LIMIT ? OFFSET ?
+2026-03-12 17:01:42,981 INFO sqlalchemy.engine.Engine [generated in 0.00018s] (1, 0)
+Testing with interview id: 4
+2026-03-12 17:01:42,982 INFO sqlalchemy.engine.Engine SELECT interviews.id AS interviews_id, interviews.test_id AS interviews_test_id, interviews.application_id AS interviews_application_id, interviews.status AS interviews_status, interviews.locked_skill AS interviews_locked_skill, interviews.total_questions AS interviews_total_questions, interviews.questions_asked AS interviews_questions_asked, interviews.overall_score AS interviews_overall_score, interviews.started_at AS interviews_started_at, interviews.ended_at AS interviews_ended_at, interviews.access_key_hash AS interviews_access_key_hash, interviews.expires_at AS interviews_expires_at, interviews.is_used AS interviews_is_used, interviews.used_at AS interviews_used_at, interviews.interview_stage AS interviews_interview_stage, interviews.aptitude_score AS interviews_aptitude_score, interviews.aptitude_completed_at AS interviews_aptitude_completed_at, interviews.aptitude_completed AS interviews_aptitude_completed, interviews.first_level_completed AS interviews_first_level_completed, interviews.first_level_score AS interviews_first_level_score, interviews.created_at AS interviews_created_at, interviews.updated_at AS interviews_updated_at 
+FROM interviews 
+WHERE interviews.id = ?
+ LIMIT ? OFFSET ?
+2026-03-12 17:01:42,983 INFO sqlalchemy.engine.Engine [generated in 0.00013s] (4, 1, 0)
+2026-03-12 17:01:42,984 INFO sqlalchemy.engine.Engine SELECT interview_questions.id AS interview_questions_id, interview_questions.interview_id AS interview_questions_interview_id, interview_questions.question_number AS interview_questions_question_number, interview_questions.question_text AS interview_questions_question_text, interview_questions.question_type AS interview_questions_question_type, interview_questions.options AS interview_questions_options, interview_questions.question_options AS interview_questions_question_options, interview_questions.correct_answer AS interview_questions_correct_answer, interview_questions.correct_option AS interview_questions_correct_option, interview_questions.ai_generated_at AS interview_questions_ai_generated_at, interview_questions.created_at AS interview_questions_created_at 
+FROM interview_questions 
+WHERE interview_questions.interview_id = ? AND interview_questions.question_type = ?
+2026-03-12 17:01:42,985 INFO sqlalchemy.engine.Engine [generated in 0.00022s] (4, 'aptitude')
+2026-03-12 17:01:42,986 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-03-12 17:01:42,987 INFO sqlalchemy.engine.Engine [generated in 0.00041s] (121, 122, 123, 124, 125, 126, 127, 128, 129, 130)
+2026-03-12 17:01:42,993 INFO sqlalchemy.engine.Engine SELECT applications.id AS applications_id, applications.job_id AS applications_job_id, applications.candidate_name AS applications_candidate_name, applications.candidate_email AS applications_candidate_email, applications.candidate_phone AS applications_candidate_phone, applications.resume_file_path AS applications_resume_file_path, applications.resume_file_name AS applications_resume_file_name, applications.candidate_photo_path AS applications_candidate_photo_path, applications.status AS applications_status, applications.hr_notes AS applications_hr_notes, applications.resume_score AS applications_resume_score, applications.aptitude_score AS applications_aptitude_score, applications.interview_score AS applications_interview_score, applications.composite_score AS applications_composite_score, applications.recommendation AS applications_recommendation, applications.applied_at AS applications_applied_at, applications.updated_at AS applications_updated_at 
+FROM applications 
+WHERE applications.id = ?
+2026-03-12 17:01:42,993 INFO sqlalchemy.engine.Engine [generated in 0.00017s] (4,)
+2026-03-12 17:01:42,994 INFO sqlalchemy.engine.Engine SELECT interview_questions.id AS interview_questions_id, interview_questions.interview_id AS interview_questions_interview_id, interview_questions.question_number AS interview_questions_question_number, interview_questions.question_text AS interview_questions_question_text, interview_questions.question_type AS interview_questions_question_type, interview_questions.options AS interview_questions_options, interview_questions.question_options AS interview_questions_question_options, interview_questions.correct_answer AS interview_questions_correct_answer, interview_questions.correct_option AS interview_questions_correct_option, interview_questions.ai_generated_at AS interview_questions_ai_generated_at, interview_questions.created_at AS interview_questions_created_at 
+FROM interview_questions 
+WHERE interview_questions.interview_id = ? AND interview_questions.question_type != ?
+2026-03-12 17:01:42,994 INFO sqlalchemy.engine.Engine [generated in 0.00012s] (4, 'aptitude')
+2026-03-12 17:01:42,995 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,995 INFO sqlalchemy.engine.Engine [generated in 0.00013s] (131,)
+2026-03-12 17:01:42,996 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,996 INFO sqlalchemy.engine.Engine [cached since 0.0006743s ago] (132,)
+2026-03-12 17:01:42,996 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,996 INFO sqlalchemy.engine.Engine [cached since 0.001082s ago] (133,)
+2026-03-12 17:01:42,996 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,997 INFO sqlalchemy.engine.Engine [cached since 0.001565s ago] (134,)
+2026-03-12 17:01:42,997 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,997 INFO sqlalchemy.engine.Engine [cached since 0.002141s ago] (135,)
+2026-03-12 17:01:42,998 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,998 INFO sqlalchemy.engine.Engine [cached since 0.002829s ago] (136,)
+2026-03-12 17:01:42,998 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,998 INFO sqlalchemy.engine.Engine [cached since 0.003298s ago] (137,)
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine [cached since 0.003726s ago] (138,)
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine [cached since 0.004106s ago] (139,)
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:42,999 INFO sqlalchemy.engine.Engine [cached since 0.004504s ago] (140,)
+2026-03-12 17:01:43,000 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,000 INFO sqlalchemy.engine.Engine [cached since 0.004879s ago] (141,)
+2026-03-12 17:01:43,000 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,000 INFO sqlalchemy.engine.Engine [cached since 0.005227s ago] (142,)
+2026-03-12 17:01:43,000 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,001 INFO sqlalchemy.engine.Engine [cached since 0.005593s ago] (143,)
+2026-03-12 17:01:43,001 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,001 INFO sqlalchemy.engine.Engine [cached since 0.005925s ago] (144,)
+2026-03-12 17:01:43,001 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,001 INFO sqlalchemy.engine.Engine [cached since 0.006257s ago] (145,)
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine [cached since 0.006663s ago] (146,)
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine [cached since 0.007004s ago] (147,)
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,002 INFO sqlalchemy.engine.Engine [cached since 0.007395s ago] (148,)
+2026-03-12 17:01:43,003 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,003 INFO sqlalchemy.engine.Engine [cached since 0.007801s ago] (149,)
+2026-03-12 17:01:43,003 INFO sqlalchemy.engine.Engine SELECT interview_answers.id AS interview_answers_id, interview_answers.question_id AS interview_answers_question_id, interview_answers.interview_id AS interview_answers_interview_id, interview_answers.answer_text AS interview_answers_answer_text, interview_answers.answer_score AS interview_answers_answer_score, interview_answers.answer_evaluation AS interview_answers_answer_evaluation, interview_answers.skill_relevance_score AS interview_answers_skill_relevance_score, interview_answers.technical_score AS interview_answers_technical_score, interview_answers.completeness_score AS interview_answers_completeness_score, interview_answers.clarity_score AS interview_answers_clarity_score, interview_answers.depth_score AS interview_answers_depth_score, interview_answers.practicality_score AS interview_answers_practicality_score, interview_answers.submitted_at AS interview_answers_submitted_at, interview_answers.evaluated_at AS interview_answers_evaluated_at 
+FROM interview_answers 
+WHERE interview_answers.question_id = ? ORDER BY interview_answers.id
+2026-03-12 17:01:43,003 INFO sqlalchemy.engine.Engine [cached since 0.008188s ago] (150,)
+2026-03-12 17:01:43,005 INFO sqlalchemy.engine.Engine UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?
+2026-03-12 17:01:43,005 INFO sqlalchemy.engine.Engine [generated in 0.00019s] ('ai_interview_completed', 4)
+2026-03-12 17:01:43,006 INFO sqlalchemy.engine.Engine ROLLBACK
+Traceback (most recent call last):
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: CHECK constraint failed: check_applications_status
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\CALDIM\ars\RIMS\backend\app\api\interviews.py", line 1178, in end_interview
+    db.commit()
+    ~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "<string>", line 2, in commit
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        update,
+        ^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) CHECK constraint failed: check_applications_status
+[SQL: UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?]
+[parameters: ('ai_interview_completed', 4)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Traceback (most recent call last):
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: CHECK constraint failed: check_applications_status
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\CALDIM\ars\RIMS\backend\app\api\interviews.py", line 1178, in end_interview
+    db.commit()
+    ~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
+    trans.commit(_to_root=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "<string>", line 2, in commit
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
+    self._prepare_impl()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "<string>", line 2, in _prepare_impl
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
+    self.session.flush()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\persistence.py", line 85, in save_obj
+    _emit_update_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        update,
+        ^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\orm\persistence.py", line 912, in _emit_update_statements
+    c = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\aashi\AppData\Roaming\Python\Python313\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) CHECK constraint failed: check_applications_status
+[SQL: UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?]
+[parameters: ('ai_interview_completed', 4)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\CALDIM\ars\RIMS\backend\test_end.py", line 16, in main
+    res = await end_interview(interview_id=interview.id, interview_session=interview, db=db)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\CALDIM\ars\RIMS\backend\app\api\interviews.py", line 1184, in end_interview
+    raise HTTPException(status_code=500, detail=f"Failed to properly calculate intermediate scoring: {str(e)}")
+fastapi.exceptions.HTTPException: 500: Failed to properly calculate intermediate scoring: (sqlite3.IntegrityError) CHECK constraint failed: check_applications_status
+[SQL: UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?]
+[parameters: ('ai_interview_completed', 4)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Intermediate scoring error: (sqlite3.IntegrityError) CHECK constraint failed: check_applications_status
+[SQL: UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?]
+[parameters: ('ai_interview_completed', 4)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+Error details: 500: Failed to properly calculate intermediate scoring: (sqlite3.IntegrityError) CHECK constraint failed: check_applications_status
+[SQL: UPDATE applications SET status=?, updated_at=CURRENT_TIMESTAMP WHERE applications.id = ?]
+[parameters: ('ai_interview_completed', 4)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

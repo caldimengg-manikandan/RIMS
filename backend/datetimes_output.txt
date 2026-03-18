@@ -1,0 +1,59 @@
+Connecting to: mysql+pymysql://root:0000@localhost:3306/rims_db
+Fixing ai_evaluations...
+ - Converted created_at to DATETIME
+Fixing application_stages...
+ - Converted started_at to DATETIME
+ - Converted completed_at to DATETIME
+ - Converted created_at to DATETIME
+Fixing applications...
+ - Converted applied_at to DATETIME
+ - Converted updated_at to DATETIME
+Fixing audit_logs...
+ - Converted created_at to DATETIME
+Fixing hiring_decisions...
+ - Converted decided_at to DATETIME
+ - Converted created_at to DATETIME
+Fixing interview_answers...
+ - Converted submitted_at to DATETIME
+ - Converted evaluated_at to DATETIME
+Fixing interview_events...
+ - Converted created_at to DATETIME
+Fixing interview_feedbacks...
+ - Converted created_at to DATETIME
+Fixing interview_issues...
+ - Converted created_at to DATETIME
+ - Converted resolved_at to DATETIME
+Fixing interview_questions...
+ - Converted ai_generated_at to DATETIME
+ - Converted created_at to DATETIME
+Fixing interview_reports...
+ - Converted created_at to DATETIME
+ - Converted updated_at to DATETIME
+Fixing interview_sessions...
+ - Converted start_time to DATETIME
+ - Converted end_time to DATETIME
+Fixing interviews...
+ - Converted started_at to DATETIME
+ - Converted ended_at to DATETIME
+ - Converted expires_at to DATETIME
+ - Converted used_at to DATETIME
+ - Converted aptitude_completed_at to DATETIME
+ - Converted created_at to DATETIME
+ - Converted updated_at to DATETIME
+Fixing jobs...
+ - Converted created_at to DATETIME
+ - Converted updated_at to DATETIME
+ - Converted closed_at to DATETIME
+Fixing notifications...
+ - Converted created_at to DATETIME
+ - Converted read_at to DATETIME
+Fixing question_bank...
+ - Converted created_at to DATETIME
+Fixing resume_extractions...
+ - Converted created_at to DATETIME
+ - Converted updated_at to DATETIME
+Fixing users...
+ - Converted otp_expiry to DATETIME
+ - Converted created_at to DATETIME
+ - Converted updated_at to DATETIME
+All DateTimes updated successfully!

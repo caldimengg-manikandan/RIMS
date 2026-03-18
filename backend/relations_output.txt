@@ -1,0 +1,13 @@
+Connecting to: mysql+pymysql://root:0000@localhost:3306/rims_db
+
+--- Users ---
+ - ID: 1, Email: caldiminternship@gmail.com, Role: hr
+
+--- Jobs ---
+ - ID: 1, Title: Software Engineer, HR_ID: 1, Status: open
+ - ID: 2, Title: Structural Steel Detailer, HR_ID: 1, Status: open
+ - ID: 3, Title: Software Developer, HR_ID: 1, Status: open
+
+--- Applications ---
+ - ID: 4, Job_ID: 3, Candidate: Aashif, Status: hired
+ - ID: 5, Job_ID: 1, Candidate: Aaron, Status: ai_interview

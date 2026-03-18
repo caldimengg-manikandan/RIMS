@@ -1,0 +1,78 @@
+Connecting to: mysql+pymysql://root:0000@localhost:3306/rims_db
+Adding AUTO_INCREMENT to ai_evaluations.id...
+ - Failed adding AUTO_INCREMENT to ai_evaluations: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE ai_evaluations MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to application_stages.id...
+ - Failed adding AUTO_INCREMENT to application_stages: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE application_stages MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to applications.id...
+ - Failed adding AUTO_INCREMENT to applications: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE applications MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to audit_logs.id...
+ - Failed adding AUTO_INCREMENT to audit_logs: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE audit_logs MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to candidate_skills.id...
+ - Failed adding AUTO_INCREMENT to candidate_skills: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE candidate_skills MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to hiring_decisions.id...
+ - Failed adding AUTO_INCREMENT to hiring_decisions: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE hiring_decisions MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_answers.id...
+ - Failed adding AUTO_INCREMENT to interview_answers: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_answers MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_events.id...
+ - Failed adding AUTO_INCREMENT to interview_events: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_events MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_feedbacks.id...
+ - Failed adding AUTO_INCREMENT to interview_feedbacks: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_feedbacks MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_issues.id...
+ - Failed adding AUTO_INCREMENT to interview_issues: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_issues MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_questions.id...
+ - Failed adding AUTO_INCREMENT to interview_questions: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_questions MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_reports.id...
+ - Failed adding AUTO_INCREMENT to interview_reports: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_reports MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interview_sessions.id...
+ - Failed adding AUTO_INCREMENT to interview_sessions: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interview_sessions MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to interviews.id...
+ - Failed adding AUTO_INCREMENT to interviews: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE interviews MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to jobs.id...
+ - Failed adding AUTO_INCREMENT to jobs: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE jobs MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to notifications.id...
+ - Failed adding AUTO_INCREMENT to notifications: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE notifications MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to question_bank.id...
+ - Failed adding AUTO_INCREMENT to question_bank: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE question_bank MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to resume_extractions.id...
+ - Failed adding AUTO_INCREMENT to resume_extractions: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE resume_extractions MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Adding AUTO_INCREMENT to users.id...
+ - Failed adding AUTO_INCREMENT to users: (pymysql.err.OperationalError) (1075, 'Incorrect table definition; there can be only one auto column and it must be defined as a key')
+[SQL: ALTER TABLE users MODIFY id INT AUTO_INCREMENT]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+All AUTO_INCREMENT properties updated successfully!

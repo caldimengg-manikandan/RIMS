@@ -1,0 +1,15 @@
+<svg width="600" height="120" viewBox="0 0 600 120" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(10, 10) scale(0.19)">
+    <path d="M256,0 L512,110 L512,274 C512,410 398,512 256,512 C114,512 0,410 0,274 L0,110 L256,0 Z" 
+          fill="none" stroke="#818cf8" stroke-width="32" stroke-linejoin="round"/>
+    <path d="M128,420 C128,340 180,290 256,290 C332,290 384,340 384,420 L384,500 L128,500 Z" fill="#818cf8"/>
+    <circle cx="256" cy="180" r="70" fill="#818cf8"/>
+    <path d="M256,180 L140,120 M256,180 L350,80 M256,180 L390,200" stroke="#c7d2fe" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="140" cy="120" r="16" fill="#c7d2fe"/>
+    <circle cx="350" cy="80" r="20" fill="#c7d2fe"/>
+    <circle cx="390" cy="200" r="14" fill="#c7d2fe"/>
+  </g>
+  <text x="130" y="75" font-family="system-ui, -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, sans-serif" font-size="42" font-weight="700" fill="#f8fafc" letter-spacing="-1.5">
+    Recruit<tspan fill="#818cf8">AI</tspan>
+  </text>
+</svg>

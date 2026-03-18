@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS "applications" (
+            id INTEGER NOT NULL, 
+            job_id INTEGER NOT NULL, 
+            candidate_name VARCHAR(255) NOT NULL, 
+            candidate_email VARCHAR(255) NOT NULL, 
+            candidate_phone TEXT, 
+            resume_file_path VARCHAR(500), 
+            resume_file_name VARCHAR(255), 
+            candidate_photo_path VARCHAR(500), 
+            status VARCHAR(50), 
+            hr_notes TEXT, 
+            resume_score FLOAT, 
+            aptitude_score FLOAT, 
+            interview_score FLOAT, 
+            composite_score FLOAT, 
+            recommendation VARCHAR(50), 
+            applied_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+            PRIMARY KEY (id), 
+            CONSTRAINT check_applications_status CHECK (status IN (
+                'applied', 'submitted', 'resume_screening', 'aptitude_round', 'ai_interview', 
+                'technical_interview', 'hr_interview', 'physical_interview', 'final_decision', 
+                'hired', 'rejected', 'processing_failed', 'approved_for_interview', 
+                'review_later', 'rejected_post_interview'
+            )), 
+            CONSTRAINT uq_application_job_email UNIQUE (job_id, candidate_email), 
+            FOREIGN KEY(job_id) REFERENCES jobs (id)
+        );
+CREATE INDEX ix_applications_composite_score ON applications (composite_score);
+CREATE INDEX ix_applications_job_id ON applications (job_id);
+CREATE INDEX ix_applications_status ON applications (status);
+CREATE INDEX ix_applications_applied_at ON applications (applied_at);
+CREATE INDEX ix_applications_candidate_email ON applications (candidate_email);
+CREATE INDEX ix_applications_job_status ON applications (job_id, status);
+CREATE INDEX ix_applications_id ON applications (id);
