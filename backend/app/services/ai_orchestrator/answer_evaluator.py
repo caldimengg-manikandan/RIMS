@@ -7,7 +7,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=15.0)
 
 async def evaluate_answer(question: str, answer: str, expected_points: List[str]) -> dict:
     """Evaluates a single answer and returns scored metrics."""

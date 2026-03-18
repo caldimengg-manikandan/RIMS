@@ -7,9 +7,11 @@ from .skill_mapper import map_skills_to_category
 
 class ResponseAnalyzer:
     def __init__(self):
+        import httpx
         self.client = OpenAI(
             api_key=OPENROUTER_API_KEY,
-            base_url=OPENROUTER_BASE_URL
+            base_url=OPENROUTER_BASE_URL,
+            timeout=httpx.Timeout(15.0, connect=5.0)
         )
 
     def _fallback_analysis(self, response: str) -> Dict:

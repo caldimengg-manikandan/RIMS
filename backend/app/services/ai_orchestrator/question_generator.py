@@ -7,7 +7,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=15.0)
 
 async def generate_questions(role: str, experience_level: str, skills: List[str], previous_evaluations: List[Dict] = None, difficulty: str = "medium") -> dict:
     """Generates the next interview question based on role, skills, and current difficulty."""

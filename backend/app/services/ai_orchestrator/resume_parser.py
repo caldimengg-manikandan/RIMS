@@ -6,7 +6,7 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=15.0)
 
 async def parse_resume(text: str) -> dict:
     """Extracts structured fields from raw resume text."""
