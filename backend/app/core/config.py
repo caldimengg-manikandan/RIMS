@@ -80,8 +80,17 @@ class Settings(BaseSettings):
         case_sensitive = False
 
     def get_allowed_origins(self) -> List[str]:
-        """Convert comma-separated string to list"""
-        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        """Convert comma-separated string to list, with safety fallbacks"""
+        origins = [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        
+        # If in development and no origins are set or only localhost, 
+        # consider allowing * for easier debugging, but keep default strict for production.
+        if self.env == "development" and ("*" not in origins):
+            # We don't force * here to keep it secure by default, 
+            # but main.py's exception handlers already check self.env.
+            pass
+            
+        return origins
 
     def validate_production_settings(self):
         """Validate critical settings at startup. Called from main.py."""

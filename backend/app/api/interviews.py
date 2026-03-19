@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
@@ -701,10 +701,131 @@ async def get_current_question(
     raise HTTPException(status_code=status.HTTP_410_GONE, detail="All questions in this stage answered")
 
 
+# ─── Background Tasks ─────────────────────────────────────────────────────────
+
+async def evaluate_answer_task(
+    answer_id: int,
+    question_text: str,
+    answer_text: str,
+    question_type: str,
+    interview_id: int
+):
+    """
+    Background task to evaluate an interview answer using AI and handle 
+    auto-termination logic without blocking the main request.
+    """
+    from app.infrastructure.database import SessionLocal
+    from sqlalchemy.orm import Session
+    
+    db: Session = SessionLocal()
+    try:
+        # 1. Fetch the records
+        answer = db.query(InterviewAnswer).filter(InterviewAnswer.id == answer_id).first()
+        interview = db.query(Interview).filter(Interview.id == interview_id).first()
+        if not answer or not interview:
+            return
+
+        # 2. Get detailed evaluation from AI
+        try:
+            from app.services.ai_service import evaluate_detailed_answer
+            evaluation = await evaluate_detailed_answer(
+                question_text, 
+                answer_text,
+                question_type=question_type or "technical"
+            )
+            
+            if question_type == "behavioral":
+                technical_score = evaluation.get("relevance", 0)
+                completeness_score = evaluation.get("action_impact", 0)
+                clarity_score = evaluation.get("clarity", 0)
+                depth_score = 0
+                practicality_score = 0
+            else:
+                technical_score = evaluation.get("technical_accuracy", 0)
+                completeness_score = evaluation.get("completeness", 0)
+                clarity_score = evaluation.get("clarity", 0)
+                depth_score = evaluation.get("depth", 0)
+                practicality_score = evaluation.get("practicality", 0)
+            
+            answer_score = evaluation.get("overall", 0)
+            answer_evaluation = json.dumps(evaluation)
+        except Exception as e:
+            logger.error(f"Background evaluation error: {e}")
+            answer_score = 5.0
+            technical_score = 5.0
+            completeness_score = 5.0
+            clarity_score = 5.0
+            depth_score = 5.0
+            practicality_score = 5.0
+            answer_evaluation = json.dumps({"error": "Background evaluation failed"})
+
+        # 3. Update the answer
+        answer.answer_score = float(answer_score)
+        answer.skill_relevance_score = float(technical_score)
+        answer.technical_score = float(technical_score)
+        answer.completeness_score = float(completeness_score)
+        answer.clarity_score = float(clarity_score)
+        answer.depth_score = float(depth_score)
+        answer.practicality_score = float(practicality_score)
+        answer.answer_evaluation = answer_evaluation
+        answer.evaluated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        # 4. Low Performance Screening (logic moved to background)
+        if question_type != "aptitude":
+            answered_questions = db.query(InterviewAnswer).join(InterviewQuestion).filter(
+                InterviewQuestion.interview_id == interview_id,
+                InterviewQuestion.question_type != "aptitude"
+            ).all()
+            
+            if len(answered_questions) >= 5: # Changed to >= to ensure we don't miss it
+                # Check if we already handled termination
+                if interview.status == "terminated":
+                    return
+
+                scores_list = [a.answer_score for a in answered_questions if a.answer_score is not None]
+                if len(scores_list) >= 5:
+                    avg_score = sum(scores_list) / len(scores_list)
+                    if avg_score < 4.0:
+                        try:
+                            interview.status = "terminated"
+                            interview.interview_stage = "completed"
+                            interview.ended_at = datetime.now(timezone.utc)
+                            
+                            from app.services.state_machine import CandidateStateMachine, TransitionAction
+                            from app.domain.models import InterviewIssue
+                            
+                            fsm = CandidateStateMachine(db)
+                            try:
+                                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated due to low performance. (Background Evaluation)")
+                            except Exception:
+                                interview.application.status = "rejected"
+                                
+                            system_issue = InterviewIssue(
+                                interview_id=interview.id,
+                                candidate_name=interview.application.candidate_name,
+                                candidate_email=interview.application.candidate_email,
+                                issue_type="technical",
+                                description=f"SYSTEM AUTO-TERMINATION (BG): low_performance. Average score of first {len(scores_list)} questions was {avg_score:.1f}/10.",
+                                status="pending"
+                            )
+                            db.add(system_issue)
+                            db.commit()
+                        except Exception as inner_e:
+                            logger.error(f"Error in background termination: {inner_e}")
+                            db.rollback()
+    except Exception as e:
+        logger.error(f"Fatal error in background evaluation task: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @router.post("/{interview_id}/submit-answer")
 async def submit_answer(
     interview_id: int,
     data: InterviewAnswerSubmit,
+    background_tasks: BackgroundTasks,
     interview_session: Interview = Depends(get_current_interview),
     db: Session = Depends(get_db)
 ):
@@ -738,7 +859,7 @@ async def submit_answer(
             detail="Question not found"
         )
     
-    # Check if already answered - make idempotent
+    # Check if already answered - make it idempotent
     existing_answer = db.query(InterviewAnswer).filter(
         InterviewAnswer.question_id == data.question_id
     ).first()
@@ -760,13 +881,13 @@ async def submit_answer(
             interview.status = "terminated"
             interview.interview_stage = STAGE_COMPLETED
             interview.ended_at = datetime.now(timezone.utc)
-            # Use FSM for state transition
+            
             from app.services.state_machine import CandidateStateMachine, TransitionAction
             from app.domain.models import InterviewIssue
             
             fsm = CandidateStateMachine(db)
             try:
-                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated. Reason: {termination_reason}")
+                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated. AI-detected reason: {termination_reason}")
             except Exception:
                 interview.application.status = "rejected"
             
@@ -780,25 +901,23 @@ async def submit_answer(
                 status="pending"
             )
             db.add(system_issue)
-            
             db.commit()
+            
+            return {
+                "success": True,
+                "terminated": True,
+                "termination_reason": termination_reason,
+                "message": (
+                    "Interview terminated due to inappropriate language."
+                    if termination_reason == "misconduct"
+                    else "Interview ended at your request."
+                )
+            }
         except Exception:
             db.rollback()
-        return {
-            "success": True,
-            "terminated": True,
-            "termination_reason": termination_reason,
-            "message": (
-                "Interview terminated due to inappropriate language."
-                if termination_reason == "misconduct"
-                else "Interview ended at your request."
-            )
-        }
-    # ─────────────────────────────────────────────────────────────────────────
 
-
+    # ── Save Answer ──
     try:
-        # Save answer (unique constraint on question_id prevents duplicates)
         answer = InterviewAnswer(
             question_id=current_question.id,
             interview_id=interview_id,
@@ -808,14 +927,12 @@ async def submit_answer(
 
         # Auto-grade aptitude MCQs if correct_answer is set
         if current_question.question_type == "aptitude" and current_question.correct_answer is not None:
-            # Assume answer_text is the option index (0, 1, 2, 3) or the text
             submitted_val = data.answer_text.strip()
             is_correct = False
             try:
                 if int(submitted_val) == int(current_question.correct_answer):
                     is_correct = True
             except (ValueError, TypeError):
-                # If they submitted text instead of index, try to match it
                 if current_question.options:
                     try:
                         options = json.loads(current_question.options)
@@ -836,131 +953,26 @@ async def submit_answer(
         db.refresh(answer)
     except IntegrityError:
         db.rollback()
-        # Duplicate answer — return the existing one idempotently
-        existing = db.query(InterviewAnswer).filter(
-            InterviewAnswer.question_id == current_question.id
-        ).first()
-        if existing:
-            return {"success": True, "answer_id": existing.id}
-        raise HTTPException(status_code=409, detail="Answer already submitted for this question.")
+        existing = db.query(InterviewAnswer).filter(InterviewAnswer.question_id == current_question.id).first()
+        if existing: return {"success": True, "answer_id": existing.id}
+        raise HTTPException(status_code=409, detail="Answer already exists")
     except Exception as e:
         db.rollback()
-        detail = f"Failed to save answer: {str(e)}" if settings.debug else "Failed to save answer efficiently."
-        raise HTTPException(status_code=500, detail=detail)
-    
-    # Evaluate answer with AI safely (non-blocking failure)
-    # Skip AI evaluation for aptitude (MCQs are auto-graded above)
-    if current_question.question_type == "aptitude":
-        return {"success": True, "answer_id": answer.id}
+        raise HTTPException(status_code=500, detail=f"Failed to save answer: {str(e)}")
 
-    try:
-        # Get detailed evaluation
-        try:
-            # Pass question type so AI service knows whether to run technical or behavioral eval
-            # NOTE: `evaluate_detailed_answer` is imported directly above; using it avoids a NameError
-            # (there is no `ai_service` module object in this file).
-            evaluation = await evaluate_detailed_answer(
-                current_question.question_text, 
-                data.answer_text,
-                question_type=current_question.question_type or "technical"
-            )
-            
-            if current_question.question_type == "behavioral":
-                # Map behavioral specific keys to generic DB columns
-                # We store the real keys in the answer_evaluation JSON
-                technical_score = evaluation.get("relevance", 0)
-                completeness_score = evaluation.get("action_impact", 0)
-                clarity_score = evaluation.get("clarity", 0)
-                depth_score = 0
-                practicality_score = 0
-            else:
-                technical_score = evaluation.get("technical_accuracy", 0)
-                completeness_score = evaluation.get("completeness", 0)
-                clarity_score = evaluation.get("clarity", 0)
-                depth_score = evaluation.get("depth", 0)
-                practicality_score = evaluation.get("practicality", 0)
-            
-            answer_score = evaluation.get("overall", 0)
-            answer_evaluation = json.dumps(evaluation)
-        except Exception as e:
-            print(f"Error evaluating detailed answer: {e}")
-            # Fallback scores
-            answer_score = 5.0
-            technical_score = 5.0
-            completeness_score = 5.0
-            clarity_score = 5.0
-            depth_score = 5.0
-            practicality_score = 5.0
-            answer_evaluation = json.dumps({"error": "Evaluation failed"})
+    # ── Background Evaluation ──
+    # Offload slow AI evaluation to background tasks to prevent 504 gateway timeouts.
+    if current_question.question_type != "aptitude":
+        background_tasks.add_task(
+            evaluate_answer_task,
+            answer.id,
+            current_question.question_text,
+            data.answer_text,
+            current_question.question_type or "technical",
+            interview_id
+        )
 
-        answer.answer_score = float(answer_score)
-        answer.skill_relevance_score = float(technical_score) # Using technical_score for skill_relevance
-        answer.technical_score = float(technical_score)
-        answer.completeness_score = float(completeness_score)
-        answer.clarity_score = float(clarity_score)
-        answer.depth_score = float(depth_score)
-        answer.practicality_score = float(practicality_score)
-        answer.answer_evaluation = answer_evaluation
-        answer.evaluated_at = datetime.now(timezone.utc)
-        db.commit()
-        
-        # ── CONDITION 1: Low Performance Screening ──
-        if current_question.question_type != "aptitude":
-            answered_questions = db.query(InterviewAnswer).join(InterviewQuestion).filter(
-                InterviewQuestion.interview_id == interview_id,
-                InterviewQuestion.question_type != "aptitude"
-            ).all()
-            
-            if len(answered_questions) == 5:
-                # Calculate average score of first 5 non-aptitude questions
-                scores_list = [a.answer_score for a in answered_questions if a.answer_score is not None]
-                if scores_list:
-                    avg_score = sum(scores_list) / len(scores_list)
-                    if avg_score < 4.0:
-                        try:
-                            interview.status = "terminated"
-                            interview.interview_stage = STAGE_COMPLETED
-                            interview.ended_at = datetime.now(timezone.utc)
-                            
-                            from app.services.state_machine import CandidateStateMachine, TransitionAction
-                            from app.domain.models import InterviewIssue
-                            
-                            fsm = CandidateStateMachine(db)
-                            try:
-                                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated due to low performance. Average score: {avg_score:.1f}/10.")
-                            except Exception:
-                                interview.application.status = "rejected"
-                                
-                            system_issue = InterviewIssue(
-                                interview_id=interview.id,
-                                candidate_name=interview.application.candidate_name,
-                                candidate_email=interview.application.candidate_email,
-                                issue_type="technical",
-                                description=f"SYSTEM AUTO-TERMINATION: low_performance. The system automatically terminated the interview because the average score of the first 5 questions was {avg_score:.1f}/10 (Threshold < 4.0).",
-                                status="pending"
-                            )
-                            db.add(system_issue)
-                            db.commit()
-                            
-                            return {
-                                "success": True,
-                                "terminated": True,
-                                "termination_reason": "low_performance",
-                                "message": "Interview terminated due to low average score.",
-                                "answer_id": answer.id
-                            }
-                        except Exception as e:
-                            db.rollback()
-                            print(f"Error terminating based on low performance: {e}")
-    except Exception as e:
-        db.rollback()
-        print(f"Error evaluating answer safely: {e}")
-        
-    return {
-        "success": True, 
-        "answer_id": answer.id,
-        "evaluation": evaluation if 'evaluation' in locals() else {"error": "Evaluation not fully saved"}
-    }
+    return {"success": True, "answer_id": answer.id}
 
 
 @router.post("/{interview_id}/complete-aptitude")

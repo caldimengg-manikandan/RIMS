@@ -24,7 +24,9 @@ export class APIClient {
   }
 
   static async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`[APIClient] GET ${url}`);
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders()
     })
@@ -33,7 +35,9 @@ export class APIClient {
   }
 
   static async post<T>(endpoint: string, data: any): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`[APIClient] POST ${url}`);
+    const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -42,7 +46,9 @@ export class APIClient {
   }
 
   static async postMultipart<T>(endpoint: string, formData: FormData): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`[APIClient] POST (Multipart) ${url}`);
+    const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(true),
       body: formData,
