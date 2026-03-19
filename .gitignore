@@ -20,6 +20,7 @@
 *.webm
 *.sql
 *.db
+*.xlsx
 
 # Frontend ignores
 frontend/node_modules/

@@ -15,7 +15,7 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=10,         # MySQL pool scaling
     max_overflow=20,
-    pool_recycle=3600,    # Recycle connections every hour
+    pool_recycle=300,    # Recycle connections every 5 minutes (for Supabase pooler)
     echo=settings.debug
 )
 
