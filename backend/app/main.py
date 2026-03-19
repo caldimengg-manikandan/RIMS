@@ -97,7 +97,13 @@ app.add_middleware(
 @app.get("/health")
 def health_check():
     """Health check endpoint"""
-    return {"status": "ok", "message": "HR Recruitment API is running"}
+    db_type = settings.database_url.split("://")[0]
+    return {
+        "status": "ok", 
+        "message": "HR Recruitment API is running",
+        "db": db_type,
+        "is_supabase": "supabase" in settings.database_url
+    }
 
 # Root endpoint
 @app.get("/")
