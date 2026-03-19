@@ -346,10 +346,9 @@ export default function InterviewPage() {
     useEffect(() => {
         if (!interviewData?.started_at || interviewStatus !== 'active') return
 
-        // Ensure spaces are replaced with T for standard ISO format parsing.
-        // We strictly DO NOT append 'Z' because the PostgreSQL/MySQL backend 
-        // stores native naive datetimes representing the server's local timezone.
-        const cleanDateStr = interviewData.started_at.replace('Z', '').replace(' ', 'T')
+        // The backend uses naive datetimes. On Render/Supabase, these are implicitly UTC.
+        // We force UTC mapping by explicitly appending 'Z'.
+        const cleanDateStr = interviewData.started_at.replace('Z', '').replace(' ', 'T') + 'Z'
         const startTime = new Date(cleanDateStr).getTime()
         const durationMs = (interviewData.duration_minutes || 60) * 60 * 1000
         const endTime = startTime + durationMs
