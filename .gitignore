@@ -14,6 +14,12 @@
 *.zip
 *.rar
 *.7z
+*.txt
+*.wav
+*.mp3
+*.webm
+*.sql
+*.db
 
 # Frontend ignores
 frontend/node_modules/

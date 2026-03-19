@@ -496,7 +496,7 @@ class ResponseAnalyzer:
             3. Clarity (0-10): Is the answer clearly articulated, structured (e.g., STAR method), and easy to follow?
             
             Also consider:
-            - **CRITICAL CHECKS**: Did the candidate provide a nonsensical/irrelevant/silly response or exhibit inappropriate behavior? If yes, severely penalize all scores (reduce by 2 points and if 0 set 0) and state this in Weaknesses.
+            - **CRITICAL CHECKS**: Did the candidate simply copy-paste or repeat the question as their answer, provide a nonsensical/irrelevant/silly response, or exhibit inappropriate behavior? If yes, severely penalize the scores (set to 0) and explicitly state this major red flag in the Weaknesses.
             - Word count: {word_count} (ideal: 50-200 words)
             - Use of specific, real-world examples?
 
@@ -825,14 +825,12 @@ class ResponseAnalyzer:
         
         # Word count adjustments
         if word_count < 50:
-            scores["coherence"] = max(0, scores["coherence"] - 2)
+            scores["clarity"] = max(0, scores["clarity"] - 2)
             scores["overall"] = max(0, scores["overall"] - 1)
         elif 80 <= word_count <= 250:
-            scores["overall"] = min(10, (sum([scores["communication"], scores["coherence"], 
-                                            scores["empathy"], scores["situational_handling"], scores["self_awareness"]]) / 5))
+            pass # Keep AI scores intact
         
-        category_scores = [scores["communication"], scores["coherence"], 
-                           scores["empathy"], scores["situational_handling"], scores["self_awareness"]]
+        category_scores = [scores["relevance"], scores["action_impact"], scores["clarity"]]
         scores["overall"] = sum(category_scores) / len(category_scores)
         
         for key in scores:
@@ -909,15 +907,13 @@ class ResponseAnalyzer:
         base_score = 5
         if 80 <= word_count <= 250:
             base_score = 7
-        elif word_count < 50:
-            base_score = 4
+        if word_count < 50:
+            base_score = 0  # Severe penalty for extremely short or repeated question
             
         return {
-            "communication": base_score,
-            "coherence": base_score,
-            "empathy": base_score,
-            "situational_handling": base_score,
-            "self_awareness": base_score,
+            "relevance": base_score,
+            "action_impact": base_score,
+            "clarity": base_score,
             "overall": base_score,
             "strengths": ["Answered the question"] if word_count >= 50 else [],
             "weaknesses": ["Could provide more detail"] if word_count < 100 else []

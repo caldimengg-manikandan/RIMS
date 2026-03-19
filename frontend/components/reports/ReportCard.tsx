@@ -27,24 +27,24 @@ const ReportCardImpl = ({ report, onClick }: ReportCardProps) => (
             </div>
 
             <div className="flex gap-4 items-center">
-                <div className="text-right w-16">
+                <div className="text-right w-24">
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Score</div>
                     <div className="font-bold text-2xl text-primary">{report.overall_score.toFixed(1)}</div>
                 </div>
-                <div className="text-right w-16 hidden md:block">
+                <div className="text-right w-24 hidden md:block">
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Aptitude</div>
                     <div className="font-bold text-xl text-slate-700 dark:text-slate-300">
                         {report.aptitude_score !== undefined && report.aptitude_score !== null ? report.aptitude_score.toFixed(1) : '-'}
                     </div>
                 </div>
-                <div className="text-right w-16 hidden md:block">
+                <div className="text-right w-28 hidden md:block">
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Behavioral</div>
                     <div className="font-bold text-xl text-slate-700 dark:text-slate-300">
                         {report.behavioral_score !== undefined && report.behavioral_score !== null ? report.behavioral_score.toFixed(1) : '-'}
                     </div>
                 </div>
 
-                <div className="text-right w-16">
+                <div className="text-right w-28">
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Suggestion</div>
                     <div className={`w-full justify-center font-bold text-xl
                                           ${(['selected', 'hired', 'hire'].includes(report.status?.toLowerCase())) ? 'text-primary' : ''}

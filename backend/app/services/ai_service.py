@@ -580,4 +580,7 @@ async def transcribe_audio(audio_file_path: str) -> str:
             return transcript.text
     except Exception as e:
         logger.error(f"Transcription error: {e}")
+        # Gracefully handle validation errors (e.g. file too short, invalid format)
+        if "400" in str(e) or getattr(e, "status_code", None) == 400:
+            return ""
         raise e

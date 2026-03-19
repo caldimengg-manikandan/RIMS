@@ -346,11 +346,11 @@ export default function InterviewPage() {
     useEffect(() => {
         if (!interviewData?.started_at || interviewStatus !== 'active') return
 
-        const dateStr = interviewData.started_at.includes('Z')
-            ? interviewData.started_at
-            : (interviewData.started_at.replace(' ', 'T') + (interviewData.started_at.includes('T') ? 'Z' : 'Z'))
-
-        const startTime = new Date(dateStr).getTime()
+        // Ensure spaces are replaced with T for standard ISO format parsing.
+        // We strictly DO NOT append 'Z' because the PostgreSQL/MySQL backend 
+        // stores native naive datetimes representing the server's local timezone.
+        const cleanDateStr = interviewData.started_at.replace('Z', '').replace(' ', 'T')
+        const startTime = new Date(cleanDateStr).getTime()
         const durationMs = (interviewData.duration_minutes || 60) * 60 * 1000
         const endTime = startTime + durationMs
 
