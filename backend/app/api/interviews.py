@@ -826,13 +826,8 @@ async def evaluate_answer_task(
         logger.error(f"Fatal error saving background evaluation: {e}")
         db.rollback()
     finally:
-        db.close()            logger.error(f"Error in background termination: {inner_e}")
-                            db.rollback()
-    except Exception as e:
-        logger.error(f"Fatal error in background evaluation task: {e}")
-        db.rollback()
-    finally:
         db.close()
+
 
 
 @router.post("/{interview_id}/submit-answer")
