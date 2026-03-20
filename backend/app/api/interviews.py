@@ -713,53 +713,61 @@ async def evaluate_answer_task(
     """
     Background task to evaluate an interview answer using AI and handle 
     auto-termination logic without blocking the main request.
+    
+    Optimized to minimize database write-lock duration during slow AI calls.
     """
     from app.infrastructure.database import SessionLocal
     from sqlalchemy.orm import Session
+    from app.services.ai_service import evaluate_detailed_answer
     
+    # 1. PRE-EVALUATION: The AI call can take 10-20 seconds.
+    # We do NOT want a database session/transaction open during this time 
+    # because it can hold write locks (SQLite) and block the main thread.
+    try:
+        evaluation = await evaluate_detailed_answer(
+            question_text, 
+            answer_text,
+            question_type=question_type or "technical"
+        )
+        
+        if question_type == "behavioral":
+            technical_score = evaluation.get("relevance", 0)
+            completeness_score = evaluation.get("action_impact", 0)
+            clarity_score = evaluation.get("clarity", 0)
+            depth_score = 0
+            practicality_score = 0
+        else:
+            technical_score = evaluation.get("technical_accuracy", 0)
+            completeness_score = evaluation.get("completeness", 0)
+            clarity_score = evaluation.get("clarity", 0)
+            depth_score = evaluation.get("depth", 0)
+            practicality_score = evaluation.get("practicality", 0)
+        
+        answer_score = evaluation.get("overall", 0)
+        answer_evaluation_json = json.dumps(evaluation)
+    except Exception as e:
+        logger.error(f"Background AI evaluation error: {e}")
+        # Default fallback values for failure
+        answer_score = 5.0
+        technical_score = 5.0
+        completeness_score = 5.0
+        clarity_score = 5.0
+        depth_score = 5.0
+        practicality_score = 5.0
+        answer_evaluation_json = json.dumps({"error": f"Evaluation failed: {str(e)}"})
+
+    # 2. SAVE RESULTS: Use a short-lived transaction specifically for the update.
     db: Session = SessionLocal()
     try:
-        # 1. Fetch the records
-        answer = db.query(InterviewAnswer).filter(InterviewAnswer.id == answer_id).first()
-        interview = db.query(Interview).filter(Interview.id == interview_id).first()
+        # Fetch the records within this specific transaction
+        answer = db.query(InterviewAnswer).filter(InterviewAnswer.id == answer_id).with_for_update().first()
+        interview = db.query(Interview).filter(Interview.id == interview_id).with_for_update().first()
+        
         if not answer or not interview:
+            logger.warning(f"Task incomplete: answer_id={answer_id} or interview_id={interview_id} not found during result saving.")
             return
 
-        # 2. Get detailed evaluation from AI
-        try:
-            from app.services.ai_service import evaluate_detailed_answer
-            evaluation = await evaluate_detailed_answer(
-                question_text, 
-                answer_text,
-                question_type=question_type or "technical"
-            )
-            
-            if question_type == "behavioral":
-                technical_score = evaluation.get("relevance", 0)
-                completeness_score = evaluation.get("action_impact", 0)
-                clarity_score = evaluation.get("clarity", 0)
-                depth_score = 0
-                practicality_score = 0
-            else:
-                technical_score = evaluation.get("technical_accuracy", 0)
-                completeness_score = evaluation.get("completeness", 0)
-                clarity_score = evaluation.get("clarity", 0)
-                depth_score = evaluation.get("depth", 0)
-                practicality_score = evaluation.get("practicality", 0)
-            
-            answer_score = evaluation.get("overall", 0)
-            answer_evaluation = json.dumps(evaluation)
-        except Exception as e:
-            logger.error(f"Background evaluation error: {e}")
-            answer_score = 5.0
-            technical_score = 5.0
-            completeness_score = 5.0
-            clarity_score = 5.0
-            depth_score = 5.0
-            practicality_score = 5.0
-            answer_evaluation = json.dumps({"error": "Background evaluation failed"})
-
-        # 3. Update the answer
+        # Update the answer
         answer.answer_score = float(answer_score)
         answer.skill_relevance_score = float(technical_score)
         answer.technical_score = float(technical_score)
@@ -767,29 +775,25 @@ async def evaluate_answer_task(
         answer.clarity_score = float(clarity_score)
         answer.depth_score = float(depth_score)
         answer.practicality_score = float(practicality_score)
-        answer.answer_evaluation = answer_evaluation
+        answer.answer_evaluation = answer_evaluation_json
         answer.evaluated_at = datetime.now(timezone.utc)
-        db.commit()
-
-        # 4. Low Performance Screening (logic moved to background)
+        
+        # 3. Low Performance Screening
         if question_type != "aptitude":
+            # Count answers including this one (which we just locked)
             answered_questions = db.query(InterviewAnswer).join(InterviewQuestion).filter(
                 InterviewQuestion.interview_id == interview_id,
                 InterviewQuestion.question_type != "aptitude"
             ).all()
             
-            if len(answered_questions) >= 5: # Changed to >= to ensure we don't miss it
-                # Check if we already handled termination
-                if interview.status == "terminated":
-                    return
-
+            if len(answered_questions) >= 5 and interview.status == "in_progress":
                 scores_list = [a.answer_score for a in answered_questions if a.answer_score is not None]
                 if len(scores_list) >= 5:
                     avg_score = sum(scores_list) / len(scores_list)
                     if avg_score < 4.0:
                         try:
                             interview.status = "terminated"
-                            interview.interview_stage = "completed"
+                            interview.interview_stage = STAGE_COMPLETED
                             interview.ended_at = datetime.now(timezone.utc)
                             
                             from app.services.state_machine import CandidateStateMachine, TransitionAction
@@ -797,22 +801,32 @@ async def evaluate_answer_task(
                             
                             fsm = CandidateStateMachine(db)
                             try:
-                                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated due to low performance. (Background Evaluation)")
+                                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated due to low performance. (Avg score: {avg_score:.1f})")
                             except Exception:
-                                interview.application.status = "rejected"
+                                if interview.application:
+                                    interview.application.status = "rejected"
                                 
                             system_issue = InterviewIssue(
                                 interview_id=interview.id,
-                                candidate_name=interview.application.candidate_name,
-                                candidate_email=interview.application.candidate_email,
+                                candidate_name=interview.application.candidate_name if interview.application else "Candidate",
+                                candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
                                 issue_type="technical",
                                 description=f"SYSTEM AUTO-TERMINATION (BG): low_performance. Average score of first {len(scores_list)} questions was {avg_score:.1f}/10.",
                                 status="pending"
                             )
                             db.add(system_issue)
-                            db.commit()
                         except Exception as inner_e:
-                            logger.error(f"Error in background termination: {inner_e}")
+                            logger.error(f"Error in background termination logic: {inner_e}")
+        
+        # Commit the transaction quickly
+        db.commit()
+        logger.info(f"Successfully saved evaluation for answer_id={answer_id} in {interview_id}")
+        
+    except Exception as e:
+        logger.error(f"Fatal error saving background evaluation: {e}")
+        db.rollback()
+    finally:
+        db.close()            logger.error(f"Error in background termination: {inner_e}")
                             db.rollback()
     except Exception as e:
         logger.error(f"Fatal error in background evaluation task: {e}")

@@ -136,12 +136,23 @@ app.include_router(websocket_router)
 
 # Error handlers
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    """Custom HTTP exception handler"""
-    return JSONResponse(
+async def http_exception_handler(request: FastAPIRequest, exc: HTTPException):
+    """Custom HTTP exception handler with CORS support"""
+    response = JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail}
     )
+    
+    # Manually add CORS for HTTPExceptions (e.g. 401, 403, 404, 429)
+    origin = request.headers.get("origin")
+    allowed_origins = settings.get_allowed_origins()
+    if origin and (origin in allowed_origins or "*" in allowed_origins or settings.env == "development"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+    return response
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: FastAPIRequest, exc: Exception):
