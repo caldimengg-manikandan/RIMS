@@ -415,23 +415,42 @@ export default function InterviewPage() {
                 APIClient.get<Question[]>(`/api/interviews/${interviewId}/questions`)
             ])
 
+            if (!data || !qs || !Array.isArray(qs)) {
+                console.error("Malformed interview data received:", { data, qs })
+                throw new Error("Invalid interview session data structure.")
+            }
+
             setInterviewData(data)
             setQuestions(qs)
 
             if (data.status === 'completed') {
                 setInterviewStatus('completed')
-            } else {
+            } else if (qs.length > 0) {
                 // Find first unanswered
                 const firstUnanswered = qs.findIndex(q => !q.is_answered)
                 const startIdx = firstUnanswered !== -1 ? firstUnanswered : 0
                 setCurrentIndex(startIdx)
                 setVisitedIds(new Set([qs[startIdx].id]))
                 setInterviewStatus('active')
+            } else {
+                console.warn("Interview session has no questions yet.")
+                setInterviewStatus('active') // Still set to active so it doesn't show error page immediately
             }
         } catch (err: any) {
-            console.error("Failed to load interview", err)
-            // If unauthorized or forbidden, redirect to access page
-            if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unauthorized') || err.message.includes('denied')) {
+            console.error("Failed to load interview session:", err)
+            const errorMsg = err.message || ""
+            
+            // Handled by APIClient already, but we add redundant safety check
+            const isAuthError = 
+                errorMsg.includes('401') || 
+                errorMsg.includes('403') || 
+                errorMsg.includes('Unauthorized') || 
+                errorMsg.includes('Authentication failed') ||
+                errorMsg.includes('Invalid interview credentials') ||
+                errorMsg.includes('denied');
+
+            if (isAuthError) {
+                console.log("Authentication issue detected. Clearing session and redirecting...");
                 localStorage.removeItem('auth_token')
                 router.push('/interview/access')
             } else {

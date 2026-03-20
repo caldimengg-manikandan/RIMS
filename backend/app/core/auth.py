@@ -148,27 +148,27 @@ def get_current_interview(
     if interview.status == "completed":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This interview has already been completed",
+            detail="Interview has already been completed. Thank you for your time.",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
     if interview.status == "terminated":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This interview was terminated due to a policy violation",
+            detail="Session terminated due to multiple policy violations (tab switching or face detection).",
             headers={"WWW-Authenticate": "Bearer"},
         )
         
     if interview.status == "not_started":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Interview has not been started yet. Please use the access key to start it.",
+            detail="Interview session has not been initialized. Please use your access key.",
         )
         
     if interview.status != "in_progress":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Interview session is no longer active (Status: {interview.status})",
+            detail=f"Interview session is no longer active (Current status: {interview.status})",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

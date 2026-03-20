@@ -68,11 +68,11 @@ export class APIClient {
         if (isInterviewPath && !window.location.pathname.includes('/access')) {
           localStorage.removeItem('auth_token')
           window.location.href = '/interview/access'
-          return {} as T
+          throw new Error(`Authentication failed (${response.status}). Redirecting to access page...`)
         } else if (response.status === 401) {
           localStorage.removeItem('auth_token')
           window.location.href = '/'
-          return {} as T
+          throw new Error('Unauthorized. Redirecting to login...')
         }
       }
 
