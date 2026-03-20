@@ -506,7 +506,11 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Submission error details:", err)
             const errorMsg = err.message || "Failed to submit answer.";
-            alert(`${errorMsg}\n\nTechnical Tip: This "Failed to fetch" usually means a CORS error, a backend timeout, or the server is down. Please verify your BACKEND_URL and CORS settings.`)
+            if (errorMsg.includes("403") || errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
+                alert(`Submission Error: ${errorMsg}\n\nSession redirected.`);
+            } else {
+                alert(`${errorMsg}\n\nTechnical Tip: This "Failed to fetch" usually means a CORS error, a backend timeout, or the server is down. Please verify your BACKEND_URL and CORS settings.`)
+            }
         } finally {
             setIsSubmitting(false)
         }

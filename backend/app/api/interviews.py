@@ -1481,6 +1481,13 @@ async def transcribe_interview_audio(
     temp_dir = tempfile.gettempdir()
     tmp_path = os.path.join(temp_dir, f"transcribe_{interview_id}_{int(datetime.now().timestamp())}{suffix}")
     
+    if not settings.groq_keys:
+        logger.error(f"❌ Transcription failed: GROQ_API_KEY is not set in environment variables.")
+        raise HTTPException(
+            status_code=500, 
+            detail="Transcription service unavailable: GROQ_API_KEY is missing on server. Please contact support."
+        )
+
     try:
         with open(tmp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)

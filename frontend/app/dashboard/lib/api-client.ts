@@ -62,22 +62,27 @@ export class APIClient {
     }
 
     if (!response.ok) {
-      // Handle 401: Clear token and redirect to login
+      // Try to get error detail from JSON body
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }))
+      const detail = errorData.detail || `Error ${response.status}: ${response.statusText}`
+
+      // Handle 401/403: Clear token and redirect
       if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
         const isInterviewPath = window.location.pathname.startsWith('/interview')
         if (isInterviewPath && !window.location.pathname.includes('/access')) {
           localStorage.removeItem('auth_token')
-          window.location.href = '/interview/access'
-          throw new Error(`Authentication failed (${response.status}). Redirecting to access page...`)
+          // Optional: we can delay redirect or let the caller handle it, 
+          // but keeping current auto-redirect logic with better message
+          setTimeout(() => { window.location.href = '/interview/access' }, 3000)
+          throw new Error(`${detail} (Redirecting in 3s...)`)
         } else if (response.status === 401) {
           localStorage.removeItem('auth_token')
           window.location.href = '/'
-          throw new Error('Unauthorized. Redirecting to login...')
+          throw new Error(`Unauthorized: ${detail}. Redirecting...`)
         }
       }
 
-      const error = await response.json().catch(() => ({ detail: response.statusText }))
-      throw new Error(error.detail || `API error: ${response.statusText}`)
+      throw new Error(detail)
     }
 
     return response.json()

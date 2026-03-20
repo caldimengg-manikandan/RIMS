@@ -155,7 +155,7 @@ def get_current_interview(
     if interview.status == "terminated":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Session terminated due to multiple policy violations (tab switching or face detection).",
+            detail="Session terminated. This usually happens due to policy violations or performance screening. Please contact HR if you believe this is an error.",
             headers={"WWW-Authenticate": "Bearer"},
         )
         

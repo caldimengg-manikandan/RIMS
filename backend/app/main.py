@@ -167,6 +167,8 @@ async def general_exception_handler(request: FastAPIRequest, exc: Exception):
     if origin and (origin in allowed_origins or "*" in allowed_origins or settings.env == "development"):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
         
     return response
 
