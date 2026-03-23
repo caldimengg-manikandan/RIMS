@@ -74,11 +74,17 @@ export default function HRApplicationDetailPage() {
     const { data: application, error: appError, isLoading: appLoading, mutate: mutateApp } = useSWR<any>(`/api/applications/${applicationId}`, (url: string) => fetcher<any>(url))
 
     const { data: interviewReport, isLoading: reportLoading, mutate: mutateReport } = useSWR(
-        application?.interview?.status === 'completed' || application?.status === 'ai_interview_completed' ? `/api/interviews/${application.interview.id}/report` : null,
+        (application?.interview?.status === 'completed' || 
+         application?.interview?.status === 'terminated' || 
+         application?.status === 'ai_interview_completed') 
+        ? `/api/interviews/${application.interview.id}/report` : null,
         (url: string) => fetcher<any>(url)
     )
 
-    const isLoading = appLoading || (application?.interview?.status === 'completed' && reportLoading && !interviewReport)
+    const isLoading = appLoading || (
+        (application?.interview?.status === 'completed' || application?.interview?.status === 'terminated') && 
+        reportLoading && !interviewReport
+    )
     
     const [actionLoading, setActionLoading] = useState<string | null>(null)
     const [isEditingNotes, setIsEditingNotes] = useState(false)
@@ -417,28 +423,6 @@ export default function HRApplicationDetailPage() {
                         </Card>
                     </div>
 
-                    {/* ─── Video Recording Block from tamil/main ─── */}
-                    {application.interview?.status === 'completed' && (
-                        <Card className="border shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-xl flex items-center gap-2 text-primary font-bold">
-                                    <Video className="w-6 h-6" /> Interview Video Recording
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {report?.video_url ? (
-                                    <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl aspect-video relative group border-4">
-                                        <video src={`${API_BASE_URL}/${report.video_url.replace(/\\/g, '/')}`} controls className="w-full h-full" />
-                                    </div>
-                                ) : (
-                                    <div className="bg-muted/30 border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center">
-                                        <Video className="w-12 h-12 text-muted-foreground/30 mb-2" />
-                                        <p className="text-sm font-semibold text-muted-foreground">Video Session Not Found</p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
                 </div>
 
                 {/* ─── Sidebar (Right) ─── */}

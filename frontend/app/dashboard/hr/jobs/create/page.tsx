@@ -118,13 +118,22 @@ export default function HRCreateJobPage() {
     const prevExpRef = useRef(formData.experience_level)
     useEffect(() => {
         if (prevExpRef.current !== formData.experience_level) {
-            // If switching away from junior, reset aptitude
-            if (prevExpRef.current === 'junior' && formData.experience_level !== 'junior') {
-                setFormData(prev => ({
-                    ...prev,
-                    aptitude_enabled: false,
-                }))
+            // Update behavioral role to match experience level
+            let newBehavioralRole = formData.behavioral_role;
+            if (formData.experience_level === 'intern' || formData.experience_level === 'junior') {
+                newBehavioralRole = 'junior';
+            } else if (formData.experience_level === 'mid') {
+                newBehavioralRole = 'mid';
+            } else if (formData.experience_level === 'senior' || formData.experience_level === 'lead') {
+                newBehavioralRole = 'lead';
             }
+
+            setFormData(prev => ({
+                ...prev,
+                behavioral_role: newBehavioralRole,
+                // If switching away from junior, reset aptitude
+                ...(prevExpRef.current === 'junior' && formData.experience_level !== 'junior' && { aptitude_enabled: false }),
+            }))
             prevExpRef.current = formData.experience_level
         }
     }, [formData.experience_level])

@@ -496,6 +496,9 @@ async def generate_interview_report(job_title: str, all_qa_pairs: list, overall_
         "recommendation": "...", 
         "strengths": [], 
         "weaknesses": [], 
+        "technical_score": [0-10],
+        "communication_score": [0-10],
+        "problem_solving_score": [0-10],
         "evaluated_skills": [
             {{ "skillName": "React", "score": 8.5, "justification": "Evidence here..." }}
         ],
@@ -507,9 +510,9 @@ async def generate_interview_report(job_title: str, all_qa_pairs: list, overall_
         data = json.loads(clean_json(response))
         return {
             "overall_score": overall_score,
-            "technical_skills_score": float(data.get("technical_score", 5)),
-            "communication_score": float(data.get("communication_score", 5)),
-            "problem_solving_score": float(data.get("problem_solving_score", 5)),
+            "technical_skills_score": float(data.get("technical_score", overall_score)),
+            "communication_score": float(data.get("communication_score", overall_score)),
+            "problem_solving_score": float(data.get("problem_solving_score", overall_score)),
             "strengths": json.dumps(data.get("strengths", [])),
             "weaknesses": json.dumps(data.get("weaknesses", [])),
             "summary": data.get("summary", ""),

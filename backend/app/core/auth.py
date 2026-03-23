@@ -145,30 +145,20 @@ def get_current_interview(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    if interview.status == "completed":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Interview has already been completed. Thank you for your time.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
-    if interview.status == "terminated":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Session terminated. This usually happens due to policy violations or performance screening. Please contact HR if you believe this is an error.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
     if interview.status == "not_started":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Interview session has not been initialized. Please use your access key.",
         )
-        
-    if interview.status != "in_progress":
+    
+    # We allow 'completed' and 'terminated' statuses here so that the frontend can 
+    # perform final actions like uploading the video recording. 
+    # Specific endpoints (like submit-answer) must check for 'in_progress' status explicitly.
+    valid_statuses = ["in_progress", "completed", "terminated"]
+    if interview.status not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Interview session is no longer active (Current status: {interview.status})",
+            detail=f"Interview session is not in a valid state (Current status: {interview.status})",
             headers={"WWW-Authenticate": "Bearer"},
         )
     

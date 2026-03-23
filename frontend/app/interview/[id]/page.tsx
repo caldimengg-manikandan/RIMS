@@ -91,9 +91,38 @@ export default function InterviewPage() {
     useEffect(() => { warningsRef.current = warnings }, [warnings])
     useEffect(() => { interviewStatusRef.current = interviewStatus }, [interviewStatus])
 
+    // VISIBILITY & ABANDONMENT TRACKING
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            // Only trigger if interview is actually active
+            const status = interviewStatusRef.current
+            if (status === 'active' || status === 'in_progress' || status === 'aptitude') {
+                const token = localStorage.getItem('interview_token')
+                if (token && interviewId) {
+                    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000'
+                    const url = `${baseUrl}/api/interviews/${interviewId}/abandon`
+                    
+                    // fetch with keepalive: true is the modern way to send "death rattle" analytics/status
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        keepalive: true
+                    }).catch(() => {}) // Ignore errors as page is closing
+                }
+            }
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload)
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+        }
+    }, [interviewId])
+
     // Track visited questions and section transitions
     useEffect(() => {
-        // No auto-init for MediaRecorder, we start it on click
+        // ... (cleanup logic)
         return () => {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
                 mediaRecorderRef.current.stop()

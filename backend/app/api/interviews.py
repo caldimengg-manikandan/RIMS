@@ -778,45 +778,8 @@ async def evaluate_answer_task(
         answer.answer_evaluation = answer_evaluation_json
         answer.evaluated_at = datetime.now(timezone.utc)
         
-        # 3. Low Performance Screening
-        if question_type != "aptitude":
-            # Count answers including this one (which we just locked)
-            answered_questions = db.query(InterviewAnswer).join(InterviewQuestion).filter(
-                InterviewQuestion.interview_id == interview_id,
-                InterviewQuestion.question_type != "aptitude"
-            ).all()
-            
-            if len(answered_questions) >= 5 and interview.status == "in_progress":
-                scores_list = [a.answer_score for a in answered_questions if a.answer_score is not None]
-                if len(scores_list) >= 5:
-                    avg_score = sum(scores_list) / len(scores_list)
-                    if avg_score < 4.0:
-                        try:
-                            interview.status = "terminated"
-                            interview.interview_stage = STAGE_COMPLETED
-                            interview.ended_at = datetime.now(timezone.utc)
-                            
-                            from app.services.state_machine import CandidateStateMachine, TransitionAction
-                            from app.domain.models import InterviewIssue
-                            
-                            fsm = CandidateStateMachine(db)
-                            try:
-                                fsm.transition(interview.application, TransitionAction.REJECT, notes=f"Interview automatically terminated due to low performance. (Avg score: {avg_score:.1f})")
-                            except Exception:
-                                if interview.application:
-                                    interview.application.status = "rejected"
-                                
-                            system_issue = InterviewIssue(
-                                interview_id=interview.id,
-                                candidate_name=interview.application.candidate_name if interview.application else "Candidate",
-                                candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
-                                issue_type="technical",
-                                description=f"SYSTEM AUTO-TERMINATION (BG): low_performance. Average score of first {len(scores_list)} questions was {avg_score:.1f}/10.",
-                                status="pending"
-                            )
-                            db.add(system_issue)
-                        except Exception as inner_e:
-                            logger.error(f"Error in background termination logic: {inner_e}")
+        # 3. Low Performance Screening (DEPRECATED: Interviews no longer auto-terminate for poor responses)
+        # This block has been removed as per user request to ensure all candidates can complete their session.
         
         # Commit the transaction quickly
         db.commit()
@@ -911,6 +874,10 @@ async def submit_answer(
             )
             db.add(system_issue)
             db.commit()
+            
+            # Generate report automatically
+            await _finalize_interview_and_report_internal(db, interview_id)
+
             
             return {
                 "success": True,
@@ -1140,74 +1107,28 @@ async def complete_aptitude(
         }
 
 
-@router.post("/{interview_id}/end")
-async def end_interview(
-    interview_id: int,
-    interview_session: Interview = Depends(get_current_interview),
-    db: Session = Depends(get_db)
-):
-    """End first-level interview and trigger final evaluation."""
-    if interview_session.id != interview_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+async def _finalize_interview_and_report_internal(db: Session, interview_id: int):
+    """
+    Internal helper to calculate final scores, generate the AI report, 
+    and send notifications. Reusable for normal completion and auto-termination.
+    """
+    from app.services.ai_service import generate_interview_report
+    from app.domain.models import InterviewReport, InterviewQuestion, InterviewAnswer, Notification
     
-    # Re-read with row-level lock to prevent double-click race
-    interview = db.query(Interview).filter(
-        Interview.id == interview_id
-    ).with_for_update().first()
-    
+    # 1. Fetch live interview state
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
     if not interview:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+        logger.error(f"Finalization failed: Interview {interview_id} not found.")
+        return None
 
-    import os
-    # Ensure logs directory exists for debugging
-    os.makedirs(settings.logs_dir, exist_ok=True)
-
-    # Handle transition if still in aptitude or mixed stage (Unified Flow)
-    if interview.interview_stage == STAGE_APTITUDE:
-        # Calculate/Sync Aptitude Score before finishing
-        apt_questions = db.query(InterviewQuestion).filter(
-            InterviewQuestion.interview_id == interview_id,
-            InterviewQuestion.question_type == "aptitude"
-        ).all()
-        apt_q_ids = [q.id for q in apt_questions]
-        if apt_q_ids:
-            answers = db.query(InterviewAnswer).filter(InterviewAnswer.question_id.in_(apt_q_ids)).all()
-            answered_ids = {a.question_id for a in answers}
-            if len(answered_ids) < len(apt_questions):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"All {len(apt_questions)} aptitude questions must be answered before ending."
-                )
-            # Set aptitude score
-            apt_scores = [a.answer_score for a in answers if a.answer_score is not None]
-            interview.aptitude_score = sum(apt_scores) / len(apt_scores) if apt_scores else 0.0
-            interview.aptitude_completed_at = datetime.now(timezone.utc)
-            interview.aptitude_completed = True
-
-    # Idempotency guard: if already completed, return success
-    if interview.interview_stage == STAGE_COMPLETED:
-        return {
-            "success": True,
-            "interview_id": interview_id,
-            "status": "already_completed",
-            "interview_score": interview.overall_score,
-            "aptitude_score": interview.aptitude_score,
-            "combined_score": interview.overall_score,
-        }
+    # Determine status if not already set (default to completed)
+    if interview.status == "in_progress":
+        interview.status = "completed"
+    if not interview.ended_at:
+        interview.ended_at = datetime.now(timezone.utc)
     
-    # Mark completed
-    interview.status = "completed"
-    interview.interview_stage = STAGE_COMPLETED
-    interview.ended_at = datetime.now(timezone.utc)
-    # Use FSM for state transition: ai_interview -> ai_interview_completed
-    from app.services.state_machine import CandidateStateMachine, TransitionAction
-    fsm = CandidateStateMachine(db)
-    try:
-        fsm.transition(interview.application, TransitionAction.SYSTEM_INTERVIEW_COMPLETE)
-    except Exception:
-        interview.application.status = "ai_interview_completed"
-    
-    # Calculate overall interview score (first-level questions only)
+    # 2. Calculate scores
     questions = db.query(InterviewQuestion).filter(
         InterviewQuestion.interview_id == interview_id,
         InterviewQuestion.question_type != "aptitude"
@@ -1225,7 +1146,6 @@ async def end_interview(
             latest_answer = answers[-1]
             score = latest_answer.answer_score if latest_answer.answer_score is not None else 2.0
             
-            # Split off Behavioral Questions (Q16+ / behavioral type)
             if question.question_type == 'behavioral' or question.question_number >= 16:
                 behavioral_scores.append(score)
             else:
@@ -1242,85 +1162,40 @@ async def end_interview(
     interview_score = sum(scores) / len(scores) if scores else 0.0
     behavioral_score = sum(behavioral_scores) / len(behavioral_scores) if behavioral_scores else 0.0
     
-    # ENFORCEMENT: Ensure all technical/behavioral questions were answered before ending
-    total_non_aptitude_answers = len(scores) + len(behavioral_scores)
+    interview.overall_score = interview_score
+    interview.questions_asked = len(questions)
+    interview.first_level_completed = True
+    interview.first_level_score = interview_score
     
-    # If explicitly terminated early (e.g. low score, abusive language), bypass the enforcement
-    if interview.status != "terminated" and total_non_aptitude_answers < len(questions) and len(questions) > 0:
-        # Calculate missing questions for logging
-        all_q_ids = {q.id for q in questions}
-        answered_ones = db.query(InterviewAnswer.question_id).filter(
-            InterviewAnswer.question_id.in_(list(all_q_ids))
-        ).all()
-        answered_set = {r[0] for r in answered_ones}
-        missing_nums = [q.question_number for q in questions if q.id not in answered_set]
-        
-        warn_msg = f"Interview {interview_id} ending with {len(missing_nums)} missing answers: {missing_nums}"
-        print(f"⚠️ {warn_msg}")
-        
-        # Soft Enforcement: If only 1-3 are missing, let it pass but log it.
-        # This prevents race condition blocks while still catching major skips.
-        if len(missing_nums) > 3:
-            detail_msg = f"All {len(questions)} technical/behavioral questions must be answered before ending. Missing: {missing_nums}"
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=detail_msg
-            )
-    
-    try:
-        interview.overall_score = interview_score
-        interview.questions_asked = len(questions)
-        interview.first_level_completed = True
-        interview.first_level_score = interview_score
-        interview.status = "completed"
-        interview.ended_at = datetime.now(timezone.utc)
-        if interview.application:
+    if interview.application:
+        # If it was terminated, don't overwrite the 'rejected' status if FSM already handled it
+        if interview.status == "completed":
             interview.application.status = "ai_interview_completed"
+            
+    db.commit()
 
-        
-        # Final score = first-level interview score ONLY
-        # Aptitude is a sample test and does NOT contribute to the final score
-        aptitude_score = interview.aptitude_score  # stored for logging only, may be None
-        combined_score = interview_score  # aptitude excluded from scoring
-        
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to properly calculate intermediate scoring.")
-    
-    # Check for system termination reason
+    # 3. Check for termination reason (from InterviewIssue)
     from app.domain.models import InterviewIssue
     term_reason = None
-    if interview.status == "terminated":
-        # fetch latest issue directly correlated
-        issue = db.query(InterviewIssue).filter(InterviewIssue.interview_id == interview.id).order_by(InterviewIssue.id.desc()).first()
-        if issue:
-            term_reason = issue.issue_type + ": " + issue.description
+    issue = db.query(InterviewIssue).filter(InterviewIssue.interview_id == interview_id).order_by(InterviewIssue.id.desc()).first()
+    if issue:
+        term_reason = f"{issue.issue_type}: {issue.description}"
+    elif interview.status == "terminated":
+        term_reason = "System manual termination"
 
-    # Prevent duplicate reports causing 500
-    existing_report = db.query(InterviewReport).filter(InterviewReport.interview_id == interview.id).first()
+    # 4. Generate AI Report
+    existing_report = db.query(InterviewReport).filter(InterviewReport.interview_id == interview_id).first()
     if existing_report:
-        return {
-            "success": True,
-            "interview_id": interview_id,
-            "status": "completed",
-            "interview_score": interview_score,
-            "aptitude_score": aptitude_score,
-            "combined_score": combined_score,
-            "message": "Report already exists."
-        }
-    
-    # Generate report
+        return existing_report
+
     try:
         job = interview.application.job
         primary_skills = []
         if getattr(job, 'primary_evaluated_skills', None):
             try:
                 parsed = json.loads(job.primary_evaluated_skills)
-                if isinstance(parsed, list):
-                    primary_skills = parsed
-            except:
-                pass
+                if isinstance(parsed, list): primary_skills = parsed
+            except: pass
 
         report_data = await generate_interview_report(
             job_title=job.title,
@@ -1330,38 +1205,32 @@ async def end_interview(
             termination_reason=term_reason
         )
         
-        # Serialize detailed_feedback
         detailed_feedback_val = report_data["detailed_feedback"]
         if isinstance(detailed_feedback_val, (dict, list)):
             detailed_feedback_val = json.dumps(detailed_feedback_val)
             
         rec_raw = str(report_data.get("recommendation", "consider")).lower()
-        if "not " in rec_raw or "not_recommended" in rec_raw:
-            rec_val = "not_recommended"
-        elif "recommend" in rec_raw:
-            rec_val = "recommended"
-        else:
-            rec_val = "consider"
+        rec_val = "not_recommended" if "not " in rec_raw or "not_recommended" in rec_raw else ("recommended" if "recommend" in rec_raw else "consider")
             
         report = InterviewReport(
             interview_id=interview_id,
-            application_id=interview.application.id,
-            job_id=job.id,
-            candidate_name=interview.application.candidate_name,
-            candidate_email=interview.application.candidate_email,
-            applied_role=job.title,
+            application_id=interview.application.id if interview.application else None,
+            job_id=job.id if job else None,
+            candidate_name=interview.application.candidate_name if interview.application else "Candidate",
+            candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
+            applied_role=job.title if job else "N/A",
             overall_score=report_data["overall_score"],
-            technical_skills_score=report_data.get("technical_skills_score", 5),
-            communication_score=report_data.get("communication_score", 5),
-            problem_solving_score=report_data.get("problem_solving_score", 5),
+            technical_skills_score=report_data.get("technical_skills_score", report_data["overall_score"]),
+            communication_score=report_data.get("communication_score", report_data["overall_score"]),
+            problem_solving_score=report_data.get("problem_solving_score", report_data["overall_score"]),
             strengths=report_data.get("strengths", "[]"),
             weaknesses=report_data.get("weaknesses", "[]"),
             summary=report_data.get("summary", ""),
             recommendation=rec_val,
             detailed_feedback=detailed_feedback_val,
-            aptitude_score=aptitude_score,
+            aptitude_score=interview.aptitude_score,
             behavioral_score=behavioral_score,
-            combined_score=combined_score,
+            combined_score=interview_score,
             evaluated_skills=report_data.get("evaluated_skills", "[]"),
             termination_reason=term_reason
         )
@@ -1369,38 +1238,131 @@ async def end_interview(
         db.add(report)
         db.commit()
 
-        # Send notification to HR
-        from app.domain.models import Notification
+        # Notification
         try:
-            apt_info = f" | Aptitude: {aptitude_score:.1f}" if aptitude_score is not None else ""
+            apt_score = interview.aptitude_score
+            apt_info = f" | Aptitude: {apt_score:.1f}" if apt_score is not None else ""
+            status_desc = "completed" if interview.status == "completed" else "terminated early"
             notification = Notification(
-                user_id=job.hr_id,
+                user_id=job.hr_id if job else None,
                 notification_type="interview_completed",
-                title=f"Interview Completed: {interview.application.candidate_name}",
-                message=f"{interview.application.candidate_name} completed the interview for {job.title}. Score: {combined_score:.1f}{apt_info}",
+                title=f"Interview {status_desc.capitalize()}: {interview.application.candidate_name if interview.application else 'Candidate'}",
+                message=f"{interview.application.candidate_name if interview.application else 'Candidate'} {status_desc} for {job.title if job else 'Job'}. Score: {interview_score:.1f}{apt_info}",
                 related_application_id=interview.application_id,
                 related_interview_id=interview_id
             )
             db.add(notification)
             db.commit()
-
         except Exception as e:
-            print(f"Error creating notification: {e}")
+            logger.error(f"Error creating notification: {e}")
 
+        return report
     except Exception as e:
-        import traceback
-        with open(settings.logs_dir / "error_debug.log", "a", encoding="utf-8") as f:
-            f.write(f"Error in end_interview: {e}\n{traceback.format_exc()}\n")
-        print(f"Error generating report: {e}")
+        logger.error(f"Error in _finalize_interview_and_report_internal: {e}")
+        return None
+
+@router.post("/{interview_id}/end")
+async def end_interview(
+    interview_id: int,
+    data: dict = None,
+    interview_session: Interview = Depends(get_current_interview),
+    db: Session = Depends(get_db)
+):
+    """End interview manually (standard path)."""
+    if interview_session.id != interview_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
     
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+
+    if interview.status != "in_progress":
+        return {"success": True, "message": f"Interview is already in {interview.status} state.", "status": interview.status}
+    
+    # 1. Enforcement Check (Ensure sufficient answers if not already terminated)
+    if interview.status != "terminated":
+        questions = db.query(InterviewQuestion).filter(
+            InterviewQuestion.interview_id == interview_id,
+            InterviewQuestion.question_type != "aptitude"
+        ).all()
+        answered = db.query(InterviewAnswer).filter(
+            InterviewAnswer.interview_id == interview_id
+        ).all()
+        
+        if len(answered) < len(questions) and len(questions) > 0:
+            if len(questions) - len(answered) > 3:
+                raise HTTPException(status_code=400, detail=f"Please answer all questions before ending. Missing: {len(questions) - len(answered)}")
+
+    # 2. Finalize and Generate Report
+    report = await _finalize_interview_and_report_internal(db, interview_id)
+    
+    if not report:
+        raise HTTPException(status_code=500, detail="Failed to generate final report.")
+
     return {
         "success": True,
         "interview_id": interview_id,
-        "status": "completed",
-        "interview_score": interview_score,
-        "aptitude_score": aptitude_score,
-        "combined_score": combined_score,
+        "status": interview.status,
+        "interview_score": interview.overall_score,
+        "combined_score": interview.overall_score,
     }
+
+@router.post("/{interview_id}/abandon")
+async def abandon_interview(
+    interview_id: int,
+    interview_session: Interview = Depends(get_current_interview),
+    db: Session = Depends(get_db)
+):
+    """
+    Called when a candidate closes the tab or abandons the interview.
+    Forcefully terminates the interview and generates a report.
+    """
+    if interview_session.id != interview_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    
+    if interview.status != "in_progress":
+        return {"success": True, "message": f"Interview is already in {interview.status} state."}
+
+    try:
+        # Mark as terminated
+        interview.status = "terminated"
+        interview.interview_stage = STAGE_COMPLETED
+        interview.ended_at = datetime.now(timezone.utc)
+        
+        # Track abandonment in Issue list
+        from app.domain.models import InterviewIssue
+        system_issue = InterviewIssue(
+            interview_id=interview.id,
+            candidate_name=interview.application.candidate_name if interview.application else "Candidate",
+            candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
+            issue_type="technical",
+            description="Terminated by candidate (Tab closed)",
+            status="pending"
+        )
+        db.add(system_issue)
+        
+        # Transition state
+        from app.services.state_machine import CandidateStateMachine, TransitionAction
+        fsm = CandidateStateMachine(db)
+        try:
+            fsm.transition(interview.application, TransitionAction.REJECT, notes="Candidate abandoned the session.")
+        except Exception:
+            if interview.application:
+                interview.application.status = "rejected"
+        
+        db.commit()
+        
+        # Generate final report for whatever was answered so far
+        await _finalize_interview_and_report_internal(db, interview_id)
+        
+        return {"success": True, "message": "Interview abandoned and reported."}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in abandon_interview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to record abandonment.")
 
 @router.get("/{interview_id}", response_model=InterviewDetailResponse)
 def get_interview(

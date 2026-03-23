@@ -482,6 +482,52 @@ class ResponseAnalyzer:
         # First, get basic metrics
         word_count = len(answer.split())
         metrics = analyze_response_quality(answer)
+
+        # Strict Repetition Check (Hardcoded 0 score to bypass AI inconsistencies)
+        from difflib import SequenceMatcher
+        similarity = SequenceMatcher(None, question.lower(), answer.lower()).ratio()
+        if similarity > 0.85:
+            return {
+                "overall": 0.0,
+                "relevance": 0.0,
+                "action_impact": 0.0,
+                "communication": 0.0,
+                "technical_accuracy": 0.0,
+                "completeness": 0.0,
+                "clarity": 0.0,
+                "depth": 0.0,
+                "practicality": 0.0,
+                "strengths": ["None (Repetition of question)"],
+                "weaknesses": ["Answer is a repetition of the question"]
+            }
+
+        # Strict Repetition Check (Hardcoded 0 score to bypass AI inconsistencies)
+        answer_clean = answer.strip().lower().rstrip('?.,!;:"\'')
+        question_clean = question.strip().lower().rstrip('?.,!;:"\'')
+        
+        if answer_clean and question_clean and (answer_clean == question_clean or (len(answer_clean) > 4 and answer_clean in question_clean)):
+             red_flag_res = {
+                "technical_accuracy": 0.0,
+                "completeness": 0.0,
+                "clarity": 0.0,
+                "depth": 0.0,
+                "practicality": 0.0,
+                "overall": 0.0,
+                "relevance": 0.0,
+                "action_impact": 0.0,
+                "strengths": [],
+                "weaknesses": ["Major red flag: Answer is a repetition of the question."]
+             }
+             if question_type == "behavioral":
+                 return {
+                    "relevance": 0.0,
+                    "action_impact": 0.0,
+                    "clarity": 0.0,
+                    "overall": 0.0,
+                    "strengths": [],
+                    "weaknesses": ["Major red flag: Answer is a repetition of the question."]
+                 }
+             return red_flag_res
         
         if question_type == "behavioral":
             prompt = f"""
@@ -496,7 +542,7 @@ class ResponseAnalyzer:
             3. Clarity (0-10): Is the answer clearly articulated, structured (e.g., STAR method), and easy to follow?
             
             Also consider:
-            - **CRITICAL CHECKS**: Did the candidate simply copy-paste or repeat the question as their answer, provide a nonsensical/irrelevant/silly response, or exhibit inappropriate behavior? If yes, severely penalize the scores (set to 0) and explicitly state this major red flag in the Weaknesses.
+            - **CRITICAL CHECKS**: Did the candidate simply copy-paste or repeat the question as their answer, provide a nonsensical/irrelevant/silly response, or exhibit inappropriate behavior? If yes, you MUST set ALL individual competency scores to 0 and the Overall score to 0. Explicitly state this "major red flag: question repetition" in the Weaknesses.
             - Word count: {word_count} (ideal: 50-200 words)
             - Use of specific, real-world examples?
 
@@ -537,7 +583,7 @@ class ResponseAnalyzer:
                         "strengths": parsed.get("Strengths", parsed.get("strengths", [])),
                         "weaknesses": parsed.get("Weaknesses", parsed.get("weaknesses", []))
                     }
-                    if res["overall"] > 0:
+                    if "relevance" in res or "overall" in res:
                         return res
                 except Exception:
                     pass
@@ -600,7 +646,7 @@ class ResponseAnalyzer:
             5. Practicality (0-10): Does it include real-world examples or applications?
             
             Also consider:
-            - **CRITICAL CHECKS**: Did the candidate simply copy-paste the question as their answer, provide a nonsensical/irrelevant/silly response, or exhibit inappropriate behavior? If yes, severely penalize the scores (upto 1) and explicitly state this major red flag in the Weaknesses.
+            - **CRITICAL CHECKS**: Did the candidate simply copy-paste or repeat the question as their answer, provide a nonsensical/irrelevant/silly response, or exhibit inappropriate behavior? If yes, you MUST set ALL individual category scores to 0 and the Overall score to 0. This is an absolute failure. Explicitly state this "major red flag: question repetition" in the Weaknesses.
             - Word count: {word_count} (ideal: 80-200 words)
             - Technical terms used appropriately?
             - Examples provided?
@@ -649,7 +695,7 @@ class ResponseAnalyzer:
                     "strengths": parsed.get("Strengths", parsed.get("strengths", [])),
                     "weaknesses": parsed.get("Weaknesses", parsed.get("weaknesses", []))
                 }
-                if res["overall"] > 0:
+                if "technical_accuracy" in res or "overall" in res:
                      return res
             except Exception:
                 pass # Continue to standard line splits fallback Node triggers
@@ -764,7 +810,8 @@ class ResponseAnalyzer:
         scores["overall"] = sum(category_scores) / len(category_scores)
         
         # Raise error if everything is 0 to trigger overall fallback safety layouts
-        if scores["overall"] == 0:
+        # Raise error if everything is 0 ONLY if no red flags are mentioned
+        if scores["overall"] == 0 and not any("red flag" in str(w).lower() for w in scores.get("weaknesses", [])):
             raise ValueError("Parsed score is 0.0 across categories, likely parsing failed setup")
 
         # Round scores

@@ -372,7 +372,7 @@ async def get_filtered_interviews(
             detail="Access denied"
         )
 
-    query = db.query(Interview).join(Application).join(Job)
+    query = db.query(Interview).join(Application).join(Job).outerjoin(InterviewReport)
 
     # Apply global search if present
     if search:
@@ -423,7 +423,8 @@ async def get_filtered_interviews(
             "candidate_email": application.candidate_email if application else "Unknown",
             "job_title": job.title if job else "Unknown",
             "date": interview.created_at.isoformat() if interview.created_at else None,
-            "status": interview.status
+            "status": interview.status,
+            "report_id": interview.report.id if interview.report else None
         })
 
     return result

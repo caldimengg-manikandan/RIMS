@@ -4,6 +4,42 @@ from typing import List, Dict
 from .config import SKILL_CATEGORIES, OPENROUTER_API_KEY, OPENROUTER_BASE_URL, MODEL_NAME
 
 class QuestionGenerator:
+    def _get_varied_fallbacks(self, category: str, difficulty: str, needed: int, exclude: List[str] = None) -> List[str]:
+        """Generate a variety of fallback questions to avoid repetition."""
+        if exclude is None:
+            exclude = []
+            
+        if "scenario" in difficulty or "deep" in difficulty:
+            templates = [
+                f"Can you describe a real-world scenario where you applied your knowledge of {category}?",
+                f"Walk me through a complex problem you solved using {category}.",
+                f"What is the most challenging project you've handled involving {category}?",
+                f"How would you approach a critical failure or bottleneck in a {category} system?",
+                f"Describe a time you had to optimize the performance of a {category} implementation."
+            ]
+        else:
+            templates = [
+                f"Can you explain a fundamental concept related to {category}?",
+                f"What are the core principles or best practices when working with {category}?",
+                f"How do you handle common issues or errors in {category}?",
+                f"Explain the role and importance of {category} in a modern development stack.",
+                f"What are the key advantages and disadvantages of using {category}?"
+            ]
+            
+        # Filter out already present questions
+        available = [t for t in templates if t not in exclude]
+        if not available:
+            available = templates # Restart if all excluded
+            
+        result = []
+        import random
+        random.shuffle(available)
+        
+        while len(result) < needed:
+            result.append(available[len(result) % len(available)])
+            
+        return result
+
     def __init__(self):
         if OPENROUTER_API_KEY:
             self.client = OpenAI(
@@ -177,11 +213,13 @@ class QuestionGenerator:
             try:
                 questions = json.loads(content)
                 if isinstance(questions, list):
-                    while len(questions) < count:
-                        if "scenario" in difficulty:
-                            questions.append(f"Can you describe a real-world scenario where you applied your knowledge of {skill_category}?")
-                        else:
-                            questions.append(f"Can you explain a fundamental concept related to {skill_category}?")
+                    # Filter out empty or non-string results
+                    questions = [str(q).strip() for q in questions if q and str(q).strip()]
+                    
+                    if len(questions) < count:
+                        fallbacks = self._get_varied_fallbacks(skill_category, difficulty, count - len(questions), exclude=questions)
+                        questions.extend(fallbacks)
+                        
                     return questions[:count]
             except:
                 pass
@@ -192,13 +230,13 @@ class QuestionGenerator:
                 line = line.strip()
                 if '?' in line:
                     clean = re.sub(r'^\d+[\.\\)]\s*', '', line)
-                    questions.append(clean)
+                    if clean:
+                        questions.append(clean)
 
-            while len(questions) < count:
-                if "scenario" in difficulty:
-                    questions.append(f"Can you describe a real-world scenario where you applied your knowledge of {skill_category}?")
-                else:
-                    questions.append(f"Can you explain a fundamental concept related to {skill_category}?")
+            if len(questions) < count:
+                fallbacks = self._get_varied_fallbacks(skill_category, difficulty, count - len(questions), exclude=questions)
+                questions.extend(fallbacks)
+                
             return questions[:count]
 
         except Exception as e:

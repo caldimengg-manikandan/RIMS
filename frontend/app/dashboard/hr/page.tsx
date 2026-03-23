@@ -194,10 +194,10 @@ export default function HRDashboard() {
       </div>
 
       {/* Charts & Tables Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
         {/* Chart Section */}
-        <div className="lg:col-span-2 animate-in fade-in duration-500 delay-300">
+        <div className="lg:col-span-3 animate-in fade-in duration-500 delay-300">
           <Card className="h-full shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -219,8 +219,8 @@ export default function HRDashboard() {
         </div>
 
         {/* Recent Activity / Quick Actions */}
-        <div className="space-y-6 animate-in fade-in duration-500 delay-500">
-          <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
+        <div className="lg:col-span-1 space-y-6 animate-in fade-in duration-500 delay-500">
+          <Card className="h-full shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-800 dark:text-slate-200">Quick Actions</CardTitle>
             </CardHeader>
@@ -230,27 +230,6 @@ export default function HRDashboard() {
               <ActionButton href="/dashboard/hr/reports" label="View Reports" />
             </CardContent>
           </Card>
-
-          <Card className="bg-primary text-primary-foreground border-none rounded-2xl shadow-sm relative overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg font-medium flex items-center gap-2">
-                <span className="text-xl">✨</span> AI Insights
-              </CardTitle>
-              <CardDescription className="text-blue-100">System Suggestions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-blue-50 leading-relaxed font-normal">
-                {r_metrics.total_candidates > 5
-                  ? "You have a high volume of candidates. Consider using AI Leaderboards to prioritize the best matches."
-                  : "Your pipeline is healthy. The AI is continuously monitoring for strong matches."}
-              </p>
-              <Button variant="secondary" size="sm" className="mt-4 w-full bg-background/50 hover:bg-background/80 text-primary-foreground border border-background/10 transition-all">
-                Run Batch Analysis
-              </Button>
-            </CardContent>
-          </Card>
-
-          
         </div>
       </div>
 
@@ -349,7 +328,10 @@ export default function HRDashboard() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/dashboard/hr/applications`} className="text-primary hover:underline text-sm font-medium">
+                        <Link 
+                          href={interview.report_id ? `/dashboard/hr/reports?search=${encodeURIComponent(interview.candidate_name)}&reportId=${interview.report_id}` : `/dashboard/hr/applications`} 
+                          className="text-primary hover:underline text-sm font-medium"
+                        >
                           View Details
                         </Link>
                       </TableCell>
