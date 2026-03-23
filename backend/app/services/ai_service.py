@@ -98,6 +98,36 @@ def clean_json(text: str) -> str:
 
     return text
 
+# ─── Regex fallback identity extractors ──────────────────────────────
+def extract_email_regex(text: str):
+    """Extract first email address from raw text."""
+    match = re.search(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", text)
+    return match.group(0) if match else None
+
+def extract_phone_regex(text: str):
+    """Extract first phone number from raw text."""
+    match = re.search(r"(\+?\d[\d\s\-\(\)]{8,}\d)", text)
+    if match:
+        return re.sub(r'[\s\-\(\)]', '', match.group(0))
+    return None
+
+def extract_name_heuristic(text: str):
+    """Extract candidate name from first few lines of resume text."""
+    lines = text.strip().split("\n")
+    for line in lines[:5]:
+        line = line.strip()
+        # Skip empty lines, emails, phones, URLs
+        if not line or '@' in line or re.search(r'\d{5,}', line):
+            continue
+        if line.startswith('http') or line.startswith('www'):
+            continue
+        words = line.split()
+        # A name typically has 2-4 words, under 50 chars, mostly alpha
+        if 2 <= len(words) <= 4 and len(line) < 50:
+            if all(w.isalpha() or w == '.' for w in words):
+                return line
+    return None
+
 # ============================================================================
 # Business Logic Functions
 # ============================================================================
@@ -185,6 +215,9 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
 
     
     Extract:
+    - Candidate Name ("candidate_name"), leave empty if not found
+    - Candidate Email ("email"), leave empty if not found
+    - Candidate Phone Number ("phone_number"), leave empty if not found
     - List of skills (technical and soft skills)
     - Years of experience (numeric)
     - Experience Level (Intern, Junior, Mid-Level, Senior, Lead / Manager) based on the analysis
@@ -200,6 +233,9 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
     Return JSON with this exact structure:
     {{
         "is_resume": true,
+        "candidate_name": "Deep Mehta",
+        "email": "deep@example.com",
+        "phone_number": "+1 234 567 890",
         "skills": ["skill1", "skill2"],
         "experience": 3,
         "experience_level": "Mid-Level",
@@ -214,7 +250,10 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
     """
     
     result = {
-         "is_resume": True, # Default to True to give benefit of doubt if AI fails to toggle
+         "is_resume": True,
+         "candidate_name": None,
+         "email": None,
+         "phone_number": None,
          "skills": [], 
          "experience": 0, 
          "experience_level": "Unknown",

@@ -267,15 +267,15 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
                                     </CardHeader>
                                     <CardContent className="p-3 pt-0 pr-10">
                                         <div className="flex flex-wrap gap-1.5 mt-1 items-center">
-                                            {app.skill_match_percentage && (
+                                            {app.resume_score && (
                                                 <Badge
                                                     variant="outline"
-                                                    className={`text-[9px] px-1.5 py-0 h-4 border ${app.skill_match_percentage > 80
+                                                    className={`text-[9px] px-1.5 py-0 h-4 border ${app.resume_score > 80
                                                         ? "bg-primary/10 text-primary border-primary/20"
                                                         : "bg-secondary/10 text-secondary-foreground border-border"
                                                         }`}
                                                 >
-                                                    Job Comp: {Math.round(app.skill_match_percentage)}%
+                                                    Job Comp: {app.resume_score * 10}%
                                                 </Badge>
                                             )}
                                             {app.aptitude_score !== null && app.aptitude_score !== undefined && (
