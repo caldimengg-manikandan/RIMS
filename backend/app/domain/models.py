@@ -152,6 +152,11 @@ class ResumeExtraction(Base):
     experience_level = Column(String(50))  # 'Intern', 'Junior', 'Mid-Level', 'Senior', 'Lead'
     resume_score = Column(Float, default=0)  # Out of 10
     skill_match_percentage = Column(Float, default=0)  # Out of 100
+    # Identity details extracted from resume
+    candidate_name = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=True)
+    phone_number = Column(String(50), nullable=True)
+
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
 

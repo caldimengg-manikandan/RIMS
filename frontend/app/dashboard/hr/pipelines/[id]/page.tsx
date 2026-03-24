@@ -48,11 +48,11 @@ export default function PipelinePage() {
                 <div className="space-y-4">
                     <Button 
                         variant="ghost" 
-                        onClick={() => router.push('/dashboard/hr/jobs')} 
+                        onClick={() => router.push('/dashboard/hr/pipeline')} 
                         className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group"
                     >
                         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-                        <span className="text-sm font-bold">Back to Jobs</span>
+                        <span className="text-sm font-bold">Back to Pipeline</span>
                     </Button>
                     <div>
                         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none">

@@ -12,6 +12,7 @@ import { ArrowLeft, Briefcase, MapPin, Clock, UploadCloud, CheckCircle2, Loader2
 import { ToggleTheme } from '@/components/lightswind/toggle-theme'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
+import { toast } from 'sonner'
 
 interface Job {
     id: number
@@ -338,24 +339,28 @@ export default function PublicJobDetailPage() {
 
                                     {job.interview_token && (
                                         <div className="mt-6 pt-6 border-t border-border/50 text-left">
-                                            <h4 className="text-sm font-semibold text-foreground mb-2">Interview Access Link</h4>
+                                            <h4 className="text-sm font-semibold text-foreground mb-2">Job Link</h4>
                                             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                                                Share this unique link for candidate interview access testing or direct routing.
+                                                Share this job link online.
                                             </p>
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="text"
                                                     readOnly
-                                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/interview/access?token=${job.interview_token}`}
+                                                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/jobs/${job.id}`}
                                                     className="flex-1 text-xs px-3 py-2 bg-background border border-border rounded-md text-muted-foreground font-mono focus:outline-none"
                                                 />
                                                 <Button
                                                     variant="secondary"
                                                     size="sm"
                                                     onClick={() => {
-                                                        const link = `${window.location.origin}/interview/access?token=${job.interview_token}`;
+                                                        const link = `${window.location.origin}/jobs/${job.id}`;
                                                         navigator.clipboard.writeText(link);
-                                                        // Optional: add toast notification here
+                                                        toast.success('Job link copied to clipboard');
+                                                        setTimeout(() => {
+                                                            toast.dismiss();
+                                                        }, 2000);
+                                                        
                                                     }}
                                                 >
                                                     Copy

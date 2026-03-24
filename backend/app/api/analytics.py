@@ -404,7 +404,8 @@ async def get_filtered_interviews(
         try:
             # Expecting YYYY-MM-DD
             filter_date = datetime.strptime(date, "%Y-%m-%d").date()
-            query = query.filter(func.date(Interview.created_at) == filter_date)
+            from sqlalchemy import cast, Date
+            query = query.filter(cast(Interview.created_at, Date) == filter_date)
         except ValueError:
             pass # Ignore invalid date format
 

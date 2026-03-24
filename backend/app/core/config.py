@@ -3,9 +3,13 @@ from functools import lru_cache
 from typing import List
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Project root (backend folder)
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Explicitly load .env file
+load_dotenv(os.path.join(str(BASE_DIR), ".env"))
 
 class Settings(BaseSettings):
     base_dir: Path = BASE_DIR
@@ -16,10 +20,7 @@ class Settings(BaseSettings):
     # DATABASE_URL=postgresql://user:password@host:port/dbname
     database_url: str = f"sqlite:///{BASE_DIR}/sql_app.db"
     videos_dir: Path = BASE_DIR / "uploads" / "videos"
-    # Database
-    # To use MySQL (current):
-    # DATABASE_URL=mysql+pymysql://user:password@host:port/dbname
-    # database_url: str = ""
+
 
     # JWT
     jwt_secret: str = ""
@@ -76,7 +77,7 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:3000"
 
     class Config:
-        env_file = ".env"
+        env_file = os.path.join(str(BASE_DIR), ".env")
         case_sensitive = False
 
     def get_allowed_origins(self) -> List[str]:

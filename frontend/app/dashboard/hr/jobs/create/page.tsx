@@ -17,7 +17,7 @@ import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft } from 'lucide-react'
+import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/config'
 
 const MAX_QUESTION_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -47,8 +47,8 @@ export default function HRCreateJobPage() {
         // Interview pipeline
         aptitude_enabled: false,
         aptitude_mode: 'ai',
-        first_level_enabled: false,
-        interview_mode: null as string | null,
+        first_level_enabled: true,
+        interview_mode: 'ai',
         behavioral_role: 'general',
         uploaded_question_file: null as string | null,
         aptitude_questions_file: null as string | null,
@@ -719,32 +719,15 @@ export default function HRCreateJobPage() {
 
                             {/* First Level Interview — all levels */}
                             <div className="space-y-4">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.first_level_enabled}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                first_level_enabled: checked,
-                                                // Reset dependent state when disabling
-                                                ...(!checked && {
-                                                    interview_mode: null,
-                                                    uploaded_question_file: null,
-                                                }),
-                                            }))
-                                            if (!checked) setQuestionFileName('')
-                                        }}
-                                        className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                                     <div>
-                                        <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                                            Enable First Level Interview
+                                        <span className="text-sm font-bold text-foreground">
+                                            First Level Interview
                                         </span>
                                         <p className="text-xs text-muted-foreground">Evaluate candidates through a structured interview round.</p>
                                     </div>
-                                </label>
+                                </div>
 
                                 {/* Interview Mode — visible only when first_level enabled */}
                                 {formData.first_level_enabled && (

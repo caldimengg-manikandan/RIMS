@@ -8,6 +8,7 @@ import { APIClient } from '@/app/dashboard/lib/api-client'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import {
   Briefcase,
   Users,
@@ -73,6 +74,7 @@ interface DashboardData {
 }
 
 export default function HRDashboard() {
+  const router = useRouter()
   const { data: dashboardData, error: dashboardError, isLoading: dashboardLoading } = useSWR<DashboardData>('/api/analytics/dashboard', (url: string) => fetcher<DashboardData>(url))
 
   // Filter States
@@ -194,10 +196,10 @@ export default function HRDashboard() {
       </div>
 
       {/* Charts & Tables Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Chart Section */}
-        <div className="lg:col-span-3 animate-in fade-in duration-500 delay-300">
+        <div className="lg:col-span-2 animate-in fade-in duration-500 delay-300">
           <Card className="h-full shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -219,8 +221,8 @@ export default function HRDashboard() {
         </div>
 
         {/* Recent Activity / Quick Actions */}
-        <div className="lg:col-span-1 space-y-6 animate-in fade-in duration-500 delay-500">
-          <Card className="h-full shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
+        <div className="space-y-6 animate-in fade-in duration-500 delay-500">
+          <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-800 dark:text-slate-200">Quick Actions</CardTitle>
             </CardHeader>
@@ -230,6 +232,8 @@ export default function HRDashboard() {
               <ActionButton href="/dashboard/hr/reports" label="View Reports" />
             </CardContent>
           </Card>
+
+          
         </div>
       </div>
 
@@ -328,10 +332,7 @@ export default function HRDashboard() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link 
-                          href={interview.report_id ? `/dashboard/hr/reports?search=${encodeURIComponent(interview.candidate_name)}&reportId=${interview.report_id}` : `/dashboard/hr/applications`} 
-                          className="text-primary hover:underline text-sm font-medium"
-                        >
+                        <Link href={`/dashboard/hr/applications`} className="text-primary hover:underline text-sm font-medium">
                           View Details
                         </Link>
                       </TableCell>

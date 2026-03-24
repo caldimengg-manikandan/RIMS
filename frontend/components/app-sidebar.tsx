@@ -85,6 +85,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { href: '/dashboard/hr/pipeline', label: 'Hiring Pipeline', icon: UserCheck },
         { href: '/dashboard/hr/reports', label: 'Reports', icon: BarChart },
         { href: '/dashboard/hr/tickets', label: 'Tickets', icon: LifeBuoy },
+        { href: '/dashboard/hr/batch-analysis', label: 'Batch Analysis', icon: FileText },
     ]
 
     return (

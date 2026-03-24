@@ -2,12 +2,21 @@
 import asyncio
 import os
 import json
+import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
+from dotenv import load_dotenv
 
-# Setup DB
-DATABASE_URL = "mysql+pymysql://root:0000@localhost/rims_db"
+# Load env from backend/.env (script runs from backend/ typically)
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+# Setup DB using env var, not hardcoded MySQL URL
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL not set in environment. Aborting.")
+    sys.exit(1)
+
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

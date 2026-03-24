@@ -190,7 +190,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         cand_service = CandidateService(db)
         
         # Reload objects in this session
-        application = db.query(Application).filter(Application.id == application_id).first()
+        application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
         job = db.query(Job).filter(Job.id == job_id).first()
         if not application or not job:
             db.close()
@@ -234,24 +234,72 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         # AI Parsing
         extraction_data = await parse_resume_with_ai(resume_text, job_id, job.description)
         
-        # Store extraction
-        resume_extraction = ResumeExtraction(
-            application_id=application_id,
-            extracted_text=resume_text,
-            summary=extraction_data.get("summary", ""),
-            extracted_skills=json.dumps(extraction_data.get("skills") or []),
-            years_of_experience=extraction_data.get("experience"),
-            education=json.dumps(extraction_data.get("education") or []),
-            previous_roles=json.dumps(extraction_data.get("roles") or []),
-            experience_level=extraction_data.get("experience_level"),
-            resume_score=extraction_data.get("score", 0),
-            skill_match_percentage=extraction_data.get("match_percentage", 0)
-        )
-        db.add(resume_extraction)
+        # Store extraction (Upsert pattern for robustness)
+        resume_extraction = db.query(ResumeExtraction).filter(ResumeExtraction.application_id == application_id).first()
+        if not resume_extraction:
+            resume_extraction = ResumeExtraction(application_id=application_id)
+            db.add(resume_extraction)
+            
+        resume_extraction.extracted_text = resume_text
+        resume_extraction.summary = extraction_data.get("summary", "")
+        resume_extraction.extracted_skills = json.dumps(extraction_data.get("skills") or [])
+        resume_extraction.years_of_experience = extraction_data.get("experience")
+        resume_extraction.education = json.dumps(extraction_data.get("education") or [])
+        resume_extraction.previous_roles = json.dumps(extraction_data.get("roles") or [])
+        resume_extraction.experience_level = extraction_data.get("experience_level")
+        resume_extraction.resume_score = extraction_data.get("score", 0)
+        resume_extraction.skill_match_percentage = extraction_data.get("match_percentage", 0)
+        
+        if extraction_data.get("candidate_name"):
+            resume_extraction.candidate_name = extraction_data.get("candidate_name")
+        if extraction_data.get("email"):
+            resume_extraction.email = extraction_data.get("email")
+        if extraction_data.get("phone_number"):
+            resume_extraction.phone_number = extraction_data.get("phone_number")
         
         # Update Application summary fields
         application.resume_score = extraction_data.get("score", 0)
+        
+        # ── HYBRID IDENTITY EXTRACTION: AI + regex fallback ──
+        from app.services.ai_service import extract_email_regex, extract_phone_regex, extract_name_heuristic
+        
+        extracted_name = extraction_data.get("candidate_name") or extract_name_heuristic(resume_text)
+        extracted_email = extraction_data.get("email") or extract_email_regex(resume_text)
+        extracted_phone = extraction_data.get("phone_number") or extract_phone_regex(resume_text)
+        
+        print(f"[IDENTITY SYNC] App #{application_id} | EXTRACTED: name={extracted_name}, email={extracted_email}, phone={extracted_phone}")
+        print(f"[IDENTITY SYNC] App #{application_id} | BEFORE: name={application.candidate_name}, email={application.candidate_email}, phone={application.candidate_phone}")
+        
+        # Check for duplicate application before updating email to prevent UniqueConstraint crash (uq_application_job_email)
+        if extracted_email:
+            norm_email = extracted_email.lower().strip()
+            existing_match = db.query(Application).filter(
+                Application.job_id == job_id,
+                Application.candidate_email == norm_email,
+                Application.id != application_id
+            ).first()
+            
+            if existing_match:
+                print(f"[IDENTITY SYNC] App #{application_id} Conflict: '{norm_email}' already applied to job {job_id}")
+                # We can still extract data but do NOT change email to avoid crash
+                application.candidate_name = extracted_name or application.candidate_name
+                application.candidate_phone = extracted_phone or application.candidate_phone
+                # Mark as failed in notes so frontend completes safely
+                application.hr_notes = f"AI analysis failed: Candidate has already applied for this job (Existing App ID: {existing_match.id})"
+                db.commit()
+                cand_service.advance_stage(application_id, "Resume Screening", "fail", 0, "Duplicate application detected via extraction")
+                db.commit()
+                return # Short-circuit safely
+
+        # Unconditional overwrite: extracted value wins, keep existing only if extraction returned nothing
+        application.candidate_name = extracted_name or application.candidate_name
+        application.candidate_email = extracted_email or application.candidate_email
+        application.candidate_phone = extracted_phone or application.candidate_phone
+        
+        print(f"[IDENTITY SYNC] App #{application_id} | AFTER: name={application.candidate_name}, email={application.candidate_email}, phone={application.candidate_phone}")
+            
         db.commit()
+        db.refresh(application)
 
         # ── NO AUTOMATIC DECISION ──
         # All decisions (approve, reject) are now manual HR actions only.
@@ -289,12 +337,20 @@ async def process_application_background(application_id: int, job_id: int, abs_f
 @router.get("", response_model=list[ApplicationDetailResponse])
 def get_hr_applications(
     job_id: int = None,
+    from_date: str = None,
+    to_date: str = None,
+    time_range: str = None,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
-    """Get all applications for HR's jobs (HR only)"""
-    # Join with stages for visualization (Point 12)
-    # Use outerjoin to ensure apps with missing jobs (shouldn't happen but safe) still show or at least don't crash
+    """Get all applications for HR's jobs (HR only)
+    
+    Optional filters:
+      - job_id: filter by specific job
+      - from_date: ISO date YYYY-MM-DD (inclusive)
+      - to_date: ISO date YYYY-MM-DD (inclusive, end of day)
+      - time_range: morning|afternoon|evening|night
+    """
     query = db.query(Application).outerjoin(Job).options(
         joinedload(Application.job),
         joinedload(Application.resume_extraction),
@@ -305,13 +361,39 @@ def get_hr_applications(
     # Filter by job if requested
     if job_id:
         query = query.filter(Application.job_id == job_id)
-        
-    # Security: Only admins can see everything. Others see their own jobs' apps.
-    if current_user.role != "admin":
-        print(f"DEBUG: Filtering applications for HR ID {current_user.id}")
+
+    # Date range filter
+    if from_date:
+        try:
+            start = datetime.strptime(from_date, "%Y-%m-%d")
+            query = query.filter(Application.applied_at >= start)
+        except ValueError:
+            pass
+
+    if to_date:
+        try:
+            end = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Application.applied_at < end)
+        except ValueError:
+            pass
+
+    # Time-of-day filter (PostgreSQL-compatible using EXTRACT)
+    if time_range and time_range in ("morning", "afternoon", "evening", "night"):
+        from sqlalchemy import text, extract
+        # Convert stored UTC times to local Asia/Kolkata time for accurate morning/evening filters
+        hour_expr = extract('hour', text("(\"applications\".\"applied_at\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata'"))
+        if time_range == "morning":
+            query = query.filter(hour_expr.between(6, 11))
+        elif time_range == "afternoon":
+            query = query.filter(hour_expr.between(12, 17))
+        elif time_range == "evening":
+            query = query.filter(hour_expr.between(18, 23))
+        elif time_range == "night":
+            query = query.filter(hour_expr.between(0, 5))
+
+    # Security: Admins and HR can see everything. Others see their own jobs' apps.
+    if current_user.role not in ["admin", "hr"]:
         query = query.filter(Job.hr_id == current_user.id)
-    else:
-        print("DEBUG: Admin viewing all applications")
         
     applications = query.all()
     print(f"DEBUG: Found {len(applications)} applications for user {current_user.id}")
@@ -367,7 +449,7 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
         from app.services.candidate_service import CandidateService
         cand_service = CandidateService(db)
         
-        application = db.query(Application).filter(Application.id == application_id).first()
+        application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
         job = db.query(Job).filter(Job.id == job_id).first()
         if not application or not job:
             db.close()
@@ -419,7 +501,22 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
         resume_extraction.resume_score = extraction_data.get("score", 0)
         resume_extraction.skill_match_percentage = extraction_data.get("match_percentage", 0)
         
+        if extraction_data.get("candidate_name"):
+            resume_extraction.candidate_name = extraction_data.get("candidate_name")
+        if extraction_data.get("email"):
+            resume_extraction.email = extraction_data.get("email")
+        if extraction_data.get("phone_number"):
+            resume_extraction.phone_number = extraction_data.get("phone_number")
+        
         application.resume_score = extraction_data.get("score", 0)
+        
+        if "@batch.local" in application.candidate_email:
+            if extraction_data.get("candidate_name"):
+                application.candidate_name = extraction_data.get("candidate_name")
+            if extraction_data.get("email"):
+                application.candidate_email = extraction_data.get("email")
+            if extraction_data.get("phone_number"):
+                application.candidate_phone = extraction_data.get("phone_number")
         
         # Application should already be in 'applied' state, ensure it stays there
         # (processing_failed is removed from FSM)

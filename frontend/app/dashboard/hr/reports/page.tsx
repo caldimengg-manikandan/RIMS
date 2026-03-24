@@ -148,6 +148,12 @@ function cleanQuestionText(text: string): string {
 }
 
 export default function ReportsPage() {
+  const getSuggestion = (score: number) => {
+    if (score >= 7.0) return 'Select';
+    if (score >= 5.0) return 'Review';
+    return 'Reject';
+  };
+
   const { data: rawReports = [], error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<Report[]>('/api/analytics/reports', (url: string) => fetcher<Report[]>(url))
   const searchParams = useSearchParams()
   const urlReportId = searchParams.get('reportId')
@@ -805,11 +811,11 @@ export default function ReportsPage() {
                           <TableCell className="text-right font-bold text-primary">{report.overall_score.toFixed(1)}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className={`
-                                                            ${report.status === 'Selected' ? 'bg-primary/10 text-primary border-primary/20' : ''}
-                                                            ${report.status === 'Hold' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : ''}
-                                                            ${report.status === 'Rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' : ''}
+                                                            ${getSuggestion(report.overall_score) === 'Select' ? 'bg-primary/10 text-primary border-primary/20' : ''}
+                                                            ${getSuggestion(report.overall_score) === 'Review' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' : ''}
+                                                            ${getSuggestion(report.overall_score) === 'Reject' ? 'bg-destructive/10 text-destructive border-destructive/20' : ''}
                                                         `}>
-                              {report.status === 'Selected' ? 'Select' : report.status === 'Rejected' ? 'Reject' : report.status}
+                              {getSuggestion(report.overall_score)}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -880,9 +886,9 @@ export default function ReportsPage() {
                   <div className="flex flex-col items-start gap-1">
                     <DialogTitle className="text-2xl flex items-center gap-3">
                       {viewingReport.candidate_profile.candidate_name || viewingReport.display_date_short}
-                      {viewingReport.status === 'Selected' && <Badge className="capsule-badge capsule-badge-success border-none shadow-none text-sm">Suggestion: Select</Badge>}
-                      {viewingReport.status === 'Hold' && <Badge className="capsule-badge capsule-badge-warning border-none shadow-none text-sm">Suggestion: Hold</Badge>}
-                      {viewingReport.status === 'Rejected' && <Badge className="capsule-badge capsule-badge-destructive border-none shadow-none text-sm">Suggestion: Reject</Badge>}
+                      {getSuggestion(viewingReport.overall_score) === 'Select' && <Badge className="capsule-badge capsule-badge-success border-none shadow-none text-sm">Suggestion: Select</Badge>}
+                      {getSuggestion(viewingReport.overall_score) === 'Review' && <Badge className="capsule-badge capsule-badge-warning border-none shadow-none text-sm">Suggestion: Review</Badge>}
+                      {getSuggestion(viewingReport.overall_score) === 'Reject' && <Badge className="capsule-badge capsule-badge-destructive border-none shadow-none text-sm">Suggestion: Reject</Badge>}
                     </DialogTitle>
                     <DialogDescription className="text-base text-muted-foreground mt-1">
                       {viewingReport.candidate_profile.applied_role || viewingReport.filename} &middot; {viewingReport.display_date}

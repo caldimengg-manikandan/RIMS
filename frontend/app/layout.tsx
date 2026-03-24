@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/app/dashboard/lib/auth-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
+import { Toaster } from '@/components/ui/sonner'
 
 export const metadata: Metadata = {
   title: 'CALRIMS | AI-Powered Recruitment',
@@ -40,6 +41,7 @@ export default function RootLayout({
             </div>
           </AuthProvider>
           <Analytics />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

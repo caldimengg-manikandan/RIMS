@@ -121,10 +121,23 @@ def get_tickets(
     
     # Hybrid population
     for t in tickets:
-        t.application_id = t.interview.application_id
-        t.test_id = t.interview.test_id
-        t.job_id = t.interview.application.job_id
-        t.job_identifier = t.interview.application.job.job_id
+        if t.interview:
+            t.application_id = t.interview.application_id
+            t.test_id = t.interview.test_id
+            if t.interview.application:
+                t.job_id = t.interview.application.job_id
+                if t.interview.application.job:
+                    t.job_identifier = t.interview.application.job.job_id
+                else:
+                    t.job_identifier = None
+            else:
+                t.job_id = None
+                t.job_identifier = None
+        else:
+            t.application_id = None
+            t.test_id = None
+            t.job_id = None
+            t.job_identifier = None
         
     return tickets
 
@@ -152,6 +165,16 @@ async def resolve_ticket(
     ticket.resolved_at = datetime.now() if ticket.status != 'pending' else None
     
     interview = ticket.interview
+    if not interview:
+        # If interview is missing, we can only update the ticket status, not send emails or reissue
+        db.commit()
+        db.refresh(ticket)
+        ticket.application_id = None
+        ticket.test_id = None
+        ticket.job_id = None
+        ticket.job_identifier = None
+        return ticket
+
     application = interview.application
     
     if resolution.action == 'reissue_key':
