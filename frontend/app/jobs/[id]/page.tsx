@@ -78,6 +78,8 @@ export default function PublicJobDetailPage() {
     // Inline validation state
     const [emailError, setEmailError] = useState<string | null>(null)
     const [phoneError, setPhoneError] = useState<string | null>(null)
+    const [extractedPhone, setExtractedPhone] = useState<string | null>(null)
+    const [phoneWarning, setPhoneWarning] = useState<string | null>(null)
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
@@ -160,6 +162,45 @@ export default function PublicJobDetailPage() {
     useEffect(() => {
         fetchJobDetails()
     }, [jobId])
+
+    // Pre-check for duplicate application (Point 7)
+    useEffect(() => {
+        const checkDuplicate = async () => {
+            if (candidateEmail.trim() && candidateEmail.includes('@') && candidateEmail.includes('.')) {
+                try {
+                    const countryInfo = COUNTRY_CODES.find(c => c.name === selectedCountry)
+                    const fullPhone = `${(countryInfo?.code || '').replace(/\D/g, '')}${candidatePhone.replace(/\D/g, '')}`
+                    
+                    const response = await APIClient.get<{hasApplied: boolean}>(
+                        `/api/applications/has-applied?job_id=${jobId}&candidate_email=${encodeURIComponent(candidateEmail)}&candidate_phone=${encodeURIComponent(fullPhone)}`
+                    );
+                    setHasApplied(response.hasApplied);
+                } catch (err) {
+                    console.error("Duplicate Check Error:", err);
+                }
+            }
+        };
+
+        const timer = setTimeout(checkDuplicate, 800);
+        return () => clearTimeout(timer);
+    }, [candidateEmail, candidatePhone, selectedCountry, jobId]);
+
+    // Resume/Form Phone Mismatch Warning (Point 5)
+    useEffect(() => {
+        if (extractedPhone && candidatePhone && candidatePhone.length >= 10) {
+            const cleanExtracted = extractedPhone.replace(/\D/g, '');
+            const cleanEntered = candidatePhone.replace(/\D/g, '');
+            
+            // Check if entered phone is a suffix of extracted phone or vice-versa
+            if (cleanExtracted !== cleanEntered && !cleanExtracted.endsWith(cleanEntered) && !cleanEntered.endsWith(cleanExtracted)) {
+                setPhoneWarning("Entered phone differs from phone extracted from resume.");
+            } else {
+                setPhoneWarning(null);
+            }
+        } else {
+            setPhoneWarning(null);
+        }
+    }, [candidatePhone, extractedPhone]);
 
     // Warning for unsaved changes
     useEffect(() => {
@@ -268,9 +309,12 @@ export default function PublicJobDetailPage() {
                         }
                         
                         setSelectedCountry(matchedCountry);
-                        setCandidatePhone(phoneNum.replace(/\D/g, ''));
+                        const cleanPhone = phoneNum.replace(/\D/g, '');
+                        setCandidatePhone(cleanPhone);
+                        setExtractedPhone(cleanPhone);
                     } else {
                         setCandidatePhone('')
+                        setExtractedPhone(null)
                     }
                 } else {
                     setCandidateName('')
@@ -742,9 +786,14 @@ export default function PublicJobDetailPage() {
                                                         onBlur={() => validatePhone(candidatePhone)}
                                                         maxLength={COUNTRY_CODES.find(c => c.name === selectedCountry)?.placeholder.length || 15}
                                                         className={`flex-1 h-12 bg-muted/50 focus:bg-background transition-colors ${phoneError ? 'border-red-500 focus:ring-red-500' : 'border-input'}`}
-                                                        placeholder={COUNTRY_CODES.find(c => c.name === selectedCountry)?.placeholder}
+                                                    placeholder={COUNTRY_CODES.find(c => c.name === selectedCountry)?.placeholder}
                                                     />
                                                 </div>
+                                                {phoneWarning && (
+                                                    <p role="alert" className="text-xs text-amber-500 font-medium flex items-center gap-1 mt-1 animate-in fade-in">
+                                                        <AlertCircle className="h-3 w-3 shrink-0" />{phoneWarning}
+                                                    </p>
+                                                )}
                                                 {phoneError && (
                                                     <p id="phone-error" role="alert" className="text-xs text-red-500 font-medium flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
                                                         <AlertCircle className="h-3 w-3 shrink-0" />{phoneError}
@@ -872,10 +921,10 @@ export default function PublicJobDetailPage() {
                                                 <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
                                                 <div>
                                                     <p className="text-sm font-bold text-amber-900">
-                                                        You have already applied for this job using your account.
+                                                        You have already applied for this job using this email or phone number.
                                                     </p>
                                                     <p className="text-xs text-amber-700 leading-relaxed font-medium">
-                                                        You can only submit one application per job with this account. Please visit your dashboard or check your email for status updates.
+                                                        To ensure fair opportunities for everyone, we only allow one application per candidate for each role. Please check your inbox for details on your existing application.
                                                     </p>
                                                 </div>
                                             </div>

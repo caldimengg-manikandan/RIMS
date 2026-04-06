@@ -16,7 +16,8 @@ import {
     Mic, MicOff, Loader2, ChevronLeft, ChevronRight,
     CheckCircle2, Circle, Brain, BookOpen, AlertTriangle,
     Clock, Target, ListChecks, Lock, Sidebar as SidebarIcon,
-    Camera, CameraOff, Video
+    Camera, CameraOff, Video, Play, ShieldAlert, Cpu,
+    ShieldCheck
 } from 'lucide-react'
 import { IssueReportDialog, FeedbackDialog } from '@/components/interview-support'
 
@@ -62,6 +63,7 @@ export default function InterviewPage() {
     const [isMultipleFacesDetected, setIsMultipleFacesDetected] = useState(false)
     const [isFocusingOnMonitor, setIsFocusingOnMonitor] = useState(true)
     const [isCameraActive, setIsCameraActive] = useState(false)
+    const [mediaError, setMediaError] = useState(false)
 
     // Support States
     const [showIssueDialog, setShowIssueDialog] = useState(false)
@@ -236,6 +238,11 @@ export default function InterviewPage() {
     }
 
     const initOverallRecording = async () => {
+        if (overallMediaRecorderRef.current || streamRef.current) {
+            console.log("Recording or stream already active, skipping initialization.")
+            return
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true })
             streamRef.current = stream
@@ -256,6 +263,7 @@ export default function InterviewPage() {
 
             // Start Face Detection
             await startFaceDetection()
+            setMediaError(false)
         } catch (err) {
             console.error("Overall recording failed", err)
             if (faceCheckIntervalRef.current) {
@@ -273,7 +281,8 @@ export default function InterviewPage() {
             streamRef.current?.getTracks().forEach((t) => t.stop())
             streamRef.current = null
             setIsCameraActive(false)
-            alert("Could not access camera/mic for recording. Please ensure permissions are granted.")
+            setMediaError(true)
+            throw new Error("MEDIA_PERMISSION_DENIED")
         }
     }
 
@@ -610,6 +619,8 @@ export default function InterviewPage() {
 
             if (data.status === 'completed') {
                 setInterviewStatus('completed')
+            } else if (data.status === 'not_started') {
+                setInterviewStatus('ready')
             } else if (qs.length > 0) {
                 // Find first unanswered
                 const firstUnanswered = qs.findIndex(q => !q.is_answered)
@@ -651,6 +662,49 @@ export default function InterviewPage() {
                 router.push('/interview/access')
             } else {
                 setInterviewStatus('error')
+            }
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const startInterviewManual = async () => {
+        try {
+            // STEP 1: Fullscreen First (Must be immediate for browser security)
+            try {
+                if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen()
+                }
+            } catch (err) {
+                console.warn("Fullscreen request denied or failed:", err)
+            }
+
+            // STEP 2: API Call to Backend
+            setIsLoading(true)
+            await APIClient.postWithRequestId(
+                `/api/interviews/${interviewId}/start`,
+                {},
+                `rims-${interviewId}-start-manual`,
+            )
+            
+            // STEP 3: Media Access (Trigger camera/mic permissions)
+            await initOverallRecording()
+
+            // STEP 4: UI Transition (State change to revealed questions)
+            // loadData will update status to 'active' internally
+            await loadData()
+        } catch (err: any) {
+            console.error("Failed to start interview sequence:", err)
+            
+            // Exit fullscreen immediately on error so user isn't trapped
+            if (document.fullscreenElement) {
+                try { document.exitFullscreen() } catch {}
+            }
+
+            if (err.message === "MEDIA_PERMISSION_DENIED") {
+                setMediaError(true)
+            } else if (err.message) {
+                alert("Operation failed: " + err.message)
             }
         } finally {
             setIsLoading(false)
@@ -829,6 +883,109 @@ export default function InterviewPage() {
                     </div>
                     <p className="text-slate-800 font-semibold mb-2">Preparing your interview questions</p>
                     <p className="text-slate-500 text-sm">This usually takes a few seconds. Please keep this page open.</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (interviewStatus === 'ready') {
+        if (mediaError) {
+            return (
+                <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
+                    <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border-4 border-red-100">
+                        <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+                            <CameraOff className="w-12 h-12 text-red-600" />
+                        </div>
+                        <h1 className="text-4xl font-black text-red-600 mb-4 tracking-tight uppercase">Permission Required</h1>
+                        
+                        <div className="bg-red-50/50 rounded-2xl p-8 mb-10 border border-red-100">
+                            <p className="text-slate-700 text-lg font-bold mb-4">
+                                Camera and microphone access are mandatory to proceed with this AI-proctored interview.
+                            </p>
+                            <div className="flex items-start gap-4 text-left bg-white p-4 rounded-xl border border-red-200">
+                                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
+                                    <Lock className="w-4 h-4 text-amber-600" />
+                                </div>
+                                <p className="text-sm text-slate-600 font-medium">
+                                    Click the <strong>"Lock" icon</strong> in your browser's address bar next to the URL and select <strong>"Allow"</strong> for Camera and Microphone.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <Button
+                                className="w-full bg-red-600 hover:bg-red-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-red-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
+                                onClick={startInterviewManual}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Retry & Grant Permissions <ChevronRight className="w-6 h-6" /></>}
+                            </Button>
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center">
+                                You must grant permissions to start the session
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        return (
+            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
+                <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border border-slate-200">
+                    <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-8 border-4 border-blue-50">
+                        <Play className="w-12 h-12 text-blue-600 ml-1" />
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight uppercase">Ready to Start?</h1>
+                    
+                    <div className="bg-blue-50/50 rounded-2xl p-6 mb-8 border border-blue-100/50">
+                        <h2 className="text-blue-700 font-bold mb-2 flex items-center justify-center gap-2">
+                             <ShieldCheck className="w-5 h-5" /> Proctoring Notice
+                        </h2>
+                        <p className="text-slate-600 text-sm font-medium leading-relaxed">
+                            To ensure interview integrity, <strong>Fullscreen mode</strong> and <strong>Camera proctoring</strong> will be enabled immediately upon clicking start.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 text-left">
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
+                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
+                                <ShieldCheck className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Security</p>
+                            <p className="text-xs font-bold text-slate-700">Protected session</p>
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
+                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
+                                <Cpu className="w-5 h-5 text-purple-600" />
+                            </div>
+                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">AI Evaluated</p>
+                            <p className="text-xs font-bold text-slate-700">Dynamic analysis</p>
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
+                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
+                                <Clock className="w-5 h-5 text-green-600" />
+                            </div>
+                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Duration</p>
+                            <p className="text-xs font-bold text-slate-700">{interviewData?.duration_minutes || 60} min session</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Button
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-blue-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95"
+                            onClick={startInterviewManual}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                            ) : (
+                                "Begin Interview Now"
+                            )}
+                        </Button>
+                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center">
+                            By clicking, you agree to our proctoring terms and conditions
+                        </p>
+                    </div>
                 </div>
             </div>
         )

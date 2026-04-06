@@ -147,8 +147,8 @@ async def apply_for_job(
     request: Request,
     job_id: int = Form(...),
     candidate_name: str = Form(...),
-    candidate_email: str = Form(...),
-    candidate_phone: str = Form(None),
+    candidate_email: Optional[str] = Form(None),
+    candidate_phone: Optional[str] = Form(None),
     resume_file: UploadFile = File(...),
     photo_file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -173,70 +173,81 @@ async def apply_for_job(
         request_id = None
         ip_address = None
 
-    # Email: centralized strict validation + structured logging (non-breaking)
-    try:
-        from app.core.email_utils import validate_email_strict_enterprise
-
-        candidate_email = validate_email_strict_enterprise(
-            candidate_email,
-            ip=ip_address,
-            request_id=request_id,
-            logger=logger,
+    # 1. Email/Phone Presence Check (Point 1)
+    if not candidate_email and not candidate_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one valid contact method (email or phone) is required."
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
+    # 2. Email Validation & Normalization (Point 2)
+    if candidate_email:
+        try:
+            from app.core.email_utils import validate_email_strict_enterprise
+
+            candidate_email = validate_email_strict_enterprise(
+                candidate_email,
+                ip=ip_address,
+                request_id=request_id,
+                logger=logger,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        candidate_email = None
 
     # Non-blocking flag for obviously fake/test domains (H-domain hygiene)
     suspicious_email_domain = None
-    try:
-        # Minimal, explicit list to avoid over-blocking; can be extended safely later.
-        DISPOSABLE_DOMAINS = {
-            "fengnu.com",
-            "mailinator.com",
-            "guerrillamail.com",
-            "10minutemail.com",
-            "tempmail.com",
-        }
-        _, domain_part = candidate_email.rsplit("@", 1)
-        domain_part = domain_part.lower().strip()
-        if domain_part in DISPOSABLE_DOMAINS:
-            suspicious_email_domain = domain_part
-    except Exception:
-        suspicious_email_domain = None
+    if candidate_email:
+        try:
+            # Minimal, explicit list to avoid over-blocking; can be extended safely later.
+            DISPOSABLE_DOMAINS = {
+                "fengnu.com",
+                "mailinator.com",
+                "guerrillamail.com",
+                "10minutemail.com",
+                "tempmail.com",
+            }
+            _, domain_part = candidate_email.rsplit("@", 1)
+            domain_part = domain_part.lower().strip()
+            if domain_part in DISPOSABLE_DOMAINS:
+                suspicious_email_domain = domain_part
+        except Exception:
+            suspicious_email_domain = None
 
-    # Phone: Numeric only, 10-15 digits (H004) + raw audit storage (non-breaking)
+    # 3. Phone Validation & Normalization (Points 3, 4)
     from app.core.phone_utils import compute_phone_hash, normalize_phone_digits
 
     candidate_phone_raw = candidate_phone if candidate_phone else None
-    normalized_digits = None
+    candidate_phone_normalized = None
     phone_error_reason = None
     if candidate_phone:
-        normalized_digits, phone_error_reason = normalize_phone_digits(candidate_phone)
+        candidate_phone_normalized, phone_error_reason = normalize_phone_digits(candidate_phone)
 
-    if normalized_digits is None and phone_error_reason is not None:
-        try:
-            from app.core.observability import log_json
+        if candidate_phone_normalized is None and phone_error_reason is not None:
+            try:
+                from app.core.observability import log_json
 
-            log_json(
-                logger,
-                "phone_validation_rejected",
-                request_id=request_id,
-                endpoint="/api/applications/apply",
-                user_id=None,
-                status=400,
-                level="warning",
-                extra={"reason": phone_error_reason},
-            )
-        except Exception:
-            pass
-        if phone_error_reason in ("letters_present", "invalid_length"):
+                log_json(
+                    logger,
+                    "phone_validation_rejected",
+                    request_id=request_id,
+                    endpoint="/api/applications/apply",
+                    user_id=None,
+                    status=400,
+                    level="warning",
+                    extra={"reason": phone_error_reason},
+                )
+            except Exception:
+                pass
+            if phone_error_reason in ("letters_present", "invalid_length"):
+                raise HTTPException(status_code=400, detail="Phone number must be 10–15 digits")
+            if phone_error_reason == "invalid_characters":
+                raise HTTPException(status_code=400, detail="Phone number must contain only digits (and separators)")
             raise HTTPException(status_code=400, detail="Phone number must be 10–15 digits")
-        if phone_error_reason == "invalid_characters":
-            raise HTTPException(status_code=400, detail="Phone number must contain only digits (and separators)")
-        raise HTTPException(status_code=400, detail="Phone number must be 10–15 digits")
 
-    candidate_phone = normalized_digits if normalized_digits else None
-    candidate_phone_hash = compute_phone_hash(candidate_phone) if candidate_phone else None
+    # Use correctly normalized digits for both storage and hash (Point 1)
+    candidate_phone_hash = compute_phone_hash(candidate_phone_normalized) if candidate_phone_normalized else None
 
     # Check if job exists and is open
     job = db.query(Job).filter(Job.id == job_id, Job.status == "open").first()
@@ -260,17 +271,21 @@ async def apply_for_job(
         )
 
     request_id_header = request.headers.get("X-Request-ID")
+    idempotency_key = f"{candidate_email or candidate_phone_normalized}:{job_id}"
     if settings.enable_request_id_idempotency and is_duplicate_request(
         request_id=request_id_header,
         scope="applications.apply",
-        key=f"{candidate_email.lower().strip()}:{job_id}",
+        key=idempotency_key.lower().strip(),
         ttl_seconds=60,
     ):
         existing_idem = (
             db.query(Application)
             .filter(
                 Application.job_id == job_id,
-                Application.candidate_email == candidate_email,
+                or_(
+                    (Application.candidate_email == candidate_email) if candidate_email else False,
+                    (Application.candidate_phone_hash == candidate_phone_hash) if candidate_phone_hash else False
+                )
             )
             .first()
         )
@@ -293,25 +308,22 @@ async def apply_for_job(
             detail="Duplicate application request detected. Please wait and retry.",
         )
 
-    # A002: Prevent duplicate candidate entries by email OR phone per job.
-    # IMPORTANT: This guard uses ONLY the manually-typed email and phone hash
-    # from this request. AI-extracted emails from resumes are *never* used here.
+    # 4. Duplicate Identification (Point 7)
+    # Block any user who has already applied to this specific job using THIS email OR THIS phone.
     from sqlalchemy import or_
     existing_app = db.query(Application).filter(
         Application.job_id == job_id,
         or_(
-            Application.candidate_email == candidate_email,
+            (Application.candidate_email == candidate_email) if candidate_email else False,
             (Application.candidate_phone_hash == candidate_phone_hash) if candidate_phone_hash else False,
         ),
     ).first()
 
     if existing_app:
-        # Only treat this as a hard duplicate when the manually-typed email matches.
-        if existing_app.candidate_email == candidate_email:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="You have already applied for this job",
-            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already applied for this job.",
+        )
     
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
@@ -368,7 +380,7 @@ async def apply_for_job(
 
     # Save resume file using hashed filename to avoid collisions/path traversal risks.
     filename = generate_hashed_resume_filename(
-        candidate_email=candidate_email,
+        candidate_email=candidate_email or f"phone_{candidate_phone_normalized}",
         job_id=job_id,
         resume_ext=resume_ext,
         content=content,
@@ -446,7 +458,8 @@ async def apply_for_job(
         hr_id=job.hr_id,  # Set denormalized field for performance
         candidate_name=candidate_name,
         candidate_email=candidate_email,
-        candidate_phone=candidate_phone,
+        candidate_phone=candidate_phone_normalized, # This is used for EncryptedText field
+        candidate_phone_normalized=candidate_phone_normalized, # Plain digits (Point 3)
         candidate_phone_raw=candidate_phone_raw,
         candidate_phone_hash=candidate_phone_hash,
         resume_file_path=rel_file_path,
@@ -517,18 +530,26 @@ async def apply_for_job(
         # Best-effort cleanup for already-written files.
         _retry_delete_file(abs_file_path)
         _retry_delete_file(abs_photo_path)
-        # Handle duplicate race conditions gracefully
+        
+        # Handle duplicate race conditions gracefully (Point 5)
+        # We re-check the database to give a helpful error message.
         from sqlalchemy import or_
         existing = db.query(Application).filter(
             Application.job_id == job_id,
             or_(
-                Application.candidate_email == candidate_email,
+                (Application.candidate_email == candidate_email) if candidate_email else False,
                 (Application.candidate_phone_hash == candidate_phone_hash) if candidate_phone_hash else False
             )
         ).first()
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already applied for this job.")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Application already exists.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, 
+                detail="You have already applied for this job."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, 
+            detail="Duplicate application detected."
+        )
     except Exception as e:
         db.rollback()
         # Best-effort cleanup for already-written files.
@@ -789,30 +810,50 @@ def has_applied_for_job(
     request: Request,
     job_id: int,
     candidate_email: str,
+    candidate_phone: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Return whether a (job_id, candidate_email) application already exists.
-
-    This is a public helper used by the Apply UI to disable the submit button
-    before triggering the POST /api/applications/apply 409 path.
+    """Return whether a (job_id, candidate_email/phone) application already exists.
+    
+    CRITICAL: Validates against both email and normalized phone hash to strictly
+    enforce one application per person per job.
     """
-    try:
-        from app.core.email_utils import validate_email_strict_enterprise
+    from app.core.email_utils import validate_email_strict_enterprise
+    from app.core.phone_utils import compute_phone_hash, normalize_phone_digits
 
-        candidate_email = validate_email_strict_enterprise(
-            candidate_email,
-            ip=None,
-            request_id=None,
-            logger=logger,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    # 1. Normalize Email
+    if candidate_email:
+        try:
+            candidate_email = validate_email_strict_enterprise(
+                candidate_email,
+                ip=None,
+                request_id=None,
+                logger=logger,
+            )
+        except ValueError:
+            # If email is invalid, it can't match a stored valid email
+            candidate_email = None
 
+    # 2. Normalize and Hash Phone
+    candidate_phone_hash = None
+    if candidate_phone:
+        normalized_digits, _ = normalize_phone_digits(candidate_phone)
+        if normalized_digits:
+            candidate_phone_hash = compute_phone_hash(normalized_digits)
+
+    # 3. Check for duplicates (OR logic)
+    if not candidate_email and not candidate_phone_hash:
+        return HasAppliedResponse(hasApplied=False)
+
+    from sqlalchemy import or_
     existing = (
         db.query(Application.id)
         .filter(
             Application.job_id == job_id,
-            Application.candidate_email == candidate_email,
+            or_(
+                (Application.candidate_email == candidate_email) if candidate_email else False,
+                (Application.candidate_phone_hash == candidate_phone_hash) if candidate_phone_hash else False,
+            ),
         )
         .first()
     )

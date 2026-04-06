@@ -7,8 +7,9 @@ def normalize_phone_digits(raw_phone: Optional[str]) -> Tuple[Optional[str], Opt
     """
     Normalize phone input into digits-only representation.
     Returns (normalized_digits_or_empty, error_reason_or_none).
-
-    Non-breaking: error messages are handled by API layer to preserve HTTP behavior.
+    
+    CRITICAL FIX: Strips leading zeros and common prefixes (+91, etc.) 
+    to ensure 9876543210 matches +91 98765 43210.
     """
     if raw_phone is None:
         return None, None
@@ -24,8 +25,22 @@ def normalize_phone_digits(raw_phone: Optional[str]) -> Tuple[Optional[str], Opt
     if re.search(r"[^0-9+\s()-]", raw_phone):
         return None, "invalid_characters"
 
+    # 1. Remove all non-digit characters.
     digits = re.sub(r"\D", "", raw_phone)
-    if not digits or len(digits) < 10 or len(digits) > 15:
+    
+    # 2. Aggressive normalization (Point 1):
+    # Remove leading zeros.
+    digits = digits.lstrip("0")
+    
+    # 3. Country Code Fix (Point 4):
+    # Only remove if starts with 91 AND total length > 10.
+    if digits.startswith("91") and len(digits) > 10:
+        digits = digits[2:]
+    
+    if not digits:
+        return None, None
+        
+    if len(digits) < 10 or len(digits) > 15:
         return None, "invalid_length"
 
     return digits, None

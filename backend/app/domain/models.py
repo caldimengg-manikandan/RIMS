@@ -101,9 +101,11 @@ class Application(Base):
     job_id = Column(Integer, ForeignKey('jobs.id', ondelete="CASCADE"), nullable=False, index=True)
     hr_id = Column(Integer, ForeignKey('users.id', ondelete="SET NULL"), nullable=True, index=True) # Denormalized for speed
     candidate_name = Column(String(255), nullable=False)
-    candidate_email = Column(String(255), nullable=False, index=True)
+    candidate_email = Column(String(255), nullable=True, index=True)
     candidate_phone = Column(EncryptedText)
     candidate_phone_hash = Column(String(64), nullable=True, index=True)
+    # plain digits for easier debugging/validation
+    candidate_phone_normalized = Column(String(50), nullable=True, index=True)
     # Original user-provided phone value (encrypted) for auditing/debugging.
     # The normalized digits-only value is still stored in `candidate_phone`.
     candidate_phone_raw = Column(EncryptedText, nullable=True)
