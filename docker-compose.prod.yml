@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend_blue
+      - frontend_green
+
+  frontend_blue:
+    build: 
+      context: ./frontend
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3001:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend_green:
+    build: 
+      context: ./frontend
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3002:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  backend_blue:
+    build:
+      context: ./backend
+    environment:
+      - ENV=production
+    ports:
+      - "10001:10000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend_green:
+    build:
+      context: ./backend
+    environment:
+      - ENV=production
+    ports:
+      - "10002:10000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

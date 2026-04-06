@@ -1,0 +1,113 @@
+# ==============================================================================
+# RIMS ROOT GITIGNORE
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# OS / System Files
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.swp
+*.swo
+desktop.ini
+
+# ------------------------------------------------------------------------------
+# IDEs / Editors
+# ------------------------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+.classpath
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets (CRITICAL)
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging.local
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# Python / Backend
+# ------------------------------------------------------------------------------
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+**/.venv/
+**/venv/
+**/env/
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/logs/
+**/uploads/
+**/interview_reports/
+*.wav
+*.mp3
+*.webm
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Scratch scripts and temporary files in backend
+backend/check_*.py
+backend/test_*.py
+backend/smtp_*.txt
+backend/output.txt
+backend/*.log
+backend/sample_aptitude.xlsx
+
+# ------------------------------------------------------------------------------
+# Node / Frontend (Next.js)
+# ------------------------------------------------------------------------------
+**/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/*.tsbuildinfo
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.vercel/
+frontend/.turbo/
+frontend/next-env.d.ts
+
+# ------------------------------------------------------------------------------
+# Playwright & Testing
+# ------------------------------------------------------------------------------
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+coverage/
+
+# ------------------------------------------------------------------------------
+# Database (Specific Types)
+# ------------------------------------------------------------------------------
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+!DATABASE_SCHEMA.sql
+
+# ------------------------------------------------------------------------------
+# Miscellaneous
+# ------------------------------------------------------------------------------
+.gemini/
+/tmp/
+*.seed
+*.pid
+*.pid.lock

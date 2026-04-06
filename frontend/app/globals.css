@@ -1,0 +1,310 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+@plugin 'lightswind/plugin';
+@import "tw-animate-css";
+@variant dark (&:where(.dark, .dark *));
+
+/* 
+  Design system: Professional, Premium, Recruitment-focused
+  ------------------------------------------------
+  - Aesthetics: Trustworthy, Clean, Modern
+  - Palette: Indigo, Deep Sapphire, Slate, Soft Amber
+  - Visibility: Increased contrast and optimized font sizes for all users
+*/
+
+@layer base {
+  html, body {
+    @apply overflow-x-hidden max-w-full;
+    width: 100%;
+  }
+}
+
+:root {
+  /* Light mode neutrals - Softer, smoother, less contrasty */
+  --background: oklch(0.88 0.03 250); /* noticeably darker blue-gray background */
+  --foreground: oklch(0.28 0.02 250); /* Softer slate text */
+
+  --card: oklch(0.94 0.01 250); /* much softer muted card color, removing bright white */
+  --card-foreground: oklch(0.28 0.02 250);
+
+  --popover: oklch(0.94 0.01 250);
+  --popover-foreground: oklch(0.28 0.02 250);
+
+  /* Primary = Professional Deep Indigo */
+  --primary: oklch(0.42 0.16 260);
+  /* Trustworthy Indigo */
+  --primary-foreground: oklch(0.99 0.01 250);
+
+  /* Secondary = Muted professionalism */
+  --secondary: oklch(0.94 0.01 250);
+  --secondary-foreground: oklch(0.35 0.02 250);
+
+  --muted: oklch(0.94 0.01 250);
+  --muted-foreground: oklch(0.55 0.02 250);
+
+  /* Accent = Subtle energetic blue */
+  --accent: oklch(0.55 0.15 250);
+  --accent-foreground: oklch(0.99 0.01 250);
+
+  --destructive: oklch(0.55 0.18 25);
+  --destructive-foreground: oklch(0.99 0.02 250);
+
+  --border: oklch(0.92 0.01 250);
+  --input: oklch(0.92 0.01 250);
+  --ring: oklch(0.42 0.16 260);
+
+  /* Charts - Clean and professional */
+  --chart-1: oklch(0.42 0.16 260);
+  --chart-2: oklch(0.6 0.12 210);
+  --chart-3: oklch(0.7 0.12 80);
+  --chart-4: oklch(0.65 0.13 160);
+  --chart-5: oklch(0.55 0.14 30);
+
+  --radius: 1rem;
+  /* Slightly softer, more premium radius */
+
+  /* Sidebar surfaces (light) - seamlessly match soft background */
+  --sidebar: oklch(0.975 0.01 250);
+  --sidebar-foreground: oklch(0.28 0.02 250);
+  --sidebar-primary: oklch(0.42 0.16 260);
+  --sidebar-primary-foreground: oklch(0.99 0.01 250);
+  --sidebar-accent: oklch(0.94 0.01 250);
+  --sidebar-accent-foreground: oklch(0.25 0.02 250);
+  --sidebar-border: oklch(0.90 0.01 250);
+  --sidebar-ring: oklch(0.42 0.16 260);
+}
+
+.dark {
+  /* Dark mode neutrals - Deep and premium */
+  --background: oklch(0.14 0.02 260); /* Deep navy-tinted charcoal */
+  --foreground: oklch(0.98 0.01 250);
+
+  --card: oklch(0.18 0.02 260);
+  --card-foreground: oklch(0.98 0.01 250);
+
+  --popover: oklch(0.16 0.02 260);
+  --popover-foreground: oklch(0.98 0.01 250);
+
+  --primary: oklch(0.65 0.15 250); /* Vivid indigo for dark backgrounds */
+  --primary-foreground: oklch(0.1 0.02 250);
+
+  --secondary: oklch(0.22 0.02 260);
+  --secondary-foreground: oklch(0.98 0.01 250);
+
+  --muted: oklch(0.22 0.02 260);
+  --muted-foreground: oklch(0.65 0.03 260);
+
+  --accent: oklch(0.55 0.15 250);
+  --accent-foreground: oklch(0.98 0.01 250);
+
+  --destructive: oklch(0.55 0.18 25);
+  --destructive-foreground: oklch(0.99 0.02 250);
+
+  --border: oklch(0.25 0.02 260);
+  --input: oklch(0.25 0.02 260);
+  --ring: oklch(0.65 0.15 250);
+
+  --chart-1: oklch(0.65 0.15 250);
+  --chart-2: oklch(0.55 0.15 210);
+  --chart-3: oklch(0.7 0.12 80);
+  --chart-4: oklch(0.6 0.14 160);
+  --chart-5: oklch(0.6 0.16 30);
+
+  /* Sidebar surfaces (dark) */
+  --sidebar: oklch(0.14 0.02 260);
+  --sidebar-foreground: oklch(0.96 0.01 250);
+  --sidebar-primary: oklch(0.65 0.15 250);
+  --sidebar-primary-foreground: oklch(0.1 0.02 250);
+  --sidebar-accent: oklch(0.2 0.02 260);
+  --sidebar-accent-foreground: oklch(0.96 0.01 250);
+  --sidebar-border: oklch(0.22 0.02 260);
+  --sidebar-ring: oklch(0.65 0.15 250);
+}
+
+@theme inline {
+  --font-sans: "Outfit", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+    /* Base font size */
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-size: 1rem;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold tracking-tight text-foreground;
+  }
+
+  /* Global pointer cursor for all interactive elements */
+  button,
+  [role="button"],
+  a,
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  label[for],
+  select {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  .animate-blob {
+    animation: blob 22s ease-in-out infinite alternate;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  /* App shell / background utilities */
+  .app-shell {
+    @apply min-h-screen w-full bg-background text-foreground overflow-x-hidden relative;
+  }
+
+  .app-shell-gradient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -2;
+    background:
+      radial-gradient(
+        circle at top left,
+        color-mix(in oklab, var(--primary) 15%, transparent) 0,
+        transparent 60%
+      ),
+      radial-gradient(
+        circle at bottom right,
+        color-mix(in oklab, var(--accent) 20%, transparent) 0,
+        transparent 60%
+      );
+    opacity: 0.5;
+    /* Softened from 0.7 */
+  }
+
+  .app-shell-grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.7;
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--border) 60%, transparent) 1px,
+        transparent 0
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--border) 60%, transparent) 1px,
+        transparent 0
+      );
+    background-size: 120px 120px;
+    mask-image: radial-gradient(circle at center, black 0, transparent 70%);
+  }
+
+  .app-shell-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+    opacity: 0.04;
+    width: 60vw;
+    max-width: 600px;
+    aspect-ratio: 1 / 1;
+    background-image: url("/virtual-hr-watermark.svg");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+  }
+
+  .dark .app-shell-watermark {
+    opacity: 0.06;
+  }
+
+  .app-shell-content {
+    @apply relative z-10;
+  }
+}
+
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+
+  33% {
+    transform: translate(260px, -140px) scale(1.18);
+  }
+
+  66% {
+    transform: translate(-160px, 260px) scale(0.9);
+  }
+
+  100% {
+    transform: translate(120px, 40px) scale(1.08);
+  }
+}

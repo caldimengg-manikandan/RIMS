@@ -1,0 +1,252 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy.orm import Session, joinedload
+import logging
+import time
+from collections import deque
+from typing import Optional
+
+from app.infrastructure.database import get_db
+from app.domain.models import InterviewIssue, Interview, Application
+from app.core.auth import verify_password
+from app.core.observability import get_request_id, log_json, safe_hash
+from app.core.idempotency import is_duplicate_request
+from app.core.config import get_settings
+
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+router = APIRouter(prefix="/api/support", tags=["Support"])
+
+_SUPPORT_SUBMISSION_WINDOW_SECONDS = 5 * 60
+_SUPPORT_SUBMISSION_THRESHOLD = 3
+_SUPPORT_SUBMISSION_BUCKETS: dict[str, deque[float]] = {}
+
+
+def _check_support_rate_limit(key: str) -> Optional[int]:
+    """Returns retry-after seconds if limited, else None."""
+    now = time.time()
+    dq = _SUPPORT_SUBMISSION_BUCKETS.setdefault(key, deque())
+    while dq and dq[0] < now - _SUPPORT_SUBMISSION_WINDOW_SECONDS:
+        dq.popleft()
+    dq.append(now)
+    if len(dq) > _SUPPORT_SUBMISSION_THRESHOLD:
+        retry_after = int(max(1, (_SUPPORT_SUBMISSION_WINDOW_SECONDS - (now - dq[0]))))
+        return retry_after
+    return None
+
+
+@router.post("/ticket")
+def create_support_ticket(payload: dict, request: Request, db: Session = Depends(get_db)):
+    """
+    Candidate support portal ticket endpoint (non-breaking add).
+
+    Expected body (per frontend spec):
+    {
+      email,
+      access_key,
+      grievance_type,
+      description
+    }
+    """
+    email = str(payload.get("email") or "").lower().strip()
+    # Backward compatible with existing frontend variants
+    access_key = str(payload.get("access_key") or payload.get("key") or "").strip()
+    grievance_type = str(payload.get("grievance_type") or "").strip()
+    description = str(payload.get("description") or "").strip()
+
+    if not email or not access_key or not grievance_type or not description:
+        raise HTTPException(status_code=400, detail="All fields are required.")
+    if len(description) < 10:
+        raise HTTPException(status_code=400, detail="Please provide a short description (minimum 10 characters).")
+    if len(description) > 5000:
+        raise HTTPException(status_code=400, detail="Description is too long.")
+
+    request_id_header = request.headers.get("X-Request-ID")
+    if settings.enable_request_id_idempotency and is_duplicate_request(
+        request_id=request_id_header,
+        scope="support.ticket",
+        key=f"{email}:{grievance_type.lower()}",
+        ttl_seconds=60,
+    ):
+        raise HTTPException(status_code=409, detail="Duplicate support ticket submission detected. Please wait before retrying.")
+
+    # Lightweight anti-abuse throttling by email+IP without changing persistence schema.
+    ip = request.client.host if request and request.client else "unknown"
+    throttle_key = f"{email}|{ip}"
+    retry_after = _check_support_rate_limit(throttle_key)
+    if retry_after is not None:
+        log_json(
+            logger,
+            "support_ticket_rate_limited",
+            request_id=get_request_id(request),
+            endpoint="/api/support/ticket",
+            status=429,
+            level="warning",
+            extra={"email_hash": safe_hash(email), "ip": ip, "retry_after_s": retry_after},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many support requests in a short period. Please try again shortly.",
+        )
+
+    # Find all interviews for this email and verify the access key strictly belongs to one.
+    interviews = (
+        db.query(Interview)
+        .join(Application)
+        .filter(Application.candidate_email == email)
+        .options(
+            joinedload(Interview.application).joinedload(Application.job),
+            joinedload(Interview.report),
+        )
+        .order_by(Interview.created_at.desc())
+        .all()
+    )
+    if not interviews:
+        raise HTTPException(
+            status_code=404,
+            detail="No interview found for this email. Please ensure you've been invited.",
+        )
+
+    interview = None
+    for inv in interviews:
+        try:
+            if inv.access_key_hash and verify_password(access_key, inv.access_key_hash):
+                interview = inv
+                break
+        except Exception:
+            continue
+
+    if not interview:
+        log_json(
+            logger,
+            "support_ticket_rejected",
+            request_id=get_request_id(request),
+            endpoint="/api/support/ticket",
+            status=401,
+            level="warning",
+            extra={"reason": "invalid_access_key", "email_hash": safe_hash(email)},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid access key. Use the key from your invitation email.",
+        )
+
+    # Ensure support applies only to valid finished sessions.
+    report = getattr(interview, "report", None)
+    termination_reason = getattr(report, "termination_reason", None) if report else None
+    valid_states = {"completed", "cancelled"}
+    if interview.status not in valid_states and not termination_reason:
+        log_json(
+            logger,
+            "support_ticket_rejected",
+            request_id=get_request_id(request),
+            endpoint="/api/support/ticket",
+            status=400,
+            level="warning",
+            extra={
+                "reason": "invalid_interview_state",
+                "email_hash": safe_hash(email),
+                "interview_id": interview.id,
+                "interview_status": interview.status,
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Support requests can only be created after an interview is completed or terminated.",
+        )
+
+    # Prevent duplicate active tickets for same interview.
+    existing_pending = (
+        db.query(InterviewIssue)
+        .filter(
+            InterviewIssue.interview_id == interview.id,
+            InterviewIssue.status == "pending",
+        )
+        .order_by(InterviewIssue.created_at.desc())
+        .first()
+    )
+    if existing_pending:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active support request for this interview is already under review.",
+        )
+
+    # Attach metadata (clean, structured, separable from candidate message)
+    application = getattr(interview, "application", None)
+    candidate_name = getattr(application, "candidate_name", None) if application else None
+    job_role = getattr(getattr(application, "job", None), "title", None) if application else None
+
+    # Map grievance types into existing issue_type values used by HR dashboard.
+    # Keep exact values stable for existing UI filters.
+    issue_type_map = {
+        "Technical Glitch": "technical",
+        "Unexpected Termination": "interruption",
+        "Misconduct Appeal": "misconduct",
+        "Other": "other",
+        # Also accept ids from existing /support page radios
+        "technical": "technical",
+        "interruption": "interruption",
+        "misconduct": "misconduct",
+        "other": "other",
+    }
+    issue_type = issue_type_map.get(grievance_type, grievance_type.lower() or "other")
+
+    # Keep candidate input separate from system context.
+    # Avoid dumping all internals while preserving consistent metadata.
+    structured_context = [
+        "[System Context]",
+        f"interview_id={interview.id}",
+        f"candidate_name={candidate_name or ''}",
+        f"job_role={job_role or ''}",
+        f"interview_status={interview.status or ''}",
+        f"termination_reason={termination_reason or ''}",
+    ]
+    composed_description = f"{description.strip()}\n\n" + "\n".join(structured_context)
+
+    ticket = InterviewIssue(
+        interview_id=interview.id,
+        candidate_name=candidate_name,
+        candidate_email=email,
+        issue_type=issue_type,
+        description=composed_description,
+        status="pending",
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+
+    log_json(
+        logger,
+        "support_ticket_created",
+        request_id=get_request_id(request),
+        endpoint="/api/support/ticket",
+        status=200,
+        level="info",
+        extra={
+            "ticket_id": ticket.id,
+            "interview_id": interview.id,
+            "issue_type": issue_type,
+            "email_hash": safe_hash(email),
+        },
+    )
+
+    # Return existing ticket response shape (compatible with HR tickets list expectations)
+    return {
+        "id": ticket.id,
+        "interview_id": ticket.interview_id,
+        "candidate_name": ticket.candidate_name,
+        "candidate_email": ticket.candidate_email,
+        "issue_type": ticket.issue_type,
+        "description": ticket.description,
+        "status": ticket.status,
+        "hr_response": ticket.hr_response,
+        "is_reissue_granted": ticket.is_reissue_granted,
+        "created_at": ticket.created_at,
+        "resolved_at": ticket.resolved_at,
+        "application_id": getattr(application, "id", None) if application else None,
+        "test_id": getattr(interview, "test_id", None),
+        "job_id": getattr(application, "job_id", None) if application else None,
+        "job_identifier": getattr(getattr(application, "job", None), "job_id", None) if application else None,
+    }
+

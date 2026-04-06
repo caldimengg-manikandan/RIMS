@@ -1,0 +1,335 @@
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response, Request
+from typing import List
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
+from app.infrastructure.database import get_db
+from app.domain.models import User
+from app.domain.schemas import UserRegister, UserLogin, TokenResponse, UserResponse, UserVerifyOTP
+from app.core.auth import hash_password, verify_password, create_access_token, get_current_user, get_current_admin, pwd_context
+from app.services.email_service import send_otp_email
+from app.core.config import get_settings
+import secrets
+import string
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+settings = get_settings()
+
+from app.core.rate_limiter import limiter
+
+@router.post("/register", response_model=UserResponse)
+@limiter.limit("20/minute")
+def register(request: Request, user_data: UserRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Register a new HR user with pending approval."""
+    try:
+        from app.core.email_utils import validate_email_strict
+        user_data.email = validate_email_strict(user_data.email)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        if existing_user.approval_status == "approved":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An approved account already exists for this email."
+            )
+        if existing_user.approval_status == "rejected":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This email has been rejected and cannot be registered again."
+            )
+        if existing_user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An approval request for this email is already pending Super Admin review."
+            )
+
+        try:
+            raw_otp = ''.join(secrets.choice(string.digits) for _ in range(6))
+            existing_user.password_hash = hash_password(user_data.password)
+            existing_user.full_name = user_data.full_name
+            existing_user.role = "pending_hr"
+            existing_user.is_active = False
+            existing_user.is_verified = False
+            existing_user.approval_status = "pending"
+            existing_user.otp_code = hash_password(raw_otp)
+            existing_user.otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+            db.commit()
+            db.refresh(existing_user)
+            background_tasks.add_task(send_otp_email, existing_user.email, raw_otp)
+            return existing_user
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Registration update failed safely.")
+
+    role = "pending_hr"
+    raw_otp = ''.join(secrets.choice(string.digits) for _ in range(6))
+    hashed_otp = hash_password(raw_otp)
+    hashed_password = hash_password(user_data.password)
+
+    new_user = User(
+        email=user_data.email,
+        password_hash=hashed_password,
+        full_name=user_data.full_name,
+        role=role,
+        is_active=False,
+        is_verified=False,
+        approval_status="pending",
+        otp_code=hashed_otp,
+        otp_expiry=datetime.now(timezone.utc) + timedelta(minutes=30)
+    )
+
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        background_tasks.add_task(send_otp_email, new_user.email, raw_otp)
+        return new_user
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Registration creation failed: {str(e)}")
+
+@router.post("/verify", response_model=dict)
+@limiter.limit("20/minute")
+def verify_otp(request: Request, verification_data: UserVerifyOTP, db: Session = Depends(get_db)):
+    """Verify user account with OTP"""
+    email = verification_data.email.lower()
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.approval_status == "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been rejected and is permanently blocked."
+        )
+
+    if user.is_verified:
+        return {"message": "User is already verified"}
+
+    is_dev = settings.env == "development"
+    
+    if not (is_dev and verification_data.otp == "000000"):
+        if not user.otp_expiry:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No OTP has been generated. Please register again."
+            )
+
+        expiry_time = user.otp_expiry
+        if expiry_time.tzinfo is None:
+            expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+            
+        if datetime.now(timezone.utc) > expiry_time:
+            try:
+                user.otp_code = None
+                user.otp_expiry = None
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP has expired. Please register again to receive a new OTP."
+            )
+
+        if not user.otp_code or not pwd_context.verify(verification_data.otp, user.otp_code):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OTP code"
+            )
+
+    try:
+        user.is_verified = True
+        user.otp_code = None
+        user.otp_expiry = None
+        db.commit()
+        return {"message": "Account successfully verified. It will require Super Admin approval before login."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Verification finalization failed safely.")
+
+@router.post("/login")
+@limiter.limit("30/minute")
+def login(request: Request, response: Response, credentials: UserLogin, db: Session = Depends(get_db)):
+    """Login and set secure JWT HttpOnly cookie"""
+    credentials.email = credentials.email.lower()
+    user = db.query(User).filter(User.email == credentials.email).first()
+
+    if not user or not verify_password(credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not verified. Please verify your email first."
+        )
+
+    if user.approval_status == "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been rejected and is permanently blocked."
+        )
+
+    # A006: In development mode, auto-approve accounts during login to speed up dev flow.
+    is_dev = settings.env == "development"
+    if is_dev and (not user.is_active or user.approval_status != "approved"):
+        user.is_active = True
+        user.approval_status = "approved"
+        user.is_verified = True
+        db.commit()
+    
+    if user.role == "pending_hr" or user.approval_status != "approved" or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is pending approval by the Super Admin."
+        )
+
+    access_token_expires = timedelta(minutes=settings.jwt_expiration_minutes)
+    token_data = {
+        "sub": str(user.id),
+        "email": user.email,
+        "role": user.role,
+        "full_name": user.full_name
+    }
+    access_token = create_access_token(token_data, access_token_expires)
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.env == "production",
+        max_age=settings.jwt_expiration_minutes * 60,
+        expires=settings.jwt_expiration_minutes * 60
+    )
+
+    return {
+        "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "approval_status": user.approval_status,
+            "created_at": user.created_at
+        }
+    }
+
+@router.get("/hr-requests", response_model=List[UserResponse])
+@limiter.limit("20/minute")
+def get_hr_requests(
+    request: Request, 
+    status: str = "pending", 
+    current_admin: User = Depends(get_current_admin), 
+    db: Session = Depends(get_db)
+):
+    """List HR users by status for Super Admin management"""
+    query = db.query(User).filter(User.role != "super_admin")
+    
+    if status == "pending":
+        query = query.filter(User.approval_status == "pending", User.is_verified == True)
+    elif status == "approved":
+        query = query.filter(User.approval_status == "approved", User.is_active == True)
+    elif status == "rejected":
+        query = query.filter(User.approval_status == "rejected")
+    
+    return query.order_by(User.created_at.desc()).all()
+
+
+@router.delete("/remove/{user_id}", response_model=dict)
+@limiter.limit("10/minute")
+def remove_hr_user(
+    request: Request, 
+    user_id: int, 
+    current_admin: User = Depends(get_current_admin), 
+    db: Session = Depends(get_db)
+):
+    """Soft-delete (deactivate) an approved HR user account"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    if user.role == "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot remove a Super Admin")
+
+    user.is_active = False
+    # We keep approval_status as 'approved' but is_active as False for soft-delete/deactivation
+    # Or we can set approval_status to 'rejected' if we want them to never log in again
+    # The requirement says "soft delete (is_active = False)"
+    db.commit()
+    return {"message": f"User {user.email} has been deactivated."}
+
+
+@router.get("/pending-approvals", response_model=List[UserResponse])
+@limiter.limit("20/minute")
+def get_pending_approvals(request: Request, current_admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """List HR users waiting for Super Admin approval"""
+    pending_users = db.query(User).filter(
+        User.role == "pending_hr",
+        User.approval_status == "pending",
+        User.is_verified == True
+    ).order_by(User.created_at.desc()).all()
+    return pending_users
+
+
+@router.post("/approve/{user_id}", response_model=UserResponse)
+@limiter.limit("10/minute")
+def approve_hr_user(request: Request, user_id: int, current_admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Approve a pending or rejected HR user account"""
+    user = db.query(User).filter(User.id == user_id, User.role != "super_admin").first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="HR user not found")
+    
+    if user.approval_status == "approved" and user.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already approved and active")
+
+    user.role = "hr"
+    user.is_active = True
+    user.approval_status = "approved"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/reject/{user_id}", response_model=dict)
+@limiter.limit("10/minute")
+def reject_hr_user(request: Request, user_id: int, current_admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Reject a pending or active HR user account"""
+    user = db.query(User).filter(User.id == user_id, User.role != "super_admin").first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="HR user not found")
+
+    user.is_active = False
+    user.otp_code = None
+    user.otp_expiry = None
+    user.approval_status = "rejected"
+    db.commit()
+    return {"message": f"User {user.email} has been rejected."}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Clear the authentication cookie"""
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+        secure=settings.env == "production"
+    )
+    return {"message": "Logged out successfully"}
+
+@router.get("/me", response_model=UserResponse)
+def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current authenticated user info"""
+    return current_user
