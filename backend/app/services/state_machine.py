@@ -32,30 +32,54 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class CandidateState(str, Enum):
+    # Core Production Workflow
     APPLIED = "applied"
+    SCREENED = "screened"  # After resume parsing/screening
     APTITUDE_ROUND = "aptitude_round"
     AI_INTERVIEW = "ai_interview"
-    AI_INTERVIEW_COMPLETED = "ai_interview_completed"
-    REVIEW_LATER = "review_later"
-    PHYSICAL_INTERVIEW = "physical_interview"
+    INTERVIEW_SCHEDULED = "interview_scheduled"
+    INTERVIEW_COMPLETED = "interview_completed"
     HIRED = "hired"
+    PENDING_APPROVAL = "pending_approval"
+    OFFER_SENT = "offer_sent"
+    ACCEPTED = "accepted"
     REJECTED = "rejected"
+    ONBOARDED = "onboarded"
+    PHYSICAL_INTERVIEW = "physical_interview"
+    REVIEW_LATER = "review_later"
 
 
 class TransitionAction(str, Enum):
     """Actions that trigger state transitions."""
-    APPROVE_FOR_INTERVIEW = "approve_for_interview"
+    MARK_SCREENED = "mark_screened"
+    SCHEDULE_INTERVIEW = "schedule_interview"
+    COMPLETE_INTERVIEW = "complete_interview"
+    
+    # Generic actions
+    APPROVE_FOR_INTERVIEW = "approve_for_interview" # Multi-purpose
     REJECT = "reject"
     CALL_FOR_INTERVIEW = "call_for_interview"
     REVIEW_LATER = "review_later"
     HIRE = "hire"
+    
+    # Onboarding
+    SEND_FOR_APPROVAL = "send_for_approval"
+    SEND_OFFER = "send_offer"
+    ACCEPT_OFFER = "accept_offer"
+    SYSTEM_ONBOARD = "system_onboard"
+    MARK_PERMANENT_FAILURE = "mark_permanent_failure"
+    
     # System-initiated (automatic)
+    SYSTEM_PARSING_COMPLETE = "system_parsing_complete"
     SYSTEM_APTITUDE_COMPLETE = "system_aptitude_complete"
     SYSTEM_INTERVIEW_COMPLETE = "system_interview_complete"
 
 
 # Terminal states — no transitions out of these
-TERMINAL_STATES = frozenset({CandidateState.HIRED, CandidateState.REJECTED})
+TERMINAL_STATES = frozenset({
+    CandidateState.ONBOARDED,
+    CandidateState.REJECTED
+})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,33 +87,48 @@ TERMINAL_STATES = frozenset({CandidateState.HIRED, CandidateState.REJECTED})
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Key: (current_state, action) → target_state
-# Some transitions are dynamic (APPROVE depends on job config), handled in code.
-
 _TRANSITION_TABLE: Dict[Tuple[CandidateState, TransitionAction], CandidateState] = {
-    # applied
-    # APPROVE_FOR_INTERVIEW is dynamic — see _resolve_approve_target()
+    # 1. applied -> screened
+    (CandidateState.APPLIED, TransitionAction.SYSTEM_PARSING_COMPLETE): CandidateState.SCREENED,
+    (CandidateState.APPLIED, TransitionAction.MARK_SCREENED): CandidateState.SCREENED,
     (CandidateState.APPLIED, TransitionAction.REJECT): CandidateState.REJECTED,
 
-    # aptitude_round
-    (CandidateState.APTITUDE_ROUND, TransitionAction.SYSTEM_APTITUDE_COMPLETE): CandidateState.AI_INTERVIEW,
-    (CandidateState.APTITUDE_ROUND, TransitionAction.REJECT): CandidateState.REJECTED,
+    # 2. screened -> interview/aptitude
+    (CandidateState.SCREENED, TransitionAction.APPROVE_FOR_INTERVIEW): CandidateState.INTERVIEW_SCHEDULED, # Dynamic resolution in code
+    (CandidateState.SCREENED, TransitionAction.REJECT): CandidateState.REJECTED,
 
-    # ai_interview
-    (CandidateState.AI_INTERVIEW, TransitionAction.SYSTEM_INTERVIEW_COMPLETE): CandidateState.AI_INTERVIEW_COMPLETED,
+    # 3. aptitude/interview -> completed
+    (CandidateState.APTITUDE_ROUND, TransitionAction.SYSTEM_APTITUDE_COMPLETE): CandidateState.AI_INTERVIEW,
+    (CandidateState.AI_INTERVIEW, TransitionAction.SYSTEM_INTERVIEW_COMPLETE): CandidateState.INTERVIEW_COMPLETED,
+    (CandidateState.INTERVIEW_SCHEDULED, TransitionAction.COMPLETE_INTERVIEW): CandidateState.INTERVIEW_COMPLETED,
+    (CandidateState.APTITUDE_ROUND, TransitionAction.REJECT): CandidateState.REJECTED,
     (CandidateState.AI_INTERVIEW, TransitionAction.REJECT): CandidateState.REJECTED,
 
-    # ai_interview_completed
-    (CandidateState.AI_INTERVIEW_COMPLETED, TransitionAction.CALL_FOR_INTERVIEW): CandidateState.PHYSICAL_INTERVIEW,
-    (CandidateState.AI_INTERVIEW_COMPLETED, TransitionAction.REVIEW_LATER): CandidateState.REVIEW_LATER,
-    (CandidateState.AI_INTERVIEW_COMPLETED, TransitionAction.REJECT): CandidateState.REJECTED,
+    # 4. interview_completed -> hire/review/physical
+    (CandidateState.INTERVIEW_COMPLETED, TransitionAction.HIRE): CandidateState.HIRED,
+    (CandidateState.INTERVIEW_COMPLETED, TransitionAction.REVIEW_LATER): CandidateState.REVIEW_LATER,
+    (CandidateState.INTERVIEW_COMPLETED, TransitionAction.CALL_FOR_INTERVIEW): CandidateState.PHYSICAL_INTERVIEW,
+    (CandidateState.INTERVIEW_COMPLETED, TransitionAction.REJECT): CandidateState.REJECTED,
 
-    # review_later
+    # 5. review_later -> interview/reject
     (CandidateState.REVIEW_LATER, TransitionAction.CALL_FOR_INTERVIEW): CandidateState.PHYSICAL_INTERVIEW,
     (CandidateState.REVIEW_LATER, TransitionAction.REJECT): CandidateState.REJECTED,
 
-    # physical_interview
+    # 6. physical_interview -> hire/reject
     (CandidateState.PHYSICAL_INTERVIEW, TransitionAction.HIRE): CandidateState.HIRED,
     (CandidateState.PHYSICAL_INTERVIEW, TransitionAction.REJECT): CandidateState.REJECTED,
+
+    # 7. hired -> pending_approval -> offer_sent
+    (CandidateState.HIRED, TransitionAction.SEND_FOR_APPROVAL): CandidateState.PENDING_APPROVAL,
+    (CandidateState.PENDING_APPROVAL, TransitionAction.SEND_OFFER): CandidateState.OFFER_SENT,
+    (CandidateState.PENDING_APPROVAL, TransitionAction.REJECT): CandidateState.REJECTED,
+    (CandidateState.HIRED, TransitionAction.REJECT): CandidateState.REJECTED,
+
+    # 6. offer_sent -> accepted -> onboarded
+    (CandidateState.OFFER_SENT, TransitionAction.ACCEPT_OFFER): CandidateState.ACCEPTED,
+    (CandidateState.ACCEPTED, TransitionAction.SYSTEM_ONBOARD): CandidateState.ONBOARDED,
+    (CandidateState.OFFER_SENT, TransitionAction.REJECT): CandidateState.REJECTED,
+    (CandidateState.ACCEPTED, TransitionAction.REJECT): CandidateState.REJECTED,
 }
 
 # Email mapping: target_state → email_type identifier
@@ -207,18 +246,11 @@ class CandidateStateMachine:
         action: TransitionAction,
         user_id: Optional[int] = None,
         notes: Optional[str] = None,
+        is_critical: bool = False,
+        background_tasks: Optional[any] = None, # Accept BackgroundTasks from FastAPI if available
     ) -> "TransitionResult":
         """
         Execute an atomic state transition.
-        
-        1. Validate the transition
-        2. Check action-specific preconditions (e.g. interview completion)
-        3. Update application status
-        4. Log the transition
-        5. Return result with email type
-        
-        Does NOT commit the transaction — caller must db.commit()
-        after handling any additional logic (interview creation, etc.).
         """
         # 1. Validate
         target_state = self.validate_transition(application, action)
@@ -240,9 +272,14 @@ class CandidateStateMachine:
             action=action.value,
             user_id=user_id,
             notes=notes,
+            is_critical=is_critical,
         )
 
-        # 5. Determine email trigger
+        # 5. Handle Automated Side Effects (Point 3)
+        if target_state == CandidateState.INTERVIEW_COMPLETED and background_tasks:
+            self._trigger_interview_report(application, background_tasks)
+
+        # 6. Determine email trigger
         email_type = EMAIL_TRIGGERS.get((action, target_state))
 
         logger.info(
@@ -258,6 +295,30 @@ class CandidateStateMachine:
             action=action.value,
             email_type=email_type,
         )
+
+    def _trigger_interview_report(self, application: Application, background_tasks):
+        """Logic to trigger AI report generation with safety checks (Point 3)."""
+        if not application.interview:
+            return
+
+        # Safety Check: Prevent generating a report if < 3 questions answered
+        from app.domain.models import InterviewAnswer
+        answered_count = self.db.query(InterviewAnswer).filter(
+            InterviewAnswer.interview_id == application.interview.id
+        ).count()
+        
+        if answered_count < 3:
+            logger.info(f"Skipping automated report for App {application.id}: only {answered_count} questions answered.")
+            return
+
+        try:
+            from app.api.interviews import _finalize_interview_and_report
+            background_tasks.add_task(_finalize_interview_and_report, application.interview.id)
+            logger.info(f"Scheduled automated interview report for App {application.id}")
+        except ImportError:
+            logger.warning("Could not import report generation task (cyclic import or path mismatch)")
+        except Exception as e:
+            logger.error(f"Error triggering automated report: {e}")
 
     def _check_preconditions(
         self, 
@@ -318,6 +379,7 @@ class CandidateStateMachine:
         action: str,
         user_id: Optional[int] = None,
         notes: Optional[str] = None,
+        is_critical: bool = False,
     ):
         """Write an audit log for every state transition."""
         details = {
@@ -334,6 +396,7 @@ class CandidateStateMachine:
             resource_type="Application",
             resource_id=application_id,
             details=json.dumps(details),
+            is_critical=is_critical,
         )
         self.db.add(log)
 
@@ -376,32 +439,30 @@ class TransitionResult:
 def get_ui_buttons_for_state(state: str) -> List[Dict[str, str]]:
     """
     Return the list of UI buttons that should be rendered for a given state.
-    VIEW REPORT is always included.
     """
     buttons = []
 
     if state == CandidateState.APPLIED.value:
         buttons = [
+            {"action": "mark_screened", "label": "Mark as Screened", "variant": "primary"},
+            {"action": "reject", "label": "Reject", "variant": "destructive"},
+        ]
+    elif state == CandidateState.SCREENED.value:
+        buttons = [
             {"action": "approve_for_interview", "label": "Approve for Interview", "variant": "primary"},
             {"action": "reject", "label": "Reject", "variant": "destructive"},
         ]
-    elif state == CandidateState.APTITUDE_ROUND.value:
+    elif state == CandidateState.INTERVIEW_SCHEDULED.value:
         buttons = [
+            # In progress or scheduled
+            {"action": "view_status", "label": "In Progress", "variant": "outline"},
             {"action": "reject", "label": "Reject", "variant": "destructive"},
         ]
-    elif state == CandidateState.AI_INTERVIEW.value:
+    elif state == CandidateState.INTERVIEW_COMPLETED.value:
         buttons = [
-            {"action": "reject", "label": "Reject", "variant": "destructive"},
-        ]
-    elif state == CandidateState.AI_INTERVIEW_COMPLETED.value:
-        buttons = [
+            {"action": "hire", "label": "Hire", "variant": "success"},
             {"action": "call_for_interview", "label": "Call for Interview", "variant": "primary"},
             {"action": "review_later", "label": "Review Later", "variant": "secondary"},
-            {"action": "reject", "label": "Reject", "variant": "destructive"},
-        ]
-    elif state == CandidateState.REVIEW_LATER.value:
-        buttons = [
-            {"action": "call_for_interview", "label": "Call for Interview", "variant": "primary"},
             {"action": "reject", "label": "Reject", "variant": "destructive"},
         ]
     elif state == CandidateState.PHYSICAL_INTERVIEW.value:
@@ -409,9 +470,22 @@ def get_ui_buttons_for_state(state: str) -> List[Dict[str, str]]:
             {"action": "hire", "label": "Hire", "variant": "success"},
             {"action": "reject", "label": "Reject", "variant": "destructive"},
         ]
-    # hired and rejected: no action buttons
+    elif state == CandidateState.HIRED.value:
+        buttons = [
+            {"action": "send_for_approval", "label": "Request Offer Approval", "variant": "primary"},
+        ]
+    elif state == CandidateState.PENDING_APPROVAL.value:
+         # Buttons only for control-level shown later in API
+         pass
+    elif state == CandidateState.ACCEPTED.value:
+         buttons = [
+            {"action": "capture_photo", "label": "Capture Photo", "variant": "primary"},
+         ]
+    elif state == CandidateState.ONBOARDED.value:
+         buttons = [
+            {"action": "generate_id", "label": "Generate ID Card", "variant": "success"},
+         ]
 
-    # VIEW REPORT is always appended
     buttons.append({"action": "view_report", "label": "View Report", "variant": "outline"})
 
     return buttons

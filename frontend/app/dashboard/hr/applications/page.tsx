@@ -26,6 +26,8 @@ interface Application {
   applied_at: string;
   candidate_name: string;
   candidate_email: string;
+  candidate_photo_path: string | null;
+  composite_score: number | null;
   job: {
     id: number;
     job_id: string | null;
@@ -60,13 +62,48 @@ export default function HRApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [isMagicSearch, setIsMagicSearch] = useState(false);
+  const [magicSearchResults, setMagicSearchResults] = useState<Application[] | null>(null);
+  const [isMagicLoading, setIsMagicLoading] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
+  const handleMagicSearch = useCallback(async () => {
+    if (!searchTerm.trim()) return;
+    setIsMagicLoading(true);
+    try {
+      const resp = await APIClient.post<{candidates: any[]}>(
+        "/api/search/candidates", 
+        { query: searchTerm }
+      );
+      // Map basic candidate results to Application interface for table compatibility
+      const mappedResults = resp.candidates.map(c => ({
+        id: c.id,
+        candidate_name: c.candidate_name,
+        status: c.current_status,
+        applied_at: new Date().toISOString(), // Mock if missing, usually search returns list
+        job: { title: c.job_title, id: 0, job_id: "" },
+        resume_extraction: { 
+            resume_score: c.resume_score, 
+            summary: c.match_insight,
+            extracted_skills: c.skills
+        }
+      })) as Application[];
+      setMagicSearchResults(mappedResults);
+      setIsMagicSearch(true);
+    } catch (err) {
+      console.error("Magic Search Error:", err);
+      alert("Magic Search failed. Falling back to keyword search.");
+    } finally {
+      setIsMagicLoading(false);
+    }
+  }, [searchTerm]);
+
   const applicationsListUrl = useMemo(() => {
+    if (isMagicSearch) return null; // Don't fetch via SWR if magic search is active
     const q = new URLSearchParams();
     q.set("limit", String(APPLICATIONS_PAGE_SIZE));
     q.set("skip", String((applicationsPage - 1) * APPLICATIONS_PAGE_SIZE));
@@ -75,22 +112,30 @@ export default function HRApplicationsPage() {
     if (dateTo) q.set("to_date", dateTo);
     if (debouncedSearch) q.set("search", debouncedSearch);
     return `/api/applications?${q.toString()}`;
-  }, [applicationsPage, statusFilter, dateFrom, dateTo, debouncedSearch]);
+  }, [applicationsPage, statusFilter, dateFrom, dateTo, debouncedSearch, isMagicSearch]);
 
   useEffect(() => {
     setApplicationsPage(1);
-  }, [statusFilter, dateFrom, dateTo, debouncedSearch]);
+    // Auto-disable magic search if the user clears the search term or changes filters
+    if (!searchTerm && isMagicSearch) {
+        setIsMagicSearch(false);
+        setMagicSearchResults(null);
+    }
+  }, [statusFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
 
   const {
-    data: applications = [],
+    data: swrApplications = [],
     error,
-    isLoading,
+    isLoading: isSwrLoading,
     mutate,
   } = useSWR<Application[]>(
     applicationsListUrl,
     (url: string) => fetcher<Application[]>(url),
     { keepPreviousData: true },
   );
+
+  const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
+  const isLoading = isSwrLoading || isMagicLoading;
 
   const handleDecision = useCallback(async (
     applicationId: number,
@@ -199,16 +244,17 @@ export default function HRApplicationsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "applied":
-      case "submitted":
         return "capsule-badge-primary";
+      case "screened":
+        return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20";
+      case "interview_scheduled":
+        return "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
+      case "interview_completed":
+        return "capsule-badge-info";
       case "review_later":
         return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-      case "aptitude_round":
-      case "ai_interview":
-      case "ai_interview_completed":
-        return "capsule-badge-info";
       case "physical_interview":
-        return "capsule-badge-primary";
+        return "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20";
       case "hired":
         return "capsule-badge-success";
       case "rejected":
@@ -232,27 +278,46 @@ export default function HRApplicationsPage() {
         <div className="flex flex-wrap gap-4 items-end">
           {/* Combined Search Bar */}
           <div className="flex-1 min-w-0">
-            <div className="relative group">
-              <svg
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-primary h-5 w-5 transition-colors"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            <div className="relative group flex gap-2">
+              <div className="relative flex-1">
+                <svg
+                    className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground group-focus-within:text-primary h-5 w-5 transition-colors"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                >
+                    <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                </svg>
+                <input
+                    type="text"
+                    placeholder="Search name, email, ID, or job details..."
+                    className="w-full pl-12 pr-4 h-11 bg-background border-2 border-input rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-base placeholder:text-muted-foreground text-foreground"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleMagicSearch()}
                 />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search candidate name, ID, or job details..."
-                className="w-full pl-12 pr-4 h-11 bg-background border-2 border-input rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-base placeholder:text-muted-foreground text-foreground"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              </div>
+              <Button 
+                onClick={handleMagicSearch}
+                disabled={!searchTerm.trim() || isMagicLoading}
+                className={`h-11 px-6 rounded-xl font-bold transition-all shadow-sm ${isMagicSearch ? 'bg-primary text-primary-foreground scale-105' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+              >
+                {isMagicLoading ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                ) : (
+                    <>
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2L14.5 9H22L16 13.5L18.5 20.5L12 16L5.5 20.5L8 13.5L2 9H9.5L12 2Z" />
+                        </svg>
+                        Magic Search
+                    </>
+                )}
+              </Button>
             </div>
           </div>
 
@@ -292,9 +357,9 @@ export default function HRApplicationsPage() {
             >
               <option value="all">All Statuses</option>
               <option value="applied">Applied</option>
-              <option value="aptitude_round">Aptitude Round</option>
-              <option value="ai_interview">AI Interview</option>
-              <option value="ai_interview_completed">Interview Completed</option>
+              <option value="screened">Screened</option>
+              <option value="interview_scheduled">Interview Scheduled</option>
+              <option value="interview_completed">Interview Completed</option>
               <option value="review_later">Review Later</option>
               <option value="physical_interview">Physical Interview</option>
               <option value="hired">Hired</option>
@@ -303,7 +368,7 @@ export default function HRApplicationsPage() {
           </div>
 
           {/* Clear Filters */}
-          {(searchTerm || dateFrom || dateTo || statusFilter !== "all") && (
+          {(searchTerm || dateFrom || dateTo || statusFilter !== "all" || isMagicSearch) && (
             <Button 
                 variant="ghost" 
                 size="sm"
@@ -312,6 +377,8 @@ export default function HRApplicationsPage() {
                     setDateFrom("");
                     setDateTo("");
                     setStatusFilter("all");
+                    setIsMagicSearch(false);
+                    setMagicSearchResults(null);
                     setApplicationsPage(1);
                 }}
                 className="h-11 px-4 text-muted-foreground hover:text-foreground transition-colors"
@@ -347,9 +414,9 @@ export default function HRApplicationsPage() {
                 <div className="flex items-center gap-4 flex-1">
                   <div className="relative shrink-0">
                     <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-border/50 bg-muted flex items-center justify-center shadow-sm">
-                      {(app as any).candidate_photo_path ? (
+                      {app.candidate_photo_path ? (
                         <img
-                          src={`${API_BASE_URL}/${(app as any).candidate_photo_path.replace(/\\/g, "/")}`}
+                          src={`${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`}
                           alt={app.candidate_name}
                           className="h-full w-full object-cover"
                         />
@@ -416,12 +483,13 @@ export default function HRApplicationsPage() {
                         </svg>
                         {new Date(app.applied_at).toLocaleDateString()}
                       </span>
-                      {app.resume_extraction && (
+                      {(app.composite_score! > 0 || app.resume_extraction) && (
                         <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
-                          Job Compatibility:{" "}
-                          {Number(app.resume_extraction.resume_score).toFixed(
-                            2,
-                          )}
+                          Score:{" "}
+                          {(app.composite_score! > 0 
+                            ? Number(app.composite_score) 
+                            : Number(app.resume_extraction?.resume_score || 0)
+                          ).toFixed(1)}
                           /10
                         </span>
                       )}

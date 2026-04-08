@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Form, File, UploadFile
 import os
 import shutil
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from app.infrastructure.database import get_db
@@ -120,28 +121,31 @@ async def hire_candidate(
         raise HTTPException(status_code=400, detail=str(e))
 
     # 2. Save the uploaded offer letter
-    offer_dir = settings.uploads_dir / "offer_letters"
-    offer_dir.mkdir(parents=True, exist_ok=True)
-    
+    # 2. Upload the base offer letter to Supabase
     timestamp = int(datetime.now(timezone.utc).timestamp())
-    original_filename = f"offer_base_{application_id}_{timestamp}.pdf"
-    file_path = str(offer_dir / original_filename)
+    base_filename = f"offer_base_{application_id}_{timestamp}.pdf"
+    base_storage_path = f"offer_letters/{base_filename}"
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(offer_letter.file, buffer)
+    content = await offer_letter.read()
+    from app.core.storage import upload_file
+    upload_file(settings.supabase_bucket_resumes, base_storage_path, content, content_type=offer_letter.content_type)
 
-    # 3. Process the PDF (Overlay details)
+    # 3. Process the PDF (Overlay details in-memory)
     try:
         jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
     except:
         jdate = datetime.now(timezone.utc)
 
-    final_pdf_path = overlay_offer_letter_details(
-        file_path, 
+    final_pdf_content = overlay_offer_letter_details(
+        content, 
         application.candidate_name, 
         application.job.title, 
         jdate
     )
+    
+    final_filename = f"offer_final_{application_id}_{timestamp}.pdf"
+    final_storage_path = f"offer_letters/{final_filename}"
+    upload_file(settings.supabase_bucket_resumes, final_storage_path, final_pdf_content, content_type="application/pdf")
 
     # 4. Create decision record
     hiring_decision = HiringDecision(
@@ -150,7 +154,7 @@ async def hire_candidate(
         decision="hired",
         decision_comments=notes,
         joining_date=jdate,
-        offer_letter_path=final_pdf_path,
+        offer_letter_path=final_storage_path,
         decided_at=datetime.now(timezone.utc)
     )
     db.add(hiring_decision)
@@ -171,7 +175,7 @@ async def hire_candidate(
             candidate_email, 
             job_title, 
             application.interview,
-            offer_letter_path=final_pdf_path
+            offer_letter_path=final_storage_path
         )
 
     return {"status": "success", "message": "Candidate hired and offer letter sent"}
@@ -217,7 +221,6 @@ def get_hiring_pipeline(
 ):
     """Get hiring pipeline for all applications (HR only)"""
     from sqlalchemy.orm import joinedload, load_only
-    from sqlalchemy import or_
     
     query = db.query(Application).outerjoin(Job).options(
         joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id),

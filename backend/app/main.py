@@ -16,7 +16,7 @@ import logging
 from app.core.auth import hash_password
 from app.core.config import get_settings
 from app.infrastructure.database import Base, engine
-from app.api import auth, jobs, applications, interviews, decisions, notifications, analytics, tickets, support, hr_tickets, ops_email
+from app.api import auth, jobs, applications, interviews, decisions, notifications, analytics, tickets, support, hr_tickets, ops_email, settings as hr_settings, onboarding, search
 from app.domain.models import (
     User, Job, Application, ResumeExtraction, 
     Interview, InterviewQuestion, InterviewAnswer,
@@ -142,13 +142,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cors_aware_rate_limit_handler)
 
 # Ensure essential directories exist
-settings.uploads_dir.mkdir(parents=True, exist_ok=True)
-settings.videos_dir.mkdir(parents=True, exist_ok=True)
 settings.logs_dir.mkdir(parents=True, exist_ok=True)
-
-# Static files (Resume Uploads)
-app.mount("/uploads", StaticFiles(directory=str(settings.uploads_dir)), name="uploads")
-app.mount("/uploads/videos", StaticFiles(directory=str(settings.videos_dir)), name="videos")
 
 # Middleware order matters: Starlette applies middleware in reverse-add order,
 # so add performance logger first (innermost), CORS last (outermost).
@@ -159,9 +153,15 @@ from app.core.middleware import PerformanceLoggingMiddleware
 app.add_middleware(PerformanceLoggingMiddleware)
 
 # CORS middleware — must be outermost so it handles OPTIONS preflights first
+allowed_origins = list(set(settings.get_allowed_origins()))
+if settings.env == "development":
+    allowed_origins = list(set(allowed_origins + ["http://localhost:3000", "http://127.0.0.1:3000"]))
+elif "*" in allowed_origins:
+    logger.warning("HIGH SECURITY RISK: '*' found in ALLOWED_ORIGINS while ENV=production")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_allowed_origins(),
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -231,6 +231,9 @@ app.include_router(support.router)
 app.include_router(hr_tickets.router)
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(ops_email.router)
+app.include_router(hr_settings.router)
+app.include_router(onboarding.router)
+app.include_router(search.router)
 app.include_router(websocket_router)
 
 # Error handlers

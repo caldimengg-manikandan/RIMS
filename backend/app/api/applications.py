@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Form
+from sqlalchemy import or_, func, text, cast, String, extract, inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload, defer, load_only
+from sqlalchemy.orm.exc import ObjectDeletedError
+from app.core.storage import upload_file, get_signed_url, get_public_url
 import os
 import json
 import logging
 from datetime import datetime, timezone
 from app.infrastructure.database import get_db, SessionLocal
-from app.domain.models import User, Application, Job, ResumeExtraction, Interview, InterviewAnswer
+from app.domain.models import User, Application, Job, ResumeExtraction, Interview, InterviewAnswer, ResumeExtractionVersion, InterviewReport
 from app.domain.schemas import (
     ApplicationCreate,
     ApplicationStatusUpdate,
@@ -14,7 +17,7 @@ from app.domain.schemas import (
     ApplicationNotesUpdate,
     HasAppliedResponse,
 )
-from app.core.auth import get_current_user, get_current_hr
+from app.core.auth import get_current_user, get_current_hr, get_current_admin
 from app.core.ownership import validate_hr_ownership
 from app.services.ai_service import parse_resume_with_ai, extract_basic_candidate_info
 from app.services.email_service import send_application_received_email, send_rejected_email, send_approved_for_interview_email
@@ -25,9 +28,7 @@ from sqlalchemy.exc import IntegrityError
 import re
 import hashlib
 
-from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.orm.exc import ObjectDeletedError
-from typing import Optional
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,24 @@ def _heuristic_extraction_degraded(application: Application) -> bool:
 
 
 def build_application_detail_response(application: Application) -> ApplicationDetailResponse:
+    from app.core.storage import get_signed_url, get_public_url
+    
+    resume_url = None
+    if application.resume_file_path:
+        resume_url = get_signed_url(settings.supabase_bucket_resumes, application.resume_file_path)
+    
+    photo_url = None
+    if application.candidate_photo_path:
+        photo_url = get_signed_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
+             
+    id_card_url = None
+    if getattr(application, 'id_card_url', None):
+        id_card_url = get_signed_url(settings.supabase_bucket_id_cards, application.id_card_url)
+
+    video_url = None
+    if application.interview and application.interview.video_recording_path:
+        video_url = get_signed_url(settings.supabase_bucket_videos, application.interview.video_recording_path)
+
     detail = ApplicationDetailResponse.model_validate(application, from_attributes=True)
     raw_notes = application.hr_notes or ""
     degraded = RIMS_EXTRACTION_DEGRADED_MARKER in raw_notes or _heuristic_extraction_degraded(application)
@@ -86,6 +105,10 @@ def build_application_detail_response(application: Application) -> ApplicationDe
         update={
             "hr_notes": _strip_extraction_marker(raw_notes),
             "extraction_degraded": degraded,
+            "resume_url": resume_url,
+            "photo_url": photo_url,
+            "id_card_url": id_card_url,
+            "video_url": video_url
         }
     )
 
@@ -100,17 +123,24 @@ from app.core.idempotency import is_duplicate_request
 from app.core.observability import get_request_id, log_json, safe_hash
 settings = get_settings()
 
-UPLOAD_DIR = settings.uploads_dir / "resumes"
-PRIVATE_UPLOAD_DIR = settings.uploads_dir / "_private_resumes"
-PHOTO_DIR = settings.uploads_dir / "photos"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-PRIVATE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-
 from app.core.rate_limiter import limiter
 from fastapi import Request
 
 router = APIRouter(prefix="/api/applications", tags=["applications"])
+
+@router.get("/failures", response_model=list[ApplicationResponse])
+def get_application_failures(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
+):
+    """(Control-Level) Get all applications that have failed processing."""
+    from app.services.state_machine import CandidateState
+    return db.query(Application).filter(
+        or_(
+            Application.retry_count > 0,
+            Application.status == CandidateState.PERMANENT_FAILURE.value
+        )
+    ).order_by(Application.last_attempt_at.desc()).all()
 
 @router.get("/ranking/{job_id}")
 def get_candidate_ranking(
@@ -141,7 +171,7 @@ def get_candidate_ranking(
     return result
 
 
-@router.post("/apply", response_model=ApplicationResponse)
+@router.post("/apply", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def apply_for_job(
     request: Request,
@@ -310,7 +340,6 @@ async def apply_for_job(
 
     # 4. Duplicate Identification (Point 7)
     # Block any user who has already applied to this specific job using THIS email OR THIS phone.
-    from sqlalchemy import or_
     existing_app = db.query(Application).filter(
         Application.job_id == job_id,
         or_(
@@ -325,13 +354,10 @@ async def apply_for_job(
             detail="You have already applied for this job.",
         )
     
+    # 4. Resume Validation
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
-    ALLOWED_RESUME_MIMES = {
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    }
-
+    
     from app.core.resume_upload_utils import (
         generate_hashed_resume_filename,
         get_resume_extension,
@@ -352,227 +378,105 @@ async def apply_for_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File too large. Maximum size is 5MB.",
         )
-    # Basic signature validation (keeps previous behavior/messages).
+    
     ok, reason = validate_resume_signature(resume_ext, content)
     if not ok:
-        if reason == "invalid_pdf_signature":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid PDF content.")
-        if reason == "invalid_docx_signature":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid DOCX content.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid resume content.")
 
-    # Optional MIME sniff (defense in depth; non-fatal if it disagrees with client header).
-    try:
-        # python-magic is optional; if not installed we skip.
-        import magic  # type: ignore
+    # 5. Photo Validation
+    if not photo_file:
+        raise HTTPException(status_code=400, detail="Candidate photo is required.")
+    photo_content = await photo_file.read()
+    if not photo_content:
+        raise HTTPException(status_code=400, detail="Candidate photo is empty.")
+    if len(photo_content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Photo too large. Maximum size is 5MB.")
 
-        mime = magic.from_buffer(content, mime=True)
-        if mime and mime not in ALLOWED_RESUME_MIMES:
-            logger.warning(
-                "Resume MIME mismatch (non-fatal)",
-                extra={
-                    "resume_mime": mime,
-                    "resume_ext": resume_ext,
-                },
-            )
-    except Exception:
-        pass
-
-    # Save resume file using hashed filename to avoid collisions/path traversal risks.
+    # 6. Database Entry (Atomic Transaction)
+    # We flush first to get the ID, then upload to storage using that ID as a prefix.
+    user_agent = request.headers.get("user-agent")
     filename = generate_hashed_resume_filename(
         candidate_email=candidate_email or f"phone_{candidate_phone_normalized}",
         job_id=job_id,
         resume_ext=resume_ext,
         content=content,
     )
-    abs_file_path = os.path.join(PRIVATE_UPLOAD_DIR, filename).replace("\\", "/")
-    # Relative path for storage (used by the secure download endpoint)
-    rel_file_path = f"uploads/_private_resumes/{filename}"
 
-    with open(abs_file_path, "wb") as f:
-        f.write(content)
+    resume_storage_path = None
+    photo_storage_path = None
 
-    # Non-blocking virus scan hook stub (best-effort).
-    def _virus_scan_stub(path: str) -> None:
-        try:
-            # Replace with a real scanner later; kept as a no-op for now.
-            logger.info("Virus scan stub executed", extra={"path": path})
-        except Exception:
-            pass
-
-    background_tasks.add_task(_virus_scan_stub, abs_file_path)
-
-    try:
-        from app.core.observability import log_json, safe_hash
-
-        log_json(
-            logger,
-            "resume_upload_success",
-            request_id=request_id,
-            user_id=None,
-            endpoint="/api/applications/apply",
-            status=200,
-            level="info",
-            extra={"resume_ext": resume_ext, "file_hash": safe_hash(filename), "email_hash": safe_hash(candidate_email)},
-        )
-    except Exception:
-        pass
-    
-    safe_email = candidate_email.replace('@', '_').replace('.', '_')
-
-    # Save photo file (basic safety only; resume is strictly enforced per requirements)
-    rel_photo_path = None
-    abs_photo_path = None
-    if not photo_file:
-        raise HTTPException(status_code=400, detail="Candidate photo is required.")
-
-    photo_content = await photo_file.read()
-    if not photo_content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Candidate photo is empty.")
-    if len(photo_content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Photo too large. Maximum size is 5MB.",
-        )
-
-    photo_ext = (Path(photo_file.filename or "").suffix.lower() or ".jpg").lstrip(".")
-    photo_filename = f"photo_{safe_email}_{job_id}_{datetime.now(timezone.utc).timestamp()}.{photo_ext}"
-
-    # Absolute path for saving
-    abs_photo_path = os.path.join(PHOTO_DIR, photo_filename).replace("\\", "/")
-    # Relative path for DB
-    rel_photo_path = f"uploads/photos/{photo_filename}"
-
-    with open(abs_photo_path, "wb") as f:
-        f.write(photo_content)
-    
-    # Create application
     warning_notes = None
     if suspicious_email_domain:
-        warning_notes = (
-            f"Warning: Possibly fake/test email domain detected ({suspicious_email_domain})."
-        )
+        warning_notes = f"Warning: Possibly fake/test email domain detected ({suspicious_email_domain})."
 
     new_application = Application(
         job_id=job_id,
-        hr_id=job.hr_id,  # Set denormalized field for performance
+        hr_id=job.hr_id,
         candidate_name=candidate_name,
         candidate_email=candidate_email,
-        candidate_phone=candidate_phone_normalized, # This is used for EncryptedText field
-        candidate_phone_normalized=candidate_phone_normalized, # Plain digits (Point 3)
+        candidate_phone_normalized=candidate_phone_normalized,
         candidate_phone_raw=candidate_phone_raw,
         candidate_phone_hash=candidate_phone_hash,
-        resume_file_path=rel_file_path,
-        resume_file_name=resume_file.filename,
-        candidate_photo_path=rel_photo_path,
         status="applied",
         hr_notes=warning_notes,
+        applied_at=datetime.now(timezone.utc),
+        resume_status="pending",
     )
 
-    def _retry_delete_file(path: str, attempts: int = 3) -> None:
-        """Best-effort delete with retries to avoid intermittent filesystem issues."""
-        if not path:
-            return
-        for attempt in range(1, attempts + 1):
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-                return
-            except Exception as e:
-                logger.warning(
-                    "File cleanup retry failed",
-                    extra={"path": path, "attempt": attempt, "error": str(e)},
-                )
-                # Backoff between retries (small, to keep endpoint responsive)
-                time.sleep(0.05 * attempt)
-    
     try:
         db.add(new_application)
-        db.flush()  # Get ID without committing
+        db.flush() # Get ID for storage paths
 
-        # ── Send HR Notification ──
-        from app.domain.models import Notification, AuditLog
+        # Upload Resume to Supabase
+        resume_storage_path = f"{new_application.id}/resume_{filename}"
+        returned_resume_path = upload_file(settings.supabase_bucket_resumes, resume_storage_path, content, content_type=resume_file.content_type)
+        if not returned_resume_path:
+            raise Exception("Resume storage upload failed")
+        new_application.resume_file_path = returned_resume_path
 
-        hr_notification = Notification(
+        # Upload Photo to Supabase
+        photo_ext = os.path.splitext(photo_file.filename)[1] if photo_file.filename else ".jpg"
+        photo_storage_path = f"{new_application.id}/photo_initial{photo_ext}"
+        returned_photo_path = upload_file(settings.supabase_bucket_id_photos, photo_storage_path, photo_content, content_type=photo_file.content_type)
+        if not returned_photo_path:
+            raise Exception("Candidate photo storage upload failed")
+        new_application.candidate_photo_path = returned_photo_path
+
+        # Create HR Notification
+        from app.domain.models import Notification
+        db.add(Notification(
             user_id=job.hr_id,
             notification_type="new_application",
             title=f"New Application: {candidate_name}",
             message=f"{candidate_name} has applied for {job.title}.",
             related_application_id=new_application.id,
-        )
-        db.add(hr_notification)
-
-        # Best-effort audit log for obviously fake/test email domains.
-        if suspicious_email_domain:
-            try:
-                audit = AuditLog(
-                    user_id=None,
-                    action="POSSIBLY_FAKE_EMAIL_DOMAIN",
-                    resource_type="Application",
-                    resource_id=new_application.id,
-                    details=(
-                        f"Application #{new_application.id} uses disposable-like domain: {suspicious_email_domain}"
-                    ),
-                    ip_address=ip_address,
-                )
-                db.add(audit)
-            except Exception:
-                # Logging issues should never block application creation.
-                logger.warning(
-                    "Failed to create audit log for suspicious email domain",
-                    extra={"domain": suspicious_email_domain},
-                )
+        ))
 
         db.commit()
         db.refresh(new_application)
-    except IntegrityError:
-        db.rollback()
-        # Best-effort cleanup for already-written files.
-        _retry_delete_file(abs_file_path)
-        _retry_delete_file(abs_photo_path)
-        
-        # Handle duplicate race conditions gracefully (Point 5)
-        # We re-check the database to give a helpful error message.
-        from sqlalchemy import or_
-        existing = db.query(Application).filter(
-            Application.job_id == job_id,
-            or_(
-                (Application.candidate_email == candidate_email) if candidate_email else False,
-                (Application.candidate_phone_hash == candidate_phone_hash) if candidate_phone_hash else False
-            )
-        ).first()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, 
-                detail="You have already applied for this job."
-            )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, 
-            detail="Duplicate application detected."
-        )
+
+        # Audit Log
+        from app.services.candidate_service import CandidateService
+        CandidateService(db).create_audit_log(None, "APPLICATION_CREATED", "Application", new_application.id, {"job_id": job_id})
+
     except Exception as e:
         db.rollback()
-        # Best-effort cleanup for already-written files.
-        _retry_delete_file(abs_file_path)
-        _retry_delete_file(abs_photo_path)
+        logger.error(f"Application submission failed: {e}")
+        # Clean up cloud files if they were uploaded
+        from app.core.storage import delete_file
         try:
-            import sentry_sdk  # type: ignore
+            if resume_storage_path and new_application.resume_file_path:
+                delete_file(settings.supabase_bucket_resumes, resume_storage_path)
+            if photo_storage_path and new_application.candidate_photo_path:
+                delete_file(settings.supabase_bucket_id_photos, photo_storage_path)
+        except: pass
+        raise HTTPException(status_code=500, detail="Failed to submit application securely.")
 
-            sentry_sdk.capture_exception(e)
-        except Exception:
-            pass
-        logger.error(f"Error saving application/notification: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save application securely")
-    
-    # 1. Notify candidate immediately of receipt
-    background_tasks.add_task(send_application_received_email, candidate_email, job.title)
-
-    # 2. Move all heavy processing to background task to prevent timeouts
     background_tasks.add_task(
         process_application_background, 
         new_application.id, 
         job_id, 
-        abs_file_path, 
+        new_application.resume_file_path, 
         candidate_email, 
         candidate_name
     )
@@ -590,7 +494,6 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         # Step 1: lock only (without joins)
         # Note: Application.resume_extraction is configured as lazy='joined', so ORM-level
         # .with_for_update() may turn into a LEFT OUTER JOIN, which Postgres rejects.
-        from sqlalchemy import text
         db.execute(text("SELECT 1 FROM applications WHERE id = :id FOR UPDATE"), {"id": application_id})
         
         # Step 2: fetch with joins, no lock
@@ -604,6 +507,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             return
 
         application.resume_status = "parsing"
+        application.parsing_started_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(application)
         try:
@@ -623,30 +527,45 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         # 2. Screening Stage
         cand_service.advance_stage(application_id, "Resume Screening", "pending")
         
-        # Parse resume text based on file type
+        # Parse resume text based on file type from Supabase Storage
         resume_text = ""
         try:
-            file_ext = abs_file_path.lower().split('.')[-1]
+            if not abs_file_path:
+                raise Exception("No resume file path available (storage likely disabled)")
+                
+            from app.core.storage import get_supabase_client
+            supabase = get_supabase_client()
+            if not supabase:
+                raise Exception("Supabase client not initialized")
+            
+            # Download from storage
+            # Assuming 'resumes' bucket
+            bucket_name = settings.supabase_bucket_resumes
+            response = supabase.storage.from_(bucket_name).download(abs_file_path)
+            if not response:
+                raise Exception(f"Failed to download resume from {abs_file_path}")
+            
+            from io import BytesIO
+            file_stream = BytesIO(response)
+            
+            file_ext = abs_file_path.lower().split('_')[-1].split('.')[-1] if '.' in abs_file_path else 'pdf'
+            
             if file_ext == 'pdf':
                 from pypdf import PdfReader
-                if not os.path.exists(abs_file_path):
-                    logger.error(f"[ERROR] Resume file not found at: {abs_file_path}")
-                    raise FileNotFoundError(f"Resume file not found: {abs_file_path}")
-                reader = PdfReader(abs_file_path)
+                reader = PdfReader(file_stream)
                 for page in reader.pages:
                     resume_text += page.extract_text() + "\n"
             elif file_ext in ['docx', 'doc']:
                 import docx
-                doc = docx.Document(abs_file_path)
+                doc = docx.Document(file_stream)
                 for para in doc.paragraphs:
                     resume_text += para.text + "\n"
             else:
-                with open(abs_file_path, "rb") as f:
-                    resume_text = f.read().decode('utf-8', errors='ignore')
+                resume_text = response.decode('utf-8', errors='ignore')
         except Exception as e:
-            logger.error(f"Background Text Extraction Error: {e}")
-            cand_service.create_audit_log(None, "RESUME_TEXT_EXTRACTION_FAILED", "Application", application_id, {"error": str(e)})
-            resume_text = "Error extracting text."
+            logger.error(f"Background Text Extraction Skipped or Failed: {e}")
+            cand_service.create_audit_log(None, "RESUME_TEXT_EXTRACTION_SKIPPED", "Application", application_id, {"reason": str(e)})
+            resume_text = "Parsing skipped: Storage unavailable or file missing."
         
         if not resume_text.strip():
             resume_text = "No readable text found."
@@ -655,9 +574,23 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         extraction_data = await parse_resume_with_ai(resume_text, job_id, job.description, job.experience_level)
         extraction_degraded_flag = extraction_data.pop("extraction_degraded", False)
 
-        # Store extraction (Upsert pattern for robustness)
+        # Store extraction (Versioning + Upsert pattern)
         resume_extraction = db.query(ResumeExtraction).filter(ResumeExtraction.application_id == application_id).first()
-        if not resume_extraction:
+        if resume_extraction:
+            # ── Phase 3: Versioning (Save old record before overwrite) ──
+            try:
+                version_count = db.query(ResumeExtractionVersion).filter(ResumeExtractionVersion.application_id == application_id).count()
+                old_version = ResumeExtractionVersion(
+                    application_id=application_id,
+                    version_number=version_count + 1,
+                    extracted_text=resume_extraction.extracted_text,
+                    extracted_skills=resume_extraction.extracted_skills,
+                    resume_score=resume_extraction.resume_score
+                )
+                db.add(old_version)
+            except Exception as e:
+                logger.warning(f"Failed to version old resume extraction: {e}")
+        else:
             resume_extraction = ResumeExtraction(application_id=application_id)
             db.add(resume_extraction)
             
@@ -670,6 +603,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         resume_extraction.experience_level = extraction_data.get("experience_level")
         resume_extraction.resume_score = extraction_data.get("score", 0)
         resume_extraction.skill_match_percentage = extraction_data.get("match_percentage", 0)
+        resume_extraction.reasoning = {"ai_justification": extraction_data.get("reasoning")}
         
         if extraction_data.get("candidate_name"):
             resume_extraction.candidate_name = extraction_data.get("candidate_name")
@@ -680,6 +614,14 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         
         # Update Application summary fields
         application.resume_score = extraction_data.get("score", 0)
+        
+        # ── Phase 7: Scoring Transparency ──
+        application.scoring_metadata = json.dumps({
+            "logic_version": "v2.0",
+            "weights": {"skills": 0.6, "experience": 0.4},
+            "recomputed_at": datetime.now(timezone.utc).isoformat(),
+            "extraction_degraded": extraction_degraded_flag
+        })
         
         # ── HYBRID IDENTITY EXTRACTION: AI + regex fallback ──
         from app.services.ai_service import extract_email_regex, extract_phone_regex, extract_name_heuristic
@@ -727,7 +669,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         if extraction_degraded_flag:
             _append_extraction_degraded_marker(application)
 
-        application.resume_status = "parsed"
+        application.resume_status = "parsed"; application.failure_reason = None
         db.commit()
         db.refresh(application)
         try:
@@ -758,8 +700,16 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             extraction_data.get("score", 0) * 10, 
             stage_note
         )
-        cand_service.create_audit_log(None, "RESUME_SCREENING_COMPLETED", "Application", application_id, 
-                                      {"score": extraction_data.get("score", 0), "match": extraction_data.get("match_percentage", 0)})
+        
+        # ── Phase 6: Critical Audit Logging ──
+        cand_service.create_audit_log(
+            None, 
+            "RESUME_SCREENING_COMPLETED", 
+            "Application", 
+            application_id, 
+            {"score": extraction_data.get("score", 0), "match": extraction_data.get("match_percentage", 0)},
+            is_critical=True
+        )
         
         db.commit()
     except Exception as e:
@@ -773,10 +723,20 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             cand_service = CandidateService(db) # Re-initialize if needed, or pass db
             cand_service.create_audit_log(None, "BACKGROUND_PROCESSING_FAILED", "Application", application_id, {"error": str(e)})
             # Optionally update application status to indicate processing failed
-            application = db.query(Application).filter(Application.id == application_id).first()
+            application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
             if application:
                 application.status = "applied"  # Keep in 'applied' — HR can retry or proceed manually
                 application.resume_status = "failed"
+                application.retry_count = (application.retry_count or 0) + 1
+                application.failure_reason = str(e)[:1000]
+                application.last_attempt_at = datetime.now(timezone.utc)
+
+                # Escalation (Phase 5 fix)
+                if application.retry_count >= 3:
+                     from app.services.state_machine import CandidateState
+                     application.status = CandidateState.PERMANENT_FAILURE.value
+                     application.failure_reason = "[PERMANENT_FAILURE]: " + application.failure_reason
+
                 # Never write raw exception details (may include internal SQL / query text) into HR-visible notes.
                 application.hr_notes = (
                     "AI analysis failed. Please click "
@@ -845,7 +805,6 @@ def has_applied_for_job(
     if not candidate_email and not candidate_phone_hash:
         return HasAppliedResponse(hasApplied=False)
 
-    from sqlalchemy import or_
     existing = (
         db.query(Application.id)
         .filter(
@@ -866,9 +825,24 @@ def get_pending_applications_count(
     db: Session = Depends(get_db),
 ):
     """Sidebar / badges: count applications not in a terminal state, scoped to HR's jobs."""
-    q = db.query(Application).filter(~Application.status.in_(("hired", "rejected")))
+    # Phase 4 (System Recovery): Mark jobs stuck in 'parsing' for > 2 hours as failed.
+    # This ensures accuracy of the counter and allows HR to see it's failed.
+    db.execute(text("""
+        UPDATE applications SET 
+            resume_status = 'failed', 
+            failure_reason = 'Stuck in parsing for > 2 hours (System Timeout)'
+        WHERE resume_status = 'parsing' AND (NOW() - updated_at) > INTERVAL '2 hours'
+    """))
+    db.commit()
+
+    # FIX: Use outerjoin to include orphan applications if they exist
+    # FIX: NULL-safe file_status check (Phase 2, point 3)
+    q = db.query(Application).filter(
+        ~Application.status.in_(("hired", "rejected")),
+        or_(Application.file_status == 'active', Application.file_status == None)
+    )
     if current_user.role != "super_admin":
-        q = q.join(Job, Application.job_id == Job.id).filter(Job.hr_id == current_user.id)
+        q = q.outerjoin(Job).filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
     return {"count": q.count()}
 
 
@@ -889,6 +863,7 @@ def get_hr_applications(
     # Performance Optimization:
     # - Avoid loading huge `resume_extraction.extracted_text` (not needed by HR list UI).
     # - Only join `jobs` when we filter on job columns.
+    # 1. Base Query with optimized loading
     query = db.query(Application).options(
         joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id, Job.status),
         joinedload(Application.resume_extraction).load_only(
@@ -896,21 +871,37 @@ def get_hr_applications(
             ResumeExtraction.skill_match_percentage, ResumeExtraction.experience_level,
             ResumeExtraction.summary, ResumeExtraction.extracted_skills,
         ),
-        joinedload(Application.interview).load_only(Interview.id, Interview.status, Interview.overall_score),
+        load_only(
+            Application.id, Application.job_id, Application.candidate_name,
+            Application.candidate_email, Application.candidate_phone,
+            Application.candidate_phone_raw, Application.candidate_photo_path,
+            Application.resume_file_path,
+            Application.status, Application.hr_id, Application.hr_notes,
+            Application.resume_status, Application.resume_score,
+            Application.composite_score, Application.applied_at, Application.updated_at
+        ),
+        # Fix: Selectively load interview data to avoid giant join overhead
+        joinedload(Application.interview).options(
+            load_only(Interview.id, Interview.status, Interview.overall_score),
+            selectinload(Interview.report).load_only(InterviewReport.id, InterviewReport.overall_score)
+        ),
         selectinload(Application.pipeline_stages),
     )
 
-    needs_job_join = bool(search and str(search).strip()) or current_user.role != "super_admin"
-    if needs_job_join:
-        query = query.outerjoin(Job)
+    # 2. Join Management (Always Outer Join)
+    # Ensure Job is joined to applications table to enable filtering and search without dropping rows.
+    query = query.outerjoin(Job)
+
+    # 3. Base Reliability Filtering (Phase 2, point 3)
+    # Ensure we show active/NULL statuses only by default.
+    query = query.filter(or_(Application.file_status == 'active', Application.file_status == None))
     
-    # Filter by job if requested
+    # Filter by job if requested (Restored Phase 2)
     if job_id:
         query = query.filter(Application.job_id == job_id)
 
     # Server-side search across candidate, job, and application id (paginated with skip/limit)
     if search and str(search).strip():
-        from sqlalchemy import String, cast, or_
         qraw = str(search).strip()[:200]
         term = f"%{qraw}%"
         query = query.filter(
@@ -924,14 +915,13 @@ def get_hr_applications(
         )
 
     # Status filter (HR UI "Applied" includes legacy/submitted)
-    if status:
+    if status and status not in ("all", ""):
         if status == "applied":
             query = query.filter(Application.status.in_(("applied", "submitted")))
         else:
             query = query.filter(Application.status == status)
 
     # Date range filter (A004/A005/A009)
-    from sqlalchemy import func
     today_utc = datetime.now(timezone.utc).date()
     min_year = 1900
     max_year = today_utc.year
@@ -1000,7 +990,6 @@ def get_hr_applications(
 
     # Time-of-day filter
     if time_range and time_range in ("morning", "afternoon", "evening", "night"):
-        from sqlalchemy import text, extract
         hour_expr = extract('hour', text("(\"applications\".\"applied_at\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata'"))
         if time_range == "morning":
             query = query.filter(hour_expr.between(6, 11))
@@ -1012,8 +1001,9 @@ def get_hr_applications(
             query = query.filter(hour_expr.between(0, 5))
 
     # Security: Hybrid HR Filter for guaranteed visibility
+    # FIX: Super Admin bypasses ownership checks to facilitate full data visibility (Phase 3)
     if current_user.role != "super_admin":
-        from sqlalchemy import or_
+        # Note: Job is already outerjoined above
         query = query.filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
         
     # Pagination safety (A007/A008): cap limit to keep queries predictable.
@@ -1066,26 +1056,28 @@ def download_resume(
     db: Session = Depends(get_db)
 ):
     """Securely download a candidate's resume (HR only)"""
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application or not application.resume_file_path:
         raise HTTPException(status_code=404, detail="Resume file not found")
     validate_hr_ownership(application, current_user, resource_name="application")
 
-    # A006: Robust file path resolution using strictly sanitized filename
+    from fastapi.responses import RedirectResponse, FileResponse
     stored_path = (application.resume_file_path or "").replace("\\", "/")
+    
+    # 1. Cloud Storage Redirect (New)
+    if "uploads" not in stored_path:
+        from app.core.storage import get_signed_url
+        signed_url = get_signed_url(settings.supabase_bucket_resumes, application.resume_file_path)
+        if signed_url:
+            return RedirectResponse(url=signed_url)
+    
+    # 2. Local File Fallback (Legacy)
     filename = os.path.basename(stored_path)
-
-    # Candidate 1: expected new format: <uploads>/resumes/<filename>
     candidate_1 = settings.uploads_dir / "resumes" / filename
-
-    # Candidate 2: stored path includes "uploads/<subpath>"
-    # e.g. uploads/resumes/<filename> -> resumes/<filename> under uploads_dir
     candidate_2 = None
     if "uploads/" in stored_path:
         rel = stored_path.split("uploads/", 1)[1]
         candidate_2 = settings.uploads_dir / rel
-
-    # Candidate 3: legacy fallback: <uploads>/<filename>
     candidate_3 = settings.uploads_dir / filename
 
     file_path = None
@@ -1095,28 +1087,8 @@ def download_resume(
             break
 
     if not file_path:
-        try:
-            from app.core.observability import get_request_id, log_json
-
-            log_json(
-                logger,
-                "resume_download_not_found",
-                request_id=get_request_id(request),
-                endpoint="/api/applications/{application_id}/resume/download",
-                user_id=current_user.id,
-                status=404,
-                level="warning",
-                extra={
-                    "application_id": application_id,
-                    "stored_path": stored_path,
-                    "resolved_filename": filename,
-                },
-            )
-        except Exception:
-            pass
         raise HTTPException(status_code=404, detail="Resume file not found on server")
 
-    from fastapi.responses import FileResponse
     return FileResponse(
         path=str(file_path),
         filename=application.resume_file_name or filename,
@@ -1156,7 +1128,7 @@ def get_application(
 
     return build_application_detail_response(application)
 
-async def retry_application_background(application_id: int, job_id: int, abs_file_path: str):
+async def retry_application_background(application_id: int, job_id: int, bucket_path: str):
     """Safely retry AI resume extraction without altering pipeline stages or triggering emails."""
     db = SessionLocal()
     try:
@@ -1167,7 +1139,6 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
         # Step 1: lock only (without joins)
         # Note: Application.resume_extraction is configured as lazy='joined', so ORM-level
         # .with_for_update() may turn into a LEFT OUTER JOIN, which Postgres rejects.
-        from sqlalchemy import text
         db.execute(text("SELECT 1 FROM applications WHERE id = :id FOR UPDATE"), {"id": application_id})
         
         # Step 2: fetch with joins, no lock
@@ -1182,23 +1153,29 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
             
         logger.info(f"Retrying AI extraction for application {application_id}...")
         
-        # Parse resume text based on file type
+        # Parse resume text based on file type from Supabase
         resume_text = ""
         try:
-            file_ext = abs_file_path.lower().split('.')[-1]
+            from io import BytesIO
+            from app.core.storage import get_supabase_client
+            supabase = get_supabase_client()
+            response = supabase.storage.from_(settings.supabase_bucket_resumes).download(bucket_path)
+            file_stream = BytesIO(response)
+            file_ext = bucket_path.lower().split('_')[-1].split('.')[-1] if '.' in bucket_path else 'pdf'
+
             if file_ext == 'pdf':
                 from pypdf import PdfReader
-                reader = PdfReader(abs_file_path)
+                reader = PdfReader(file_stream)
                 for page in reader.pages:
                     resume_text += page.extract_text() + "\n"
             elif file_ext in ['docx', 'doc']:
                 import docx
-                doc = docx.Document(abs_file_path)
+                doc = docx.Document(file_stream)
                 for para in doc.paragraphs:
                     resume_text += para.text + "\n"
             else:
-                with open(abs_file_path, "rb") as f:
-                    resume_text = f.read().decode('utf-8', errors='ignore')
+                file_stream.seek(0)
+                resume_text = file_stream.read().decode('utf-8', errors='ignore')
         except Exception as e:
             logger.error(f"Retry Text Extraction Error: {e}", exc_info=True)
             cand_service.create_audit_log(None, "RETRY_TEXT_EXTRACTION_FAILED", "Application", application_id, {"error": str(e)})
@@ -1247,7 +1224,7 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
         if extraction_degraded_flag:
             _append_extraction_degraded_marker(application)
 
-        application.resume_status = "parsed"
+        application.resume_status = "parsed"; application.failure_reason = None
         db.commit()
         cand_service.create_audit_log(None, "AI_ANALYSIS_RETRY_SUCCESS", "Application", application_id, {"score": extraction_data.get("score")})
         logger.info(f"Retry successful for application {application_id}")
@@ -1272,6 +1249,8 @@ async def retry_application_background(application_id: int, job_id: int, abs_fil
             failed_app = db.query(Application).filter(Application.id == application_id).first()
             if failed_app:
                 failed_app.resume_status = "failed"
+                failed_app.retry_count = (failed_app.retry_count or 0) + 1
+                failed_app.failure_reason = str(e)[:1000] # Cap length
                 # Never write raw exception details (may include internal SQL / query text) into HR-visible notes.
                 failed_app.hr_notes = (
                     "AI analysis failed. Please click "
@@ -1300,28 +1279,11 @@ async def retry_resume_analysis(
     db: Session = Depends(get_db)
 ):
     """Manually trigger AI resume analysis if it failed"""
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     validate_hr_ownership(application, current_user, resource_name="application")
         
-    abs_file_path = ""
-    if application.resume_file_path:
-        # Resolve the actual file path using application settings
-        # In the DB, it's typically 'uploads/resumes/filename.pdf'
-        # settings.uploads_dir is 'D:\CALDIM\ars\RIMS\backend\uploads'
-        clean_path = application.resume_file_path
-        if clean_path.startswith("uploads/"):
-             clean_path = clean_path[8:]
-        elif clean_path.startswith("uploads\\"):
-             clean_path = clean_path[8:]
-        
-        abs_file_path = str(settings.uploads_dir / clean_path)
-        
-    if not abs_file_path or not os.path.exists(abs_file_path):
-         logger.error(f"Error locating file path: DB path='{application.resume_file_path}', Tried path='{abs_file_path}'")
-         raise HTTPException(status_code=400, detail="Resume file not found on server")
-
     application.resume_status = "parsing"
     application.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -1344,7 +1306,7 @@ async def retry_resume_analysis(
         retry_application_background, 
         application.id, 
         application.job_id, 
-        abs_file_path
+        application.resume_file_path
     )
     
     return {
@@ -1368,10 +1330,11 @@ async def resend_interview_invitation(
     provider (e.g. Gmail quota) failed. We re-issue the interview access key only when
     the interview is missing or still 'not_started'.
     """
+    # Concurrency Hardening (Phase 1): Lock row for update
     application = db.query(Application).options(
         joinedload(Application.job),
         joinedload(Application.interview),
-    ).filter(Application.id == application_id).first()
+    ).filter(Application.id == application_id).with_for_update().first()
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -1433,7 +1396,7 @@ async def update_application_status(
         InvalidTransitionError, DuplicateTransitionError,
     )
 
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     validate_hr_ownership(application, current_user, resource_name="application")
@@ -1456,12 +1419,17 @@ async def update_application_status(
     fsm = CandidateStateMachine(db)
     try:
         logger.debug(f"/api/auth/me user_id={current_user.id}, role={current_user.role}")
+        # Hardening Phase 5: Single transaction for Status + Audit Log
         result = fsm.transition(
             application=application,
             action=action,
             user_id=current_user.id,
             notes=status_update.hr_notes,
+            is_critical=True,
+            background_tasks=background_tasks
         )
+        # Flush to confirm DB state without committing yet
+        db.flush()
     except InvalidTransitionError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except DuplicateTransitionError as e:
@@ -1674,7 +1642,7 @@ async def update_hr_notes(
     db: Session = Depends(get_db)
 ):
     """Update HR notes for an application"""
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     validate_hr_ownership(application, current_user, resource_name="application")

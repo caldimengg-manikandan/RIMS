@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import logging
 from app.core.config import get_settings
 from app.domain.models import User
-from app.infrastructure.database import get_db
+from app.infrastructure.database import get_db, set_db_identity
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -125,6 +125,9 @@ def get_current_user(
                 detail="User not found",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # ── Phase 2 Fix: Row Level Security Identity ──
+        set_db_identity(db, user.id)
 
         if user.role != role:
             raise HTTPException(

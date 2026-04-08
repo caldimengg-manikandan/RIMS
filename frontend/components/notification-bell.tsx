@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
-import useSWR from 'swr'
+import useSWR, { mutate as globalMutate } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
+
 import {
     Popover,
     PopoverContent,
@@ -35,12 +36,14 @@ export function NotificationBell() {
         canViewNotifications ? '/api/notifications' : null,
         (url: string) => fetcher<Notification[]>(url),
         {
-            refreshInterval: 30000, // Auto-poll every 30s
+            refreshInterval: 60000, // Reduced polling frequency as we now have realtime
             dedupingInterval: 10000,
             revalidateOnFocus: false,
             revalidateOnReconnect: false,
         }
     )
+
+
 
     const markAsRead = useCallback(async (id: number) => {
         try {
@@ -64,7 +67,7 @@ export function NotificationBell() {
                 <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full text-slate-200 hover:text-white hover:bg-blue-800/50">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                        <span key={unreadCount} className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground animate-in zoom-in duration-300">
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     )}

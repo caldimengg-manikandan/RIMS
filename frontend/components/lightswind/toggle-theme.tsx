@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Moon, Sun } from "lucide-react"
 import { flushSync } from "react-dom"
+import { useTheme } from "next-themes"
 
 import { cn } from "@/app/dashboard/lib/utils"
 
@@ -39,35 +40,23 @@ export const ToggleTheme = ({
     animationType = "circle-spread",
     ...props
 }: ToggleThemeProps) => {
-    const [isDark, setIsDark] = useState(false)
+    const { theme, setTheme, resolvedTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
     const buttonRef = useRef<HTMLButtonElement>(null)
 
     useEffect(() => {
-        const updateTheme = () => {
-            setIsDark(document.documentElement.classList.contains("dark"))
-        }
-
-        updateTheme()
-
-        const observer = new MutationObserver(updateTheme)
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ["class"],
-        })
-
-        return () => observer.disconnect()
+        setMounted(true)
     }, [])
 
+    const isDark = resolvedTheme === "dark"
+
     const toggleTheme = useCallback(async () => {
-        if (!buttonRef.current) return
+        if (!buttonRef.current || !mounted) return
 
         // Wait for the DOM update to complete within the View Transition
         await document.startViewTransition(() => {
             flushSync(() => {
-                const newTheme = !isDark
-                setIsDark(newTheme)
-                document.documentElement.classList.toggle("dark")
-                localStorage.setItem("theme", newTheme ? "dark" : "light")
+                setTheme(isDark ? "light" : "dark")
             })
         }).ready
 
@@ -300,7 +289,22 @@ export const ToggleTheme = ({
                 break
         }
 
-    }, [isDark, duration, animationType])
+    }, [isDark, setTheme, mounted, duration, animationType])
+
+    // Avoid hydration mismatch: if not mounted, render a placeholder with the base structure
+    if (!mounted) {
+        return (
+            <button
+                className={cn(
+                    "flex items-center justify-center h-10 w-10 rounded-full transition-colors duration-300 hover:bg-blue-800/50 text-slate-200",
+                    className
+                )}
+                {...props}
+            >
+              <div className="h-5 w-5" />
+            </button>
+        )
+    }
 
     return (
         <>

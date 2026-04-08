@@ -108,6 +108,16 @@ class Settings(BaseSettings):
     idempotency_ttl_max_seconds: int = 120
     ai_observability_enabled: bool = True
     # A007: Use env var as-is (no auto replacement from ALLOWED_ORIGINS)
+    # Supabase Storage
+    supabase_url: str = ""
+    supabase_key: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_bucket_resumes: str = "resumes"
+    supabase_bucket_id_cards: str = "id-cards"
+    supabase_bucket_id_photos: str = "id-photos"
+    supabase_bucket_videos: str = "videos"
+
     frontend_base_url: str = os.getenv(
         "NEXT_PUBLIC_FRONTEND_URL",
         os.getenv(
@@ -122,10 +132,15 @@ class Settings(BaseSettings):
     class Config:
         env_file = os.path.join(str(BASE_DIR), ".env")
         case_sensitive = False
+        extra = "ignore"
 
     @model_validator(mode="after")
     def _enforce_ws_jwt_in_production(self):
-        """Turn on WebSocket interview JWT validation in production unless explicitly overridden."""
+        """Standardize and validate configuration values."""
+        # Standardize Supabase Key (Map service_role to generic key if missing)
+        if not self.supabase_key and self.supabase_service_role_key:
+            object.__setattr__(self, "supabase_key", self.supabase_service_role_key)
+
         # Normalize common email-provider inputs early to avoid subtle auth/config bugs.
         try:
             object.__setattr__(self, "smtp_host", (self.smtp_host or "").strip())
@@ -167,6 +182,9 @@ class Settings(BaseSettings):
         critical_required = {
             "DATABASE_URL": self.database_url,
             "JWT_SECRET": self.jwt_secret,
+            "SUPABASE_URL": self.supabase_url,
+            "SUPABASE_KEY": self.supabase_key,
+            "GROQ_API_KEY": self.groq_api_key,
         }
         missing_critical = [k for k, v in critical_required.items() if not v or v == ""]
         

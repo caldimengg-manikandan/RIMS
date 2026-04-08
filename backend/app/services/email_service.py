@@ -400,6 +400,48 @@ async def send_hired_email(to_email: str, job_title: str, interview=None, offer_
         logger.warning(f"Hired Email failed for {to_email}: {result['error']}")
     return result["success"]
 
+async def send_simple_email(to_email: str, subject: str, message: str):
+    """Utility for sending internal/simple notification emails."""
+    body = f"<html><body><p>{message}</p></body></html>"
+    result = await send_email_async(to_email, subject, body)
+    return result["success"]
+
+async def send_offer_letter_email(to_email: str, candidate_name: str, company_name: str, offer_letter_path: str, accept_link: str = "", reject_link: str = ""):
+    subject = f"Offer Letter - {company_name}"
+    
+    # Template with buttons (Point 2)
+    body = f"""
+    <html><body style="font-family:sans-serif; color:#333; line-height: 1.6;">
+      <h2 style="color: #2563eb;">Hello {candidate_name},</h2>
+      <p>Congratulations! We are pleased to offer you a position at <strong>{company_name}</strong>.</p>
+      <p>Please find the attached offer letter for your review. We are excited about the possibility of you joining our team!</p>
+      
+      <div style="margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center;">
+        <h4 style="margin-top: 0;">Please respond to this offer:</h4>
+        <a href="{accept_link}" style="background-color: #10b981; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-right: 15px; display: inline-block;">Accept Offer</a>
+        <a href="{reject_link}" style="background-color: #ef4444; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Reject Offer</a>
+      </div>
+
+      <p>If the buttons above do not work, use these links:</p>
+      <p>Accept: <a href="{accept_link}">{accept_link}</a></p>
+      <p>Reject: <a href="{reject_link}">{reject_link}</a></p>
+      
+      <br><p>Best Regards,<br>HR Team, {company_name}</p>
+    </body></html>
+    """
+    attachments = []
+    if offer_letter_path and os.path.exists(offer_letter_path):
+        with open(offer_letter_path, "rb") as f:
+            content = base64.b64encode(f.read()).decode("utf-8")
+            attachments.append({
+                "filename": os.path.basename(offer_letter_path),
+                "content": content,
+            })
+    result = await send_email_async(to_email, subject, body, attachments if attachments else None)
+    if not result["success"]:
+        logger.warning(f"Offer Letter Email failed for {to_email}: {result['error']}")
+    return result["success"]
+
 async def send_rejected_email(to_email: str, job_title: str, is_ai_auto_reject: bool = False):
     subject = f"Update on your application for {job_title}"
     reason = "we found that your resume did not align closely enough with the job requirements." if is_ai_auto_reject else "we have decided to move forward with other candidates at this time."

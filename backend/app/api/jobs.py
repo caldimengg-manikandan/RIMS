@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from typing import Optional, List, Any
 from sqlalchemy.orm import Session
 from app.infrastructure.database import get_db
-from app.domain.models import User, Job, Application
+from app.domain.models import User, Job, Application, JobVersion
 from app.domain.schemas import JobCreate, JobUpdate, JobResponse, JobExtractionResponse
 from app.core.auth import get_current_user, get_current_hr
 from app.core.ownership import validate_hr_ownership
@@ -200,16 +200,12 @@ async def upload_question_file(
 
     # Sanitize filename: use UUID to prevent path traversal and collisions
     safe_name = f"{uuid.uuid4().hex}{ext}"
-    upload_dir = settings.base_dir / "uploads" / "questions"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    file_path = upload_dir / safe_name
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    # Return path relative to the backend dir for storage
-    relative_path = f"uploads/questions/{safe_name}"
-    return {"file_path": relative_path, "original_name": file.filename}
+    # Upload to Supabase Storage
+    path = f"questions/{safe_name}"
+    from app.core.storage import upload_file
+    upload_file(settings.supabase_bucket_resumes, path, content, content_type=file.content_type)
+    
+    return {"file_path": path, "original_name": file.filename}
 
 
 @router.post("/upload-aptitude-questions")
@@ -288,17 +284,17 @@ async def upload_aptitude_questions(
 
     # Save as JSON for _generate_aptitude_questions to consume
     safe_name = f"{uuid.uuid4().hex}.json"
-    upload_dir = settings.base_dir / "uploads" / "aptitude_questions"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    file_path = upload_dir / safe_name
+    # Save as JSON to Supabase
+    safe_name = f"{uuid.uuid4().hex}.json"
+    path = f"aptitude_questions/{safe_name}"
+    
     import json as json_mod
-    with open(file_path, "w", encoding="utf-8") as f:
-        json_mod.dump(questions, f, ensure_ascii=False, indent=2)
+    questions_json = json_mod.dumps(questions, ensure_ascii=False, indent=2)
+    from app.core.storage import upload_file
+    upload_file(settings.supabase_bucket_resumes, path, questions_json.encode("utf-8"), content_type="application/json")
 
-    relative_path = f"uploads/aptitude_questions/{safe_name}"
     return {
-        "file_path": relative_path,
+        "file_path": path,
         "original_name": file.filename,
         "questions_count": len(questions),
     }
@@ -443,13 +439,33 @@ def create_job(
         db.add(new_job)
         db.commit()
         db.refresh(new_job)
+        
+        # ── Phase 6: Critical Audit Logging ──
+        from app.services.candidate_service import CandidateService
+        cand_service = CandidateService(db)
+        cand_service.create_audit_log(current_user.id, "JOB_CREATED", "Job", new_job.id, {"title": new_job.title}, is_critical=True)
+        
         return new_job
     except IntegrityError:
         db.rollback()
+        # Phase 5: File Consistency Tracking (Partial - deleting if tx fails)
+        for f_path in [new_job.uploaded_question_file, new_job.aptitude_questions_file]:
+            if f_path:
+                try:
+                    full_p = settings.base_dir / f_path
+                    if full_p.exists(): full_p.unlink()
+                except: pass
         raise HTTPException(status_code=409, detail="Failed to create job due to ID collision. Please try submitting again.")
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating job: {e}")
+        # Phase 5 cleanup
+        for f_path in [new_job.uploaded_question_file, new_job.aptitude_questions_file]:
+            if f_path:
+                try:
+                    full_p = settings.base_dir / f_path
+                    if full_p.exists(): full_p.unlink()
+                except: pass
         raise HTTPException(status_code=500, detail="Failed to create job safely")
 
 def _clamp_pagination(*, skip: int, limit: Optional[int], default_limit: int = 100, max_limit: int = 200) -> tuple[int, int]:
@@ -503,7 +519,7 @@ def list_jobs(
         query = query.filter(Job.hr_id == current_user.id)
 
     # Apply optional status filter
-    if status:
+    if status and status not in ("all", ""):
         query = query.filter(Job.status == status)
 
     s, lim = _clamp_pagination(skip=skip, limit=limit, default_limit=200, max_limit=500)
@@ -572,13 +588,28 @@ def update_job(
         )
     validate_hr_ownership(job, current_user, resource_name="job")
     
-    # Use centralized validation on update if provided
     _validate_job_content(
         job_data.title or job.title, 
         job_data.description or job.description, 
         db, 
         job_id
     )
+
+    # ── Phase 3: Versioning (Save snapshot before update) ──
+    try:
+        current_version_count = db.query(JobVersion).filter(JobVersion.job_id == job.id).count()
+        new_version = JobVersion(
+            job_id=job.id,
+            version_number=current_version_count + 1,
+            title=job.title,
+            description=job.description,
+            primary_evaluated_skills=job.primary_evaluated_skills,
+            experience_level=job.experience_level
+        )
+        db.add(new_version)
+        # We don't commit yet; it will commit with the job update.
+    except Exception as e:
+        logger.warning(f"Failed to create job version snapshot: {e}")
 
     # Duration limit (H024)
     if job_data.duration_minutes is not None and job_data.duration_minutes < 1:

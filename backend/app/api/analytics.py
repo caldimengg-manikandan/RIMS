@@ -56,7 +56,8 @@ async def get_dashboard_analytics(
             chart_data.append({"name": label, "value": count})
 
         # 3. Recent Activity (Hybrid filtering)
-        activity_query = db.query(Interview).join(Application).outerjoin(Job).options(
+        # FIX: Use outerjoin to prevent dropping activities due to missing links (Phase 2)
+        activity_query = db.query(Interview).outerjoin(Application).outerjoin(Job).options(
             joinedload(Interview.application).joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id)
         )
         if current_user.role != "super_admin":
@@ -94,8 +95,9 @@ async def get_interview_reports(
     """Get all interview reports from DB and merge/sync with local JSON files."""
     try:
         # 1. Query all reports from DB and filter by HR ID if not admin
+        # FIX: Use outerjoin chain to ensure all reports show (Phase 2)
         from sqlalchemy import or_
-        query = db.query(InterviewReport).join(Interview).join(Application).join(Job)
+        query = db.query(InterviewReport).outerjoin(Interview).outerjoin(Application).outerjoin(Job)
         
         if current_user.role != "super_admin":
             query = query.filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
@@ -288,69 +290,18 @@ async def get_interview_reports(
         # Process DB reports
         for report in db_reports:
             processed = process_raw_report(report, report.interview, report.interview.application if report.interview else None)
-            if processed["test_id"]:
-                seen_test_ids.add(processed["test_id"])
+            
+            # Use signed URL for video if available
+            if processed.get("video_url"):
+                from app.core.storage import get_signed_url
+                from app.core.config import get_settings
+                settings = get_settings()
+                processed["video_url"] = get_signed_url(settings.supabase_bucket_videos, processed["video_url"])
+                
             reports.append(processed)
 
-        # Process Local File reports
-        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        reports_dir = os.path.join(backend_dir, "interview_reports")
-        
-        if os.path.exists(reports_dir):
-            for filename in os.listdir(reports_dir):
-                if filename.endswith(".json"):
-                    try:
-                        with open(os.path.join(reports_dir, filename), "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            # Fallback chain for ID: test_id -> report_id -> id -> filename
-                            t_id = data.get("test_id") or data.get("report_id") or data.get("id") or filename
-                            
-                            if t_id not in seen_test_ids:
-                                # Calculate scores for file-based reports
-                                cand = data.get("candidate_profile", {})
-                                q_evals = data.get("question_evaluations", [])
-                                f_apt_evals = data.get("aptitude_question_evaluations", [])
-                                combined_q = q_evals + f_apt_evals
-                                
-                                f_tech_scores = [q.get("score", 0) for q in combined_q if q.get("question_type") == "technical"]
-                                f_beh_scores = [q.get("score", 0) for q in combined_q if q.get("question_type") == "behavioral"]
-                                
-                                f_tech_avg = sum(f_tech_scores) / len(f_tech_scores) if f_tech_scores else 0
-                                f_beh_avg = sum(f_beh_scores) / len(f_beh_scores) if f_beh_scores else 0
-                                f_apt_qty = len(f_apt_evals)
-                                f_apt_correct = sum(1 for q in f_apt_evals if q.get("correct"))
-                                f_apt_score = (f_apt_correct / f_apt_qty * 10) if f_apt_qty > 0 else 0
-
-                                reports.append({
-                                    "id": f"file_{filename}",
-                                    "filename": filename,
-                                    "test_id": t_id,
-                                    "timestamp": data.get("timestamp", data.get("created_at", "")),
-                                    "display_date": data.get("display_date", data.get("timestamp", "")),
-                                    "display_date_short": data.get("display_date_short", filename[:10]),
-                                    "status": data.get("status", "completed"),
-                                    "overall_score": data.get("overall_score") or data.get("final_score") or 0,
-                                    "final_score": data.get("final_score") or 0,
-                                    "technical_score": f_tech_avg or data.get("technical_score") or 0,
-                                    "behavioral_score": f_beh_avg or data.get("behavioral_score") or 0,
-                                    "aptitude_score": f_apt_score or data.get("aptitude_score") or 0,
-                                    "total_questions_answered": len(q_evals),
-                                    "question_evaluations": q_evals,
-                                    "aptitude_question_evaluations": f_apt_evals,
-                                    "candidate_profile": cand,
-                                    "tech_score": data.get("tech_score") or f_tech_avg,
-                                    "comm_score": data.get("comm_score"),
-                                    "evaluated_skills": data.get("evaluated_skills"),
-                                    "recommendation": data.get("recommendation", "consider"),
-                                    "video_url": data.get("video_url"),
-                                    "source": "file"
-                                })
-                                seen_test_ids.add(t_id)
-                    except Exception as e:
-                        logger.error(f"Error reading report file {filename}: {e}")
-
-        # Final sort - newest first
-        reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        # Final sort - newest first (by created_at or id)
+        reports.sort(key=lambda x: x.get("id", 0), reverse=True)
         return reports
     except Exception as e:
         logger.critical("CRITICAL ERROR in get_interview_reports:")
@@ -376,7 +327,8 @@ async def get_filtered_interviews(
     """
     Get filtered interviews for the HR user.
     """
-    query = db.query(Interview).join(Application).join(Job).outerjoin(InterviewReport).options(
+    # FIX: Use outerjoin chain for robustness (Phase 2)
+    query = db.query(Interview).outerjoin(Application).outerjoin(Job).outerjoin(InterviewReport).options(
         joinedload(Interview.application).joinedload(Application.job),
         joinedload(Interview.report)
     )

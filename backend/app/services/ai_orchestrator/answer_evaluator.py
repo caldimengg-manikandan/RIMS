@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import List
+from app.core.observability import log_json, filter_pii
 from app.services.ai_client import ai_client, clean_json, is_ai_unavailable_response
 
 logger = logging.getLogger(__name__)
@@ -28,14 +29,20 @@ async def evaluate_answer(question: str, answer: str, expected_points: List[str]
     - 'strengths' (list of strings, constructively outlining positives)
     - 'weaknesses' (list of strings, constructively outlining negatives/gaps)
     - 'feedback_text' (string summarizing constructive feedback)
+    - 'reasoning' (string, brief 1-sentence justification for the internal scoring)
     Return ONLY valid JSON.
     """
     
     try:
         response = await ai_client.generate(prompt, system_instr)
         if is_ai_unavailable_response(response):
-            raise ValueError("ai_unavailable")
-        return json.loads(clean_json(response))
+             raise ValueError("ai_unavailable")
+             
+        data = json.loads(clean_json(response))
+        if "reasoning" in data:
+            data["reasoning"] = filter_pii(str(data["reasoning"]))
+        return data
+        
     except Exception as e:
         logger.error(f"Failed to evaluate answer: {str(e)}", exc_info=True)
         return {
@@ -46,5 +53,6 @@ async def evaluate_answer(question: str, answer: str, expected_points: List[str]
             "practicality": 5.0,
             "strengths": [],
             "weaknesses": [],
-            "feedback_text": "Failed to parse answer evaluation due to an error."
+            "feedback_text": "Failed to parse answer evaluation due to an error.",
+            "reasoning": "Heuristic fallback evaluation due to AI parsing error."
         }

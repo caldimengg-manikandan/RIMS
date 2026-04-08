@@ -2,7 +2,7 @@ import datetime
 from datetime import timezone
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, Float,
-    ForeignKey, UniqueConstraint, CheckConstraint, Index
+    ForeignKey, UniqueConstraint, CheckConstraint, Index, JSON
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -85,8 +85,7 @@ class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('applied', 'aptitude_round', 'ai_interview', 'ai_interview_completed', 'review_later', "
-            "'physical_interview', 'hired', 'rejected')",
+            "status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview')",
             name='check_applications_status'
         ),
         UniqueConstraint('job_id', 'candidate_email', name='uq_application_job_email'),
@@ -130,6 +129,15 @@ class Application(Base):
     applied_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
 
+    # Reliability & Versioning
+    parsing_started_at = Column(DateTime, nullable=True)
+    file_status = Column(String(20), default='active') # 'active', 'orphaned', 'deleted', 'missing'
+    retry_count = Column(Integer, default=0)
+    failure_reason = Column(String(1000))
+    last_attempt_at = Column(DateTime)
+    background_task_id = Column(String(100))
+    scoring_metadata = Column(Text) # JSON string of weights/logic
+
     # Relationships
     job = relationship("Job", back_populates="applications")
     resume_extraction = relationship(
@@ -138,7 +146,7 @@ class Application(Base):
         uselist=False, 
         cascade="all, delete-orphan",
         passive_deletes=True,
-        lazy='joined'
+        lazy='select'
     )
     interview = relationship("Interview", back_populates="application", uselist=False, cascade="all, delete-orphan")
     hiring_decision = relationship("HiringDecision", back_populates="application", uselist=False, cascade="all, delete-orphan")
@@ -146,6 +154,39 @@ class Application(Base):
     notifications = relationship("Notification", foreign_keys="[Notification.related_application_id]", cascade="all, delete-orphan")
     candidate_skills = relationship("CandidateSkill", cascade="all, delete-orphan")
     interview_sessions = relationship("InterviewSession", cascade="all, delete-orphan")  # Legacy — kept for migration safety
+
+    # Onboarding fields
+    offer_sent = Column(Boolean, default=False)
+    offer_sent_date = Column(DateTime)
+    joining_date = Column(DateTime)
+    onboarding_approval_status = Column(String(20), default='pending') # Legacy — Repurposing to offer_approval_status
+    
+    # Enhanced Onboarding V2
+    offer_approval_status = Column(String(20), default='pending') # 'pending', 'approved', 'rejected'
+    offer_approved_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    offer_approved_at = Column(DateTime)
+    offer_response_status = Column(String(20), default='pending') # 'pending', 'accepted', 'rejected'
+    offer_response_date = Column(DateTime)
+    offer_token = Column(String(100), unique=True, index=True)
+    offer_short_id = Column(String(20), unique=True, index=True)
+    offer_token_expiry = Column(DateTime(timezone=True))
+    offer_token_used = Column(Boolean, default=False)
+    offer_template_snapshot = Column(Text)
+    offer_pdf_path = Column(String(500))
+    offer_accepted_ip = Column(String(50))
+    offer_accepted_user_agent = Column(Text)
+    offer_email_status = Column(String(20), default='pending') # 'pending', 'sent', 'failed'
+    offer_email_retry_count = Column(Integer, default=0)
+    reminder_sent_at = Column(DateTime)
+
+    # Post-Joining & ID Card (New Phase)
+    # Using candidate_photo_path exclusively for ID card photo
+    employee_id = Column(String(50), unique=True, index=True)
+    id_card_url = Column(String(500))
+    onboarded_at = Column(DateTime)
+    
+    # Relationships (additional)
+    approver = relationship("User", foreign_keys=[offer_approved_by])
 
 
 class ApplicationStage(Base):
@@ -185,6 +226,7 @@ class ResumeExtraction(Base):
     candidate_name = Column(String(255), nullable=True)
     email = Column(String(255), nullable=True)
     phone_number = Column(String(50), nullable=True)
+    reasoning = Column(JSON, nullable=True)  # AI reasoning for scores
 
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
@@ -204,6 +246,7 @@ class Interview(Base):
     locked_skill = Column(String(50))  # e.g. 'backend', 'frontend'
     total_questions = Column(Integer, default=20)
     questions_asked = Column(Integer, default=0)
+    current_difficulty = Column(String(20), default='medium') # 'easy', 'medium', 'hard'
     overall_score = Column(Float)
     started_at = Column(DateTime, index=True)
     ended_at = Column(DateTime, index=True)
@@ -293,6 +336,7 @@ class InterviewAnswer(Base):
     ai_used = Column(Boolean, default=False)
     fallback_used = Column(Boolean, default=False)
     confidence_score = Column(Float, nullable=True)
+    reasoning = Column(JSON, nullable=True)  # AI reasoning for scores
     submitted_at = Column(DateTime, default=func.now(), server_default=func.now())
     evaluated_at = Column(DateTime)
 
@@ -328,7 +372,10 @@ class InterviewReport(Base):
     termination_reason = Column(String(255), nullable=True)
     ai_used = Column(Boolean, default=False)
     fallback_used = Column(Boolean, default=False)
+    reasoning = Column(JSON, nullable=True)  # AI reasoning for scores
     confidence_score = Column(Float, nullable=True)
+    retry_count = Column(Integer, default=0)
+    failure_reason = Column(String(1000))
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
     updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
 
@@ -421,6 +468,7 @@ class AuditLog(Base):
     resource_id = Column(Integer)
     details = Column(EncryptedText) 
     ip_address = Column(String(50))
+    is_critical = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
 
     # Relationships
@@ -498,3 +546,52 @@ class AIEvaluation(Base):
 
     # Relationships
     answer = relationship("InterviewAnswer", back_populates="evaluation")
+
+
+class GlobalSettings(Base):
+    __tablename__ = "global_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)
+    value = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class JobVersion(Base):
+    __tablename__ = "job_versions"
+    __table_args__ = (UniqueConstraint('job_id', 'version_number', name='uq_job_version'),)
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(Integer, ForeignKey('jobs.id', ondelete='CASCADE'))
+    version_number = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    primary_evaluated_skills = Column(Text)
+    experience_level = Column(String(50))
+    created_at = Column(DateTime, default=func.now())
+
+
+class ResumeExtractionVersion(Base):
+    __tablename__ = "resume_extraction_versions"
+    __table_args__ = (UniqueConstraint('application_id', 'version_number', name='uq_resume_version'),)
+
+    id = Column(Integer, primary_key=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete='CASCADE'))
+    version_number = Column(Integer, nullable=False)
+    extracted_text = Column(EncryptedText)
+    extracted_skills = Column(Text)
+    resume_score = Column(Float)
+    created_at = Column(DateTime, default=func.now())
+
+
+class InterviewReportVersion(Base):
+    __tablename__ = "interview_report_versions"
+    __table_args__ = (UniqueConstraint('interview_id', 'version_number', name='uq_report_version'),)
+
+    id = Column(Integer, primary_key=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete='CASCADE'))
+    version_number = Column(Integer, nullable=False)
+    overall_score = Column(Float)
+    summary = Column(EncryptedText)
+    created_at = Column(DateTime, default=func.now())

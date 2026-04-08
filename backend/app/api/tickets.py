@@ -129,9 +129,9 @@ def get_ticket_count(
     """Lightweight endpoint returning just the pending ticket count for sidebar badges."""
     q = (
         db.query(InterviewIssue)
-        .join(Interview, InterviewIssue.interview_id == Interview.id)
-        .join(Application, Interview.application_id == Application.id)
-        .join(Job, Application.job_id == Job.id)
+        .outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
+        .outerjoin(Application, Interview.application_id == Application.id)
+        .outerjoin(Job, Application.job_id == Job.id)
         .filter(InterviewIssue.status == "pending")
     )
     if current_user.role != "super_admin":
@@ -153,9 +153,9 @@ def get_tickets(
         .joinedload(Application.job)
     )
     query = (
-        query.join(Interview, InterviewIssue.interview_id == Interview.id)
-        .join(Application, Interview.application_id == Application.id)
-        .join(Job, Application.job_id == Job.id)
+        query.outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
+        .outerjoin(Application, Interview.application_id == Application.id)
+        .outerjoin(Job, Application.job_id == Job.id)
     )
     if current_user.role != "super_admin":
         query = query.filter(Job.hr_id == current_user.id)

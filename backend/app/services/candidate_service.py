@@ -7,20 +7,21 @@ class CandidateService:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_audit_log(self, user_id: int, action: str, resource_type: str, resource_id: int, details: dict = None):
+    def create_audit_log(self, user_id: int, action: str, resource_type: str, resource_id: int, details: dict = None, is_critical: bool = False):
         log = AuditLog(
             user_id=user_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
-            details=json.dumps(details) if details else None
+            details=json.dumps(details) if details else None,
+            is_critical=is_critical
         )
         self.db.add(log)
-        self.db.commit()
+        self.db.flush() # Keep in same transaction (Phase 8 Fix)
 
     def advance_stage(self, application_id: int, stage_name: str, status: str = 'pending', score: float = None, notes: str = None, evaluator_id: int = None):
         """Advance a candidate to a new pipeline stage"""
-        application = self.db.query(Application).filter(Application.id == application_id).first()
+        application = self.db.query(Application).filter(Application.id == application_id).with_for_update().first() # Phase 3 Fix
         if not application:
             return None
 
@@ -64,19 +65,28 @@ class CandidateService:
         
         if status in ['pass', 'fail', 'hold']:
             stage.completed_at = datetime.utcnow()
-
-        self.db.commit()
         
         # Trigger composite score update if scores changed
         self.update_composite_score(application_id)
         
+        # Combined log (Phase 8 Fix)
+        self.create_audit_log(
+            evaluator_id, 
+            "STAGE_TRANSITION", 
+            "Application", 
+            application_id, 
+            {"stage": stage_name, "status": status}, 
+            is_critical=(status in ['pass', 'fail', 'hired'])
+        )
+        
+        self.db.flush()
         return stage
 
     def update_composite_score(self, application_id: int):
         """
         Calculate: 40% Resume + 30% Aptitude + 30% Interview (First Level)
         """
-        application = self.db.query(Application).filter(Application.id == application_id).first()
+        application = self.db.query(Application).filter(Application.id == application_id).with_for_update().first() # Phase 3 Fix
         if not application:
             return
 
@@ -103,7 +113,7 @@ class CandidateService:
         else:
             application.recommendation = "Reject"
 
-        self.db.commit()
+        self.db.flush()
 
     def get_ranked_candidates(self, job_id: int):
         """Get candidates ranked by composite score for a specific job (Point 3)"""

@@ -1,0 +1,80 @@
+'use client'
+
+import React, { useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Calendar } from 'lucide-react'
+import { APIClient } from '@/app/dashboard/lib/api-client'
+import { useToast } from "@/components/ui/use-toast"
+
+export function SendOfferDialog({ applicationId, candidateName, onSuccess, trigger }: { applicationId: number, candidateName: string, onSuccess: () => void, trigger: React.ReactNode }) {
+    const { toast } = useToast()
+    const [open, setOpen] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [joiningDate, setJoiningDate] = useState('')
+
+    const handleSend = async () => {
+        if (!joiningDate) {
+            toast({ title: "Error", description: "Please select a joining date", variant: "destructive" })
+            return
+        }
+
+        setLoading(true)
+        try {
+            await APIClient.post(`/api/onboarding/applications/${applicationId}/send-offer?joining_date=${joiningDate}`, {})
+            toast({ title: "Request Sent", description: `Offer approval request sent to Super Admin for ${candidateName}` })
+            setOpen(false)
+            onSuccess()
+        } catch (error: any) {
+            toast({ 
+                title: "Failed", 
+                description: error.response?.data?.detail || error.message || "Could not request offer approval", 
+                variant: "destructive" 
+            })
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                {trigger}
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Request Offer Approval</DialogTitle>
+                    <DialogDescription>
+                        Stage the offer for {candidateName}. This will be sent to the Super Admin for final approval.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="joining_date">Expected Joining Date</Label>
+                        <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                id="joining_date" 
+                                type="date" 
+                                className="pl-10"
+                                value={joiningDate}
+                                onChange={(e) => setJoiningDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-700 font-medium font-sans leading-relaxed">
+                        Important: Once you request approval, the offer template will be snapshot. Ensure Branding and HR Email are correct in Settings before proceeding.
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSend} disabled={loading} className="font-bold">
+                        {loading ? "Staging..." : "Request Approval"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}

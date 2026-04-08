@@ -71,3 +71,32 @@ def log_json(
     else:
         logger.info(msg)
 
+
+import re
+
+def filter_pii(text: str) -> str:
+    """Mask common PII patterns: emails, phone numbers from strings."""
+    if not text:
+        return ""
+    # Mask common patterns: emails
+    text = re.sub(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", "[EMAIL_REDACTED]", text)
+    # Mask common patterns: phone numbers (8+ digits with common separators)
+    text = re.sub(r"(\+?\d[\d\s\-\(\)]{8,}\d)", "[PHONE_REDACTED]", text)
+    return text
+
+
+def log_ai_score_deviation(logger: logging.Logger, score: float, context: str, application_id: int):
+    """Log warning if AI score is under 2.0 or over 9.0 (outlier detection)."""
+    if score < 2.0 or score > 9.0:
+        log_json(
+            logger,
+            "ai_score_deviation",
+            level="warning",
+            extra={
+                "score": score,
+                "context": context,
+                "application_id": application_id,
+                "threshold_breach": "low" if score < 2.0 else "high"
+            }
+        )
+

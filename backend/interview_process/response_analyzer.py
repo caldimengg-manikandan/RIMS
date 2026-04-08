@@ -512,7 +512,8 @@ class ResponseAnalyzer:
                 "technical_accuracy": 0.0, "completeness": 0.0, "clarity": 0.0, 
                 "depth": 0.0, "practicality": 0.0, "overall": 0.0,
                 "relevance": 0.0, "action_impact": 0.0,
-                "strengths": [], "weaknesses": ["Major red flag: Answer is a repetition of the question."]
+                "strengths": [], "weaknesses": ["Major red flag: Answer is a repetition of the question."],
+                "reasoning": "Automatic detection: Candidate answer is a direct repetition of the question text."
             }
             return red_flag_res
 
@@ -536,7 +537,8 @@ class ResponseAnalyzer:
                         "Clarity": [0-10],
                         "Overall": [average],
                         "Strengths": [],
-                        "Weaknesses": []
+                        "Weaknesses": [],
+                        "Reasoning": "1-sentence justification"
                     }}
                     """
                     system_msg = "You are an HR recruiter. Return valid JSON only."
@@ -554,7 +556,8 @@ class ResponseAnalyzer:
                             "clarity": self._bound_score(parsed.get("Clarity", 0)),
                             "overall": self._bound_score(parsed.get("Overall", 0)),
                             "strengths": parsed.get("Strengths", []),
-                            "weaknesses": parsed.get("Weaknesses", [])
+                            "weaknesses": parsed.get("Weaknesses", []),
+                            "reasoning": parsed.get("Reasoning", "Behavioral assessment performed.")
                         }
 
                 elif question_type == "aptitude":
@@ -573,7 +576,6 @@ class ResponseAnalyzer:
                     }
 
                 else:
-                    # Technical Prompt Logic
                     prompt = f"""
                     Evaluate technical answer:
                     Question: {question}
@@ -588,7 +590,8 @@ class ResponseAnalyzer:
                         "Practicality": [0-10],
                         "Overall": [average],
                         "Strengths": [],
-                        "Weaknesses": []
+                        "Weaknesses": [],
+                        "Reasoning": "1-sentence justification"
                     }}
                     """
                     system_msg = "Technical recruiter. JSON only."
@@ -607,7 +610,8 @@ class ResponseAnalyzer:
                             "practicality": self._bound_score(parsed.get("Practicality", 0)),
                             "overall": self._bound_score(parsed.get("Overall", 0)),
                             "strengths": parsed.get("Strengths", []),
-                            "weaknesses": parsed.get("Weaknesses", [])
+                            "weaknesses": parsed.get("Weaknesses", []),
+                            "reasoning": parsed.get("Reasoning", "Technical validation performed.")
                         }
 
             except asyncio.TimeoutError:

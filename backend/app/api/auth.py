@@ -8,9 +8,11 @@ from app.domain.schemas import UserRegister, UserLogin, TokenResponse, UserRespo
 from app.core.auth import hash_password, verify_password, create_access_token, get_current_user, get_current_admin, pwd_context
 from app.services.email_service import send_otp_email
 from app.core.config import get_settings
+from app.domain.models import Application, Job, User
 import secrets
 import string
 import logging
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,30 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
 from app.core.rate_limiter import limiter
+
+@router.get("/debug/data-health")
+def data_health(db: Session = Depends(get_db)):
+    """Phase 9: Enhanced Safety & Monitoring Debugging Endpoint"""
+    from sqlalchemy import func, or_
+    from app.domain.models import Application, Job, User, Interview
+    return {
+        "counts": {
+            "applications": db.query(func.count(Application.id)).scalar(),
+            "jobs": db.query(func.count(Job.id)).scalar(),
+            "users": db.query(func.count(User.id)).scalar(),
+            "interviews": db.query(func.count(Interview.id)).scalar()
+        },
+        "monitoring": {
+            "stuck_resume_parsing": db.query(func.count(Application.id)).filter(
+                Application.resume_status == "parsing",
+                Application.parsing_started_at < datetime.now(timezone.utc) - timedelta(hours=1)
+            ).scalar(),
+            "failed_resume_parsing": db.query(func.count(Application.id)).filter(
+                Application.resume_status == "failed"
+            ).scalar(),
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 @router.post("/register", response_model=UserResponse)
 @limiter.limit("20/minute")
@@ -264,11 +290,22 @@ def remove_hr_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot remove a Super Admin")
 
     user.is_active = False
-    # We keep approval_status as 'approved' but is_active as False for soft-delete/deactivation
-    # Or we can set approval_status to 'rejected' if we want them to never log in again
-    # The requirement says "soft delete (is_active = False)"
+    # Reassign candidates (Phase 3 fix)
+    _reassign_managed_resources(db, user.id, current_admin.id)
+    
     db.commit()
-    return {"message": f"User {user.email} has been deactivated."}
+    return {"message": f"User {user.email} has been deactivated and candidates reassigned."}
+
+def _reassign_managed_resources(db: Session, old_hr_id: int, fallback_user_id: int):
+    """
+    Find another active HR/Admin and reassign all jobs and applications.
+    If no other HR exists, fallback to the current admin.
+    """
+    # 1. Update Jobs handler
+    db.query(Job).filter(Job.hr_id == old_hr_id).update({"hr_id": fallback_user_id})
+    # 2. Update Applications handler (active ones)
+    db.query(Application).filter(Application.hr_id == old_hr_id).update({"hr_id": fallback_user_id})
+    # This ensures RLS ownership is transferred
 
 
 @router.get("/pending-approvals", response_model=List[UserResponse])
@@ -314,8 +351,12 @@ def reject_hr_user(request: Request, user_id: int, current_admin: User = Depends
     user.otp_code = None
     user.otp_expiry = None
     user.approval_status = "rejected"
+    
+    # Reassign candidates (Phase 3 fix)
+    _reassign_managed_resources(db, user.id, current_admin.id)
+    
     db.commit()
-    return {"message": f"User {user.email} has been rejected."}
+    return {"message": f"User {user.email} has been rejected and candidates reassigned."}
 
 
 @router.post("/logout")

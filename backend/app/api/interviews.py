@@ -14,7 +14,7 @@ import shutil
 from app.core.config import get_settings
 from app.core.observability import log_json
 from app.infrastructure.database import get_db
-from app.domain.models import User, Interview, Application, InterviewQuestion, InterviewAnswer, InterviewReport, Job
+from app.domain.models import User, Interview, Application, InterviewQuestion, InterviewAnswer, InterviewReport, Job, InterviewReportVersion
 from app.domain.schemas import (
     InterviewStart, InterviewAnswerSubmit, InterviewResponse, 
     InterviewQuestionResponse, InterviewDetailResponse, InterviewReportResponse,
@@ -1300,6 +1300,7 @@ async def evaluate_answer_task(
         answer.clarity_score = float(clarity_score)
         answer.depth_score = float(depth_score)
         answer.practicality_score = float(practicality_score)
+        answer.reasoning = {"explanation": evaluation.get("reasoning") if evaluation else "Heuristic fallback evaluation due to AI parsing error."}
         answer.answer_evaluation = answer_evaluation_json
         answer.ai_used = bool(ai_used)
         answer.fallback_used = bool(fallback_used)
@@ -1628,13 +1629,13 @@ async def complete_aptitude(
             _set_interview_status(interview, "completed")
             interview.ended_at = datetime.now(timezone.utc)
             interview.overall_score = interview.aptitude_score
-            # Use FSM for state transition: ai_interview -> ai_interview_completed
+            # Use FSM for state transition: ai_interview -> interview_completed
             from app.services.state_machine import CandidateStateMachine, TransitionAction
             fsm = CandidateStateMachine(db)
             try:
                 fsm.transition(interview.application, TransitionAction.SYSTEM_INTERVIEW_COMPLETE)
             except Exception:
-                interview.application.status = "ai_interview_completed"
+                interview.application.status = "interview_completed"
             db.commit()
         except Exception as e:
             db.rollback()
@@ -1783,10 +1784,28 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     interview.first_level_completed = True
     interview.first_level_score = interview_score
     
-    if interview.application:
-        # If it was terminated, don't overwrite the 'rejected' status if FSM already handled it
-        if interview.status == "completed":
-            interview.application.status = "ai_interview_completed"
+    # 2.5 Update Application Status via State Machine
+    if interview.application and interview.status == "completed":
+        from app.services.state_machine import CandidateStateMachine, TransitionAction
+        fsm = CandidateStateMachine(db)
+        try:
+            fsm.transition(interview.application, TransitionAction.SYSTEM_INTERVIEW_COMPLETE)
+        except Exception as e:
+            logger.warning(f"FSM transition failed for interview {interview_id}: {e}")
+            # Fallback only if FSM fails (shouldn't happen with system action)
+            interview.application.status = "interview_completed"
+            
+        # ── Phase 6: Critical Audit Logging ──
+        from app.services.candidate_service import CandidateService
+        cand_service = CandidateService(db)
+        cand_service.create_audit_log(
+            None, 
+            "INTERVIEW_COMPLETED", 
+            "Interview", 
+            interview_id, 
+            {"overall_score": interview_score, "status": interview.status},
+            is_critical=True
+        )
             
     db.commit()
 
@@ -1802,7 +1821,19 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     # 4. Generate AI Report
     existing_report = db.query(InterviewReport).filter(InterviewReport.interview_id == interview_id).first()
     if existing_report:
-        return existing_report
+        # ── Phase 3: Versioning (Save old report before generating new) ──
+        try:
+            version_count = db.query(InterviewReportVersion).filter(InterviewReportVersion.interview_id == interview_id).count()
+            old_version = InterviewReportVersion(
+                interview_id=interview_id,
+                version_number=version_count + 1,
+                overall_score=existing_report.overall_score,
+                summary=existing_report.summary
+            )
+            db.add(old_version)
+            db.flush() 
+        except Exception as e:
+            logger.warning(f"Failed to version old interview report: {e}")
 
     try:
         job = interview.application.job
@@ -1847,35 +1878,46 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
             detailed_feedback_val = json.dumps(detailed_feedback_val)
             
         rec_raw = str(report_data.get("recommendation", "consider")).lower()
-        rec_val = "not_recommended" if "not " in rec_raw or "not_recommended" in rec_raw else ("recommended" if "recommend" in rec_raw else "consider")
-            
-        report = InterviewReport(
-            interview_id=interview_id,
-            application_id=interview.application.id if interview.application else None,
-            job_id=job.id if job else None,
-            candidate_name=interview.application.candidate_name if interview.application else "Candidate",
-            candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
-            applied_role=job.title if job else "N/A",
-            overall_score=report_data["overall_score"],
-            technical_skills_score=report_data.get("technical_skills_score", report_data["overall_score"]),
-            communication_score=report_data.get("communication_score", report_data["overall_score"]),
-            problem_solving_score=report_data.get("problem_solving_score", report_data["overall_score"]),
-            strengths=report_data.get("strengths", "[]"),
-            weaknesses=report_data.get("weaknesses", "[]"),
-            summary=report_data.get("summary", ""),
-            recommendation=rec_val,
-            detailed_feedback=detailed_feedback_val,
-            aptitude_score=interview.aptitude_score,
-            behavioral_score=behavioral_score,
-            combined_score=interview_score,
-            evaluated_skills=report_data.get("evaluated_skills", "[]"),
-            termination_reason=term_reason,
-            ai_used=ai_used_count > 0,
-            fallback_used=fallback_used_count > 0,
-            confidence_score=(sum(confidence_values) / len(confidence_values)) if confidence_values else 0.0,
-        )
+        if existing_report:
+            report = existing_report
+            report.overall_score = report_data["overall_score"]
+            report.technical_skills_score = report_data.get("technical_skills_score", report_data["overall_score"])
+            report.communication_score = report_data.get("communication_score", report_data["overall_score"])
+            report.problem_solving_score = report_data.get("problem_solving_score", report_data["overall_score"])
+            report.summary = str(report_data.get("summary", ""))
+            report.detailed_feedback = detailed_feedback_val
+            report.recommendation = rec_val
+            report.reasoning = {"ai_summary": report_data.get("reasoning")}
+            report.updated_at = datetime.now(timezone.utc)
+        else:
+            report = InterviewReport(
+                interview_id=interview_id,
+                application_id=interview.application.id if interview.application else None,
+                job_id=job.id if job else None,
+                candidate_name=interview.application.candidate_name if interview.application else "Candidate",
+                candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
+                applied_role=job.title if job else "N/A",
+                overall_score=report_data["overall_score"],
+                technical_skills_score=report_data.get("technical_skills_score", report_data["overall_score"]),
+                communication_score=report_data.get("communication_score", report_data["overall_score"]),
+                problem_solving_score=report_data.get("problem_solving_score", report_data["overall_score"]),
+                strengths=str(report_data.get("strengths", "[]")),
+                weaknesses=str(report_data.get("weaknesses", "[]")),
+                summary=str(report_data.get("summary", "")),
+                recommendation=rec_val,
+                detailed_feedback=detailed_feedback_val,
+                aptitude_score=interview.aptitude_score,
+                behavioral_score=behavioral_score,
+                combined_score=interview_score,
+                evaluated_skills=str(report_data.get("evaluated_skills", "[]")),
+                termination_reason=term_reason,
+                ai_used=ai_used_count > 0,
+                fallback_used=fallback_used_count > 0,
+                confidence_score=(sum(confidence_values) / len(confidence_values)) if confidence_values else 0.0,
+                reasoning={"ai_summary": report_data.get("reasoning")},
+            )
+            db.add(report)
         
-        db.add(report)
         db.commit()
 
         # Notification
@@ -2189,33 +2231,33 @@ async def upload_interview_video(
             )
             return cached
 
-    import os
-    import shutil
+    # 6. Upload to Supabase
+    from app.core.storage import upload_file
     from datetime import datetime
-    # Generate a unique filename: interview_{id}_{timestamp}.webm
     timestamp = int(datetime.now(timezone.utc).timestamp())
     filename = f"interview_{interview_id}_{timestamp}.webm"
-    # Ensure the directory exists
-    os.makedirs(settings.videos_dir, exist_ok=True)
-    file_path = settings.videos_dir / filename
-
+    storage_path = f"{interview_id}/{filename}"
+    
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        content = await file.read()
+        returned_path = upload_file(
+            settings.supabase_bucket_videos, 
+            storage_path, 
+            content, 
+            content_type=file.content_type or "video/webm"
+        )
         
-        # Save relative path to DB
-        # Note: We store the path that will be used by the static server
-        relative_path = f"uploads/videos/{filename}"
-        interview_session.video_recording_path = relative_path
+        # Save cloud path to DB
+        interview_session.video_recording_path = returned_path
         db.add(interview_session)
         db.commit()
 
-        out = {"success": True, "path": relative_path}
+        out = {"success": True, "path": returned_path}
         if rid and settings.enable_request_id_idempotency:
             _idem_cache_set(f"idem:interviews.upload_video:{interview_id}:{rid}", out, ttl_seconds=90)
         return out
     except Exception as e:
-        logger.error(f"Video upload failure: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save video recording.")
+        logger.error(f"Video cloud upload failure: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save video to cloud storage: {str(e)}")
     finally:
         file.file.close()

@@ -284,21 +284,42 @@ class ApplicationResponse(BaseModel):
     resume_file_name: Optional[str]
     resume_file_path: Optional[str]
     candidate_photo_path: Optional[str] = None
+    candidate_phone_raw: Optional[str] = None
     status: str
     hr_id: int
     hr_notes: Optional[str] = None
     resume_status: str = "pending"
     
+    # Cloud Storage URLs
+    resume_url: Optional[str] = None
+    photo_url: Optional[str] = None
+    id_card_url: Optional[str] = None
+    video_url: Optional[str] = None
+    
     # Enterprise Scoring (Point 2)
     resume_score: Optional[float] = 0
     aptitude_score: Optional[float] = 0
     interview_score: Optional[float] = 0
-    composite_score: Optional[float] = 0
+    composite_score: float = 0.0
     recommendation: Optional[str] = None
     
     applied_at: datetime
     updated_at: datetime
-    
+
+    # Onboarding response fields (Enhanced V2)
+    offer_sent: bool = False
+    offer_sent_date: Optional[datetime] = None
+    joining_date: Optional[datetime] = None
+    onboarding_approval_status: Optional[str] = 'pending'
+    offer_approval_status: Optional[str] = 'pending'
+    offer_approved_by: Optional[int] = None
+    offer_approved_at: Optional[datetime] = None
+    offer_response_status: Optional[str] = 'pending'
+    offer_response_date: Optional[datetime] = None
+    offer_email_status: Optional[str] = 'pending'
+    offer_email_retry_count: int = 0
+    reminder_sent_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -358,6 +379,7 @@ class ResumeExtractionResponse(BaseModel):
     experience_level: Optional[str]
     resume_score: float
     skill_match_percentage: float
+    reasoning: Optional[dict] = None
     created_at: datetime
     
     class Config:
@@ -389,6 +411,7 @@ class InterviewReportResponse(BaseModel):
     ai_used: Optional[bool] = False
     fallback_used: Optional[bool] = False
     confidence_score: Optional[float] = None
+    reasoning: Optional[dict] = None
     created_at: datetime
     
     class Config:
@@ -431,6 +454,7 @@ class InterviewAnswerResponse(BaseModel):
     ai_used: Optional[bool] = False
     fallback_used: Optional[bool] = False
     confidence_score: Optional[float] = None
+    reasoning: Optional[dict] = None
     submitted_at: datetime
     
     class Config:
@@ -576,6 +600,32 @@ class UserVerifyOTP(BaseModel):
     @classmethod
     def validate_email(cls, v):
         return UserRegister.validate_email_robust(v)
+
+# ============================================================================
+# Global Settings
+# ============================================================================
+
+class GlobalSettingsUpdate(BaseModel):
+    company_logo_url: Optional[str] = None
+    company_name: Optional[str] = None
+    company_address: Optional[str] = None
+    hr_email: Optional[str] = None
+    offer_letter_template: Optional[str] = None
+
+class GlobalSettingsResponse(BaseModel):
+    company_logo_url: Optional[str] = ""
+    company_name: Optional[str] = ""
+    company_address: Optional[str] = ""
+    hr_email: Optional[str] = ""
+    offer_letter_template: Optional[str] = ""
+
+# ============================================================================
+# Candidate Offer Actions
+# ============================================================================
+
+class OfferResponseRequest(BaseModel):
+    token: str
+    response_type: str  # 'accept' or 'reject'
 
 # Rebuild model to resolve forward references
 ApplicationDetailResponse.model_rebuild()

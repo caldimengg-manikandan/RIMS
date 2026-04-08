@@ -1,6 +1,7 @@
 from app.services.ai_client import ai_client, clean_json, is_ai_unavailable_response
 import json
 import asyncio
+import os
 from functools import partial
 from app.core.config import get_settings
 
@@ -29,13 +30,11 @@ async def run_sync(func, *args, **kwargs):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, partial(func, *args, **kwargs))
 
+import re
 import logging
+from app.core.observability import log_json, filter_pii, log_ai_score_deviation
 
 logger = logging.getLogger(__name__)
-
-# Deprecated: call_openai_direct has been eradicated in favor of ai_client.generate
-
-import re
 
 
 # ─── Regex fallback identity extractors ──────────────────────────────
@@ -228,6 +227,7 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
     - "strengths": A list of 3-5 key strengths or highlights regarding the Job Description.
     - "weaknesses": A list of 3-5 potential gaps or weaknesses regarding the Job Description.
     - "score": A Resume Score from 0 to 10 (up to 1 decimal place) based on a comprehensive analysis of skills, experience, and role fit against the JD. 10 is a perfect match.
+    - "reasoning": A brief, professional justification (1-2 sentences) explaining why this specific score was given. Focus on the most critical factors.
     
     Resume content: 
     <document_content>
@@ -252,7 +252,8 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         "strengths": ["Strong PHP experience", "Good leadership skills"],
         "weaknesses": ["Lacks React native experience", "Short tenure at last job"],
         "score": 8.5,
-        "match_percentage": 50
+        "match_percentage": 50,
+        "reasoning": "Higher than average match due to X, but penalized for Y."
     }}
     """
     
@@ -359,6 +360,14 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         # or keep 0-100 if UI handles it. The UI currently does score * 10.
         # So we store it such that score * 10 gives the percentage.
         result["score"] = round(weighted_score_100 / 10, 1)
+
+        # Transparency Logic: Filter PII and Log Deviations
+        if "reasoning" in result:
+            result["reasoning"] = filter_pii(str(result["reasoning"]))
+        else:
+            result["reasoning"] = "Heuristic calculation based on skills and experience match."
+            
+        log_ai_score_deviation(logger, result["score"], "resume_extraction", job_id)
 
         # Mandatory Debug Logs
         logger.info(f"Resume Analysis Final Results | JOB ID: {job_id}")
@@ -735,7 +744,8 @@ async def generate_interview_report(
         "weaknesses": [list],
         "summary": "paragraph",
         "detailed_feedback": "paragraph",
-        "recommendation": "Strong Hire | Hire | Borderline | Reject"
+        "recommendation": "Strong Hire | Hire | Borderline | Reject",
+        "reasoning": "Brief justification for the scores provided."
     }}
     """
     
@@ -763,6 +773,12 @@ async def generate_interview_report(
                         parsed["overall_score"] = round(max(0.0, min(10.0, float(parsed["overall_score"]))), 1)
                         if "detailed_feedback" not in parsed:
                             parsed["detailed_feedback"] = str(parsed.get("summary", ""))
+                        
+                        # Transparency & Observation
+                        if "reasoning" in parsed:
+                            parsed["reasoning"] = filter_pii(str(parsed["reasoning"]))
+                        log_ai_score_deviation(logger, parsed["overall_score"], "interview_report", parsed.get("application_id", 0))
+                        
                         return parsed
                 logger.warning("AI Report parsing failed (Attempt %s)", attempt + 1)
             else:
@@ -860,3 +876,43 @@ async def transcribe_audio(audio_file_path: str) -> str:
         last_err,
     )
     return ""
+
+
+async def decompose_search_query(user_query: str) -> dict:
+    """
+    Convert a natural language candidate search query into a structured set of filters.
+    """
+    system_instr = """
+    You are a recruiter's technical search assistant. 
+    Analyze the user's search query and decompose it into structured filters for a candidate database.
+    
+    Valid options for EXPERIENCE_LEVEL (one of): Intern, Junior, Mid-Level, Senior, Lead / Manager.
+    Include "include_rejected": true only if they mention searching from all candidates, rejected ones, or historical data. Otherwise default to false.
+    
+    Return JSON only:
+    {
+        "tech_skills": ["Python", "React", etc],
+        "soft_skills": ["Leadership", "Communication", etc],
+        "min_experience_years": float or null,
+        "max_experience_years": float or null,
+        "experience_level": "one of the options or null",
+        "role_keywords": ["Senior Developer", "Architect", etc],
+        "include_rejected": boolean
+    }
+    """
+    
+    prompt = f"HR Candidate Search Query: \"{user_query}\""
+    
+    try:
+        from app.services.ai_client import ai_client, clean_json, is_ai_unavailable_response
+        import json
+        
+        response = await ai_client.generate(prompt, system_instr)
+        if is_ai_unavailable_response(response):
+            return {"tech_skills": [user_query[:50]], "include_rejected": False}
+            
+        data = json.loads(clean_json(response))
+        return data
+    except Exception as e:
+        logger.error(f"Error decomposing search query: {e}")
+        return {"tech_skills": [user_query[:50]], "include_rejected": False}

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { RejectDialog } from "@/components/reject-dialog"
-import { ArrowLeft, FileText, CheckCircle2, XCircle, Clock, PhoneCall, Star, RotateCw, Eye, ChevronRight, Edit2, Save, X, Camera, CameraOff, Video } from "lucide-react"
+import { ArrowLeft, FileText, CheckCircle2, XCircle, Clock, PhoneCall, Star, RotateCw, Eye, ChevronRight, Edit2, Save, X, Camera, CameraOff, Video, Send, UserPlus, ShieldAlert, Info } from "lucide-react"
+import { SendOfferDialog } from "@/components/send-offer-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import {
     Dialog,
@@ -28,20 +29,18 @@ import { normalizeHireRecommendation } from "@/lib/recommendation-label"
 // ─── FSM Button Config ──────────────────────────────────────────────────
 const FSM_BUTTONS: Record<string, { action: string; label: string; icon: React.ReactNode; className: string }[]> = {
     applied: [
+        { action: "mark_screened", label: "MARK AS SCREENED", icon: <CheckCircle2 className="h-4 w-4" />, className: "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg" },
+        { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
+    ],
+    screened: [
         { action: "approve_for_interview", label: "APPROVE FOR INTERVIEW", icon: <CheckCircle2 className="h-4 w-4" />, className: "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg" },
         { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
     ],
-    submitted: [ 
-        { action: "approve_for_interview", label: "APPROVE FOR INTERVIEW", icon: <CheckCircle2 className="h-4 w-4" />, className: "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg" },
+    interview_scheduled: [
         { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
     ],
-    aptitude_round: [
-        { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
-    ],
-    ai_interview: [
-        { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
-    ],
-    ai_interview_completed: [
+    interview_completed: [
+        { action: "hire", label: "HIRE CANDIDATE", icon: <Star className="h-4 w-4" />, className: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg" },
         { action: "call_for_interview", label: "CALL FOR INTERVIEW", icon: <PhoneCall className="h-4 w-4" />, className: "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg" },
         { action: "review_later", label: "REVIEW LATER", icon: <Clock className="h-4 w-4" />, className: "bg-amber-500 hover:bg-amber-600 text-white shadow-lg" },
         { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
@@ -54,6 +53,10 @@ const FSM_BUTTONS: Record<string, { action: string; label: string; icon: React.R
         { action: "hire", label: "HIRE CANDIDATE", icon: <Star className="h-4 w-4" />, className: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg" },
         { action: "reject", label: "REJECT CANDIDATE", icon: <XCircle className="h-4 w-4" />, className: "bg-destructive hover:bg-destructive/90 text-white shadow-lg" },
     ],
+    hired: [],
+    accepted: [
+        { action: "onboard", label: "FINALIZE JOINING", icon: <UserPlus className="h-4 w-4" />, className: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg" },
+    ],
 }
 
 const RESUME_STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -65,13 +68,16 @@ const RESUME_STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     applied: { label: "Applied", color: "bg-blue-100 text-blue-700 border-blue-200" },
-    submitted: { label: "Submitted", color: "bg-blue-100 text-blue-700 border-blue-200" },
-    aptitude_round: { label: "Aptitude Round", color: "bg-purple-100 text-purple-700 border-purple-200" },
-    ai_interview: { label: "AI Interview", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-    ai_interview_completed: { label: "AI Interview Completed", color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+    screened: { label: "Screened", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+    interview_scheduled: { label: "Interview Scheduled", color: "bg-purple-100 text-purple-700 border-purple-200" },
+    interview_completed: { label: "Interview Completed", color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
     review_later: { label: "Review Later", color: "bg-amber-100 text-amber-700 border-amber-200" },
     physical_interview: { label: "Physical Interview", color: "bg-teal-100 text-teal-700 border-teal-200" },
     hired: { label: "Hired", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+    pending_approval: { label: "Pending Offer Approval", color: "bg-amber-100 text-amber-700 border-amber-200" },
+    offer_sent: { label: "Offer Sent", color: "bg-blue-100 text-blue-700 border-blue-200" },
+    accepted: { label: "Offer Accepted", color: "bg-emerald-500 text-white border-none" },
+    onboarded: { label: "Onboarded", color: "bg-slate-800 text-white border-none" },
     rejected: { label: "Rejected", color: "bg-red-100 text-red-700 border-red-200" },
 }
 
@@ -136,7 +142,8 @@ export default function HRApplicationDetailPage() {
 
     const handleTransition = async (action: string, notes?: string) => {
         let nextStatus = currentStatus;
-        if (action === "approve_for_interview") nextStatus = "ai_interview";
+        if (action === "mark_screened") nextStatus = "screened";
+        else if (action === "approve_for_interview") nextStatus = "interview_scheduled";
         else if (action === "reject") nextStatus = "rejected";
         else if (action === "call_for_interview") nextStatus = "physical_interview";
         else if (action === "review_later") nextStatus = "review_later";
@@ -203,33 +210,13 @@ export default function HRApplicationDetailPage() {
     }
 
     const handleDownloadResume = async (filePath: string) => {
-        // A006: Use secure download endpoint instead of direct URL
-        const downloadUrl = `${API_BASE_URL}/api/applications/${applicationId}/resume/download`;
-        try {
-            const token = localStorage.getItem('auth_token')
-            const res = await fetch(downloadUrl, {
-                method: 'GET',
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-                credentials: 'include',
-            })
-            if (!res.ok) {
-                throw new Error((await res.json().catch(() => ({}))).detail || `Download failed: ${res.status}`)
-            }
-            const blob = await res.blob()
-            const url = window.URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            // If backend sets Content-Disposition, browser may ignore this; still provides best-effort.
-            link.download = 'resume'
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
-            window.URL.revokeObjectURL(url)
-        } catch (e: any) {
-            console.error('Resume download failed:', e)
-            // Backward-compatible fallback for environments where blob download may fail.
-            window.open(downloadUrl, '_blank')
+        // Enforce direct Cloud Storage URL (Task 4)
+        if (application?.resume_url) {
+            window.open(application.resume_url, '_blank')
+            return
         }
+        
+        console.error('Resume download failed: Cloud URL not provided by backend.')
     }
 
     if (isLoading) {
@@ -254,7 +241,8 @@ export default function HRApplicationDetailPage() {
     const currentStatus = application.status || 'applied'
     const statusInfo = STATUS_LABELS[currentStatus] || { label: currentStatus, color: "bg-gray-100 text-gray-700 border-gray-200" }
     const buttons = FSM_BUTTONS[currentStatus] || []
-    const isTerminal = ['hired', 'rejected'].includes(currentStatus)
+    const isTerminal = ['rejected', 'onboarded'].includes(currentStatus)
+    const isHiredPipeline = ['hired', 'pending_approval', 'offer_sent', 'accepted'].includes(currentStatus)
 
     // Extract resume data
     const resumeExtraction = application.resume_extraction || {}
@@ -311,9 +299,9 @@ export default function HRApplicationDetailPage() {
                     </div>
 
                     <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative pr-12 md:pr-0">
-                        {application.candidate_photo_path ? (
+                        {application.photo_url ? (
                             <img
-                                src={`${API_BASE_URL}/${application.candidate_photo_path.replace(/\\/g, '/')}`}
+                                src={application.photo_url}
                                 alt={application.candidate_name}
                                 className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-xl ring-1 ring-slate-200"
                             />
@@ -378,9 +366,26 @@ export default function HRApplicationDetailPage() {
                                     <>
                                         <div className="space-y-3">
                                             <div className="grid grid-cols-3 gap-3">
-                                                <div className="text-center p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                                                    <p className="text-2xl font-black text-indigo-700">{((resumeExtraction.resume_score || 0) * 10).toFixed(1)}</p>
-                                                    <p className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider">Score</p>
+                                                <div className="text-center p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex flex-col items-center justify-center">
+                                                    <p className="text-2xl font-black text-indigo-700 leading-none">
+                                                        {((resumeExtraction.resume_score || 0) * 10).toFixed(1)}
+                                                    </p>
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <div className="flex items-center gap-1 cursor-help mt-1">
+                                                                    <p className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider">Score</p>
+                                                                    <Info className="h-2.5 w-2.5 text-indigo-400" />
+                                                                </div>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="max-w-xs border-indigo-100 shadow-xl p-3">
+                                                                <p className="text-xs font-bold mb-1 text-indigo-900">AI Scoring Reasoning</p>
+                                                                <p className="text-[11px] leading-relaxed text-slate-700">
+                                                                    {resumeExtraction.reasoning || "Automated analysis based on core skill density and experience verification."}
+                                                                </p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                 </div>
                                                 <div className="text-center p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
                                                     <p className="text-2xl font-black text-emerald-700">{resumeExtraction.skill_match_percentage?.toFixed(1) || '0'}%</p>
@@ -532,9 +537,26 @@ export default function HRApplicationDetailPage() {
                                 {report ? (
                                     <div className="space-y-6 flex-grow">
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div className="text-center p-3 bg-orange-50/50 rounded-xl border border-orange-100">
-                                                <p className="text-2xl font-black text-black">{report.overall_score?.toFixed(1) || '0.0'}</p>
-                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Overall</p>
+                                            <div className="text-center p-3 bg-orange-50/50 rounded-xl border border-orange-100 flex flex-col items-center justify-center">
+                                                <p className="text-2xl font-black text-black leading-none">
+                                                    {report.overall_score?.toFixed(1) || '0.0'}
+                                                </p>
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="flex items-center gap-1 cursor-help mt-1">
+                                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Overall</p>
+                                                                <Info className="h-2.5 w-2.5 text-slate-300" />
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="max-w-xs border-orange-100 shadow-xl p-3">
+                                                            <p className="text-xs font-bold mb-1 text-orange-900">Interview Insight</p>
+                                                            <p className="text-[11px] leading-relaxed text-slate-700">
+                                                                {report.reasoning || "Composite score derived from technical accuracy, communication, and depth analysis."}
+                                                            </p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
                                             </div>
                                             <div className="text-center p-3 bg-purple-50/50 rounded-xl border border-purple-100">
                                                 <p className="text-2xl font-black text-purple-700">{report.aptitude_score?.toFixed(1) || '0.0'}</p>
@@ -654,15 +676,81 @@ export default function HRApplicationDetailPage() {
                         </CardContent>
                     </Card>
 
-                    {/* ─── Terminal State Banner ─── */}
-                    {isTerminal && (
-                        <Card className={`border-2 shadow-sm ${currentStatus === 'hired' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                            <CardContent className="py-8 text-center space-y-2">
-                                <p className={`text-2xl font-black ${currentStatus === 'hired' ? 'text-emerald-700' : 'text-red-700'}`}>
-                                    {currentStatus === 'hired' ? '🎉 CANDIDATE HIRED' : '❌ APPLICATION REJECTED'}
-                                </p>
-                            </CardContent>
-                        </Card>
+                    {/* ─── Terminal / Onboarding State Banner ─── */}
+                    {(isTerminal || isHiredPipeline) && (
+                        <div className="space-y-4">
+                            {currentStatus === 'rejected' ? (
+                                <Card className="border-2 shadow-sm bg-red-50 border-red-200">
+                                    <CardContent className="py-8 text-center space-y-2">
+                                        <p className="text-2xl font-black text-red-700">❌ APPLICATION REJECTED</p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <Card className={`border-2 shadow-sm ${currentStatus === 'onboarded' ? 'bg-slate-800 border-slate-900 text-white' : 'bg-emerald-50 border-emerald-200'}`}>
+                                    <CardContent className="py-8 text-center space-y-2">
+                                        <p className={`text-2xl font-black ${currentStatus === 'onboarded' ? 'text-white' : 'text-emerald-700'}`}>
+                                            {currentStatus === 'onboarded' ? '🏁 ONBOARDING COMPLETED' : '🎉 CANDIDATE HIRED'}
+                                        </p>
+                                        {application.joining_date && (
+                                            <p className={`text-sm font-bold ${currentStatus === 'onboarded' ? 'text-slate-300' : 'text-emerald-600'}`}>
+                                                Joining Date: {new Date(application.joining_date).toLocaleDateString()}
+                                            </p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {currentStatus === 'hired' && (
+                                <SendOfferDialog
+                                    applicationId={parseInt(applicationId)}
+                                    candidateName={application.candidate_name}
+                                    onSuccess={() => mutateApp()}
+                                    trigger={
+                                        <Button className="w-full h-14 gap-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl rounded-2xl font-black text-sm uppercase tracking-widest">
+                                            <Send className="h-5 w-5" />
+                                            Request Offer Approval
+                                        </Button>
+                                    }
+                                />
+                            )}
+
+                            {application.status === 'pending_approval' && (
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-3">
+                                    <ShieldAlert className="h-8 w-8 text-amber-500 mx-auto" />
+                                    <p className="text-sm font-bold text-amber-800">Pending Admin Approval</p>
+                                    <p className="text-xs text-amber-600">The offer letter is staged. Waiting for a Super Admin to approve and dispatch the email.</p>
+                                </div>
+                            )}
+
+                            {application.status === 'offer_sent' && (
+                                <Card className="border shadow-sm bg-blue-50/50">
+                                    <CardContent className="py-4 flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                            <Send className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-blue-800 uppercase tracking-tight">Offer Letter Sent</p>
+                                            <p className="text-xs text-blue-600">Awaiting candidate response via token link.</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {application.status === 'accepted' && (
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-emerald-500 text-white rounded-2xl text-center flex items-center justify-center gap-3 shadow-lg">
+                                        <CheckCircle2 className="h-6 w-6" />
+                                        <span className="font-black text-sm uppercase tracking-widest">Offer Accepted!</span>
+                                    </div>
+                                    <Button 
+                                        className="w-full h-12 bg-slate-900 hover:bg-black text-white rounded-xl font-bold"
+                                        onClick={() => handleTransition('onboard')}
+                                    >
+                                        Complete Onboarding
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

@@ -29,3 +29,15 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def set_db_identity(db: Session, user_id: int):
+    """
+    Set PostgreSQL session variable for Row Level Security (RLS).
+    Policies in Phase 2 rely on 'app.current_user_id'. (Phase 2 Fix)
+    """
+    from sqlalchemy import text
+    try:
+        db.execute(text("SET LOCAL app.current_user_id = :uid"), {"uid": str(user_id)})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to set RLS identity: {e}")

@@ -22,7 +22,8 @@ type Application = {
     candidate: {
         full_name: string
         email: string
-        photo_path?: string
+        candidate_photo_path?: string
+        photo_url?: string
     }
     status: string
     skill_match_percentage?: number
@@ -35,27 +36,23 @@ type Application = {
 // ─── FSM State Columns ─────────────────────────────────────────────────
 const STATUS_COLUMNS = [
     { id: "applied", label: "Applied" },
-    { id: "ai_interview", label: "Interview in Progress" },
-    { id: "ai_interview_completed", label: "Interview Completed" },
-    { id: "review_later", label: "Review Later" },
-    { id: "physical_interview", label: "General Interview" },
+    { id: "screened", label: "Screened" },
+    { id: "interview_scheduled", label: "Interview Scheduled" },
+    { id: "interview_completed", label: "Interview Completed" },
     { id: "hired", label: "Hired" },
-    { id: "rejected", label: "Rejected" },
+    { id: "offer_sent", label: "Offer Sent" },
+    { id: "onboarded", label: "Onboarded" },
 ]
 
 // ─── Allowed FSM Actions Per State (for pipeline card actions) ──────────
 const STATE_ACTIONS: Record<string, { action: string; label: string; variant: 'primary' | 'destructive' | 'secondary' | 'success' }[]> = {
     applied: [
+        { action: "mark_screened", label: "Screen", variant: "primary" },
+    ],
+    screened: [
         { action: "approve_for_interview", label: "Approve", variant: "primary" },
     ],
-    ai_interview_completed: [
-        { action: "call_for_interview", label: "Call", variant: "primary" },
-        { action: "review_later", label: "Review Later", variant: "secondary" },
-    ],
-    review_later: [
-        { action: "call_for_interview", label: "Call", variant: "primary" },
-    ],
-    physical_interview: [
+    interview_completed: [
         { action: "hire", label: "Hire", variant: "success" },
     ],
 }
@@ -75,7 +72,8 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
         candidate: {
             full_name: app.candidate_name || "Unknown",
             email: app.candidate_email || "",
-            photo_path: app.candidate_photo_path
+            candidate_photo_path: app.candidate_photo_path,
+            photo_url: app.photo_url
         },
         status: app.status,
         skill_match_percentage: app.resume_extraction?.skill_match_percentage,
@@ -252,9 +250,9 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
                                     <CardHeader className="p-3 pb-1.5 flex flex-row items-center space-y-0 relative pr-10">
                                         <div className="flex items-start space-x-2.5 flex-1 min-w-0">
                                             <Avatar className="h-8 w-8 border-2 border-background shadow-sm shrink-0">
-                                                {app.candidate.photo_path ? (
+                                                {app.candidate.photo_url || app.candidate.candidate_photo_path ? (
                                                     <AvatarImage 
-                                                        src={`${API_BASE_URL}/${app.candidate.photo_path.replace(/\\/g, '/')}`}
+                                                        src={app.candidate.photo_url || (app.candidate.candidate_photo_path ? `${API_BASE_URL}/${app.candidate.candidate_photo_path.replace(/\\/g, '/')}` : undefined)}
                                                         alt={app.candidate.full_name}
                                                         className="object-cover"
                                                     />
