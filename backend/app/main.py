@@ -266,6 +266,16 @@ app.include_router(onboarding.router)
 app.include_router(search.router)
 app.include_router(websocket_router)
 
+# Mount local storage for resumes, photos, and ID cards
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+# Ensure local_storage directory exists
+LOCAL_STORAGE_DIR = Path("local_storage")
+LOCAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/local_storage", StaticFiles(directory=str(LOCAL_STORAGE_DIR)), name="local_storage")
+
 # Error handlers
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: FastAPIRequest, exc: RequestValidationError):
