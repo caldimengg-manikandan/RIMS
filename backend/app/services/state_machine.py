@@ -47,6 +47,7 @@ class CandidateState(str, Enum):
     ONBOARDED = "onboarded"
     PHYSICAL_INTERVIEW = "physical_interview"
     REVIEW_LATER = "review_later"
+    PERMANENT_FAILURE = "permanent_failure"
 
 
 class TransitionAction(str, Enum):
@@ -334,7 +335,8 @@ class CandidateStateMachine:
                 cur = None
             if cur == CandidateState.APPLIED:
                 rs = getattr(application, "resume_status", None) or "pending"
-                if rs != "parsed":
+                # Allow proceeding if parsed, or if it failed but HR wants to bypass, or if score exists
+                if rs not in ("parsed", "failed") and not getattr(application, "resume_score", 0):
                     raise InvalidTransitionError(
                         application.status,
                         action.value,

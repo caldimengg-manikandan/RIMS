@@ -85,7 +85,7 @@ class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview')",
+            "status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview', 'review_later', 'permanent_failure')",
             name='check_applications_status'
         ),
         UniqueConstraint('job_id', 'candidate_email', name='uq_application_job_email'),

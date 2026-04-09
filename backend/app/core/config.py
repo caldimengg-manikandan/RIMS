@@ -146,7 +146,7 @@ class Settings(BaseSettings):
             object.__setattr__(self, "smtp_host", (self.smtp_host or "").strip())
             object.__setattr__(self, "smtp_user", (self.smtp_user or "").strip())
             # Gmail "App Passwords" are often pasted with spaces; SMTP AUTH requires the raw token.
-            object.__setattr__(self, "smtp_password", (self.smtp_password or "").replace(" ", "").strip())
+            object.__setattr__(self, "smtp_password", (self.smtp_password or "").strip())
             object.__setattr__(self, "smtp_from", (self.smtp_from or "").strip())
             object.__setattr__(self, "resend_api_key", (self.resend_api_key or "").strip())
             object.__setattr__(self, "resend_from", (self.resend_from or "").strip())

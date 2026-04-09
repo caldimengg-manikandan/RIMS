@@ -289,6 +289,7 @@ class ApplicationResponse(BaseModel):
     hr_id: int
     hr_notes: Optional[str] = None
     resume_status: str = "pending"
+    file_status: Optional[str] = 'active'
     
     # Cloud Storage URLs
     resume_url: Optional[str] = None
@@ -344,6 +345,13 @@ class ApplicationDetailResponse(ApplicationResponse):
     pipeline_stages: List[ApplicationStageResponse] = Field(default_factory=list)
     # Read-only: heuristic + optional hr_notes marker; not persisted as its own column.
     extraction_degraded: bool = False
+
+class ApplicationListResponse(BaseModel):
+    items: List[ApplicationDetailResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
 
 
 class HasAppliedResponse(BaseModel):

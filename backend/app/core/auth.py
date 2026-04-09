@@ -22,8 +22,12 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify password against hash. Truncate to 72 bytes for bcrypt compatibility."""
+    if not plain_password:
+        return False
+    # BCrypt has a 72-byte limit; passlib with newer bcrypt drivers may raise ValueError
+    # if this is exceeded. Since bcrypt ignores bytes beyond 72, we truncate manually.
+    return pwd_context.verify(plain_password[:72], hashed_password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create JWT access token"""

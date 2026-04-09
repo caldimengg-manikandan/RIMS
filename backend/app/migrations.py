@@ -61,6 +61,21 @@ _REQUIRED_COLUMNS = [
     ("applications", "offer_email_status", "VARCHAR(20) DEFAULT 'pending'"),
     ("applications", "offer_email_retry_count", "INTEGER DEFAULT 0"),
     ("applications", "reminder_sent_at", "TIMESTAMP"),
+    # Missing ResumeExtraction columns
+    ("resume_extractions", "candidate_name", "VARCHAR(255)"),
+    ("resume_extractions", "email", "VARCHAR(255)"),
+    ("resume_extractions", "phone_number", "VARCHAR(50)"),
+    ("resume_extractions", "reasoning", "TEXT"), # Cast to JSONB happens in models/postgres if column exists
+    # Missing Interview columns
+    ("interviews", "current_difficulty", "VARCHAR(20) DEFAULT 'medium'"),
+    ("interviews", "questions_asked", "INTEGER DEFAULT 0"),
+    ("interviews", "total_questions", "INTEGER DEFAULT 20"),
+    ("interviews", "locked_skill", "VARCHAR(50)"),
+    ("interviews", "started_at", "TIMESTAMP"),
+    ("interviews", "completed_at", "TIMESTAMP"),
+    ("interviews", "termination_reason", "VARCHAR(100)"),
+    ("interviews", "report_generated", "BOOLEAN DEFAULT FALSE"),
+    ("interviews", "candidate_id", "INTEGER REFERENCES users(id)"),
 ]
 
 
@@ -143,7 +158,7 @@ def run_startup_migrations(engine: Engine):
                 conn.execute(text("ALTER TABLE applications DROP CONSTRAINT IF EXISTS check_applications_status"))
                 conn.execute(text("""
                     ALTER TABLE applications ADD CONSTRAINT check_applications_status 
-                    CHECK (status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview'))
+                    CHECK (status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview', 'review_later', 'permanent_failure'))
                 """))
                 conn.commit()
                 logger.info("Updated check_applications_status constraint")

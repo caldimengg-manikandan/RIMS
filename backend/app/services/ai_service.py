@@ -204,9 +204,9 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
     sanitized_resume = sanitize_ai_input(resume_text, "Resume Upload")
     
     prompt = f"""
-    Analyze this document. First, determine if it is a Resume or CV.
+    Analyze this document as an expert HR professional. Extract all relevant candidate information and evaluate their fit for the role.
     
-    If it is NOT a resume (e.g., it is a research paper, article, assignment, invoice, or irrelevant text), return JSON with "is_resume": false and "summary": "Document identified as [type] instead of resume.".
+    If the document appears to be unstructured text or is missing typical resume sections, still attempt to extract any identifiable skills, experience, or contact details.
     
     If it IS a resume, analyze it against the provided Job Description.
     
@@ -283,8 +283,9 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
             raise ValueError("ai_unavailable")
         data = json.loads(clean_json(response))
         result = data
+        # No longer triggering extraction_degraded solely on is_resume as we want to be more inclusive
         if result.get("is_resume") is False:
-            extraction_degraded = True
+            logger.info("AI flagged document as non-standard resume, but continuing with best-effort extraction.")
         raw_skills = result.get("skills")
         if not raw_skills or (isinstance(raw_skills, list) and len(raw_skills) == 0):
             extraction_degraded = True
@@ -883,8 +884,10 @@ async def decompose_search_query(user_query: str) -> dict:
     Convert a natural language candidate search query into a structured set of filters.
     """
     system_instr = """
-    You are a recruiter's technical search assistant. 
+    You are a recruiter's semantic search assistant. 
     Analyze the user's search query and decompose it into structured filters for a candidate database.
+    
+    CRITICAL: Use semantic expansion. If the user uses a broad term like "software", "development", or "engineer", include related high-level tech categories and common stacks (e.g., "backend", "frontend", "fullstack", "python", "javascript", "java") in the "tech_skills" list so that specific candidates are matched.
     
     Valid options for EXPERIENCE_LEVEL (one of): Intern, Junior, Mid-Level, Senior, Lead / Manager.
     Include "include_rejected": true only if they mention searching from all candidates, rejected ones, or historical data. Otherwise default to false.

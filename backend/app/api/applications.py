@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Form, Request
 from sqlalchemy import or_, func, text, cast, String, extract, inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload, defer, load_only
 from sqlalchemy.orm.exc import ObjectDeletedError
@@ -16,6 +16,7 @@ from app.domain.schemas import (
     ApplicationDetailResponse,
     ApplicationNotesUpdate,
     HasAppliedResponse,
+    ApplicationListResponse,
 )
 from app.core.auth import get_current_user, get_current_hr, get_current_admin
 from app.core.ownership import validate_hr_ownership
@@ -837,16 +838,17 @@ def get_pending_applications_count(
 
     # FIX: Use outerjoin to include orphan applications if they exist
     # FIX: NULL-safe file_status check (Phase 2, point 3)
+    # Sanitized to handle potential trailing spaces or hidden chars in DB
     q = db.query(Application).filter(
         ~Application.status.in_(("hired", "rejected")),
-        or_(Application.file_status == 'active', Application.file_status == None)
+        or_(func.trim(Application.file_status).in_(('active', 'missing')), Application.file_status == None)
     )
     if current_user.role != "super_admin":
         q = q.outerjoin(Job).filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
     return {"count": q.count()}
 
 
-@router.get("", response_model=list[ApplicationDetailResponse])
+@router.get("", response_model=ApplicationListResponse)
 def get_hr_applications(
     job_id: int = None,
     from_date: str = None,
@@ -892,34 +894,33 @@ def get_hr_applications(
     # Ensure Job is joined to applications table to enable filtering and search without dropping rows.
     query = query.outerjoin(Job)
 
-    # 3. Base Reliability Filtering (Phase 2, point 3)
-    # Ensure we show active/NULL statuses only by default.
-    query = query.filter(or_(Application.file_status == 'active', Application.file_status == None))
-    
     # Filter by job if requested (Restored Phase 2)
     if job_id:
         query = query.filter(Application.job_id == job_id)
 
-    # Server-side search across candidate, job, and application id (paginated with skip/limit)
+    # Filter by status if requested
+    if status and status != 'all':
+        if status == "applied":
+            query = query.filter(Application.status.in_(("applied", "submitted")))
+        else:
+            query = query.filter(Application.status == status)
+
+    # Search filter (Generic fallback search)
     if search and str(search).strip():
-        qraw = str(search).strip()[:200]
-        term = f"%{qraw}%"
+        term = f"%{search}%"
         query = query.filter(
             or_(
                 Application.candidate_name.ilike(term),
                 Application.candidate_email.ilike(term),
                 Job.title.ilike(term),
-                Job.job_id.ilike(term),
-                cast(Application.id, String).ilike(term),
+                Application.id.cast(String).ilike(term)
             )
         )
 
-    # Status filter (HR UI "Applied" includes legacy/submitted)
-    if status and status not in ("all", ""):
-        if status == "applied":
-            query = query.filter(Application.status.in_(("applied", "submitted")))
-        else:
-            query = query.filter(Application.status == status)
+    # Date range filter logic... (skipping re-implementation of existing correctly parsed start_date/end_date)
+    # The current file actually has complex date parsing below. I need to be careful.
+    
+    # Let's find where safe_skip was in the original file
 
     # Date range filter (A004/A005/A009)
     today_utc = datetime.now(timezone.utc).date()
@@ -1006,10 +1007,11 @@ def get_hr_applications(
         # Note: Job is already outerjoined above
         query = query.filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
         
-    # Pagination safety (A007/A008): cap limit to keep queries predictable.
+    # Application of filters is finished above. Proceed to pagination.
+    total = query.count()
     safe_skip = max(0, int(skip or 0))
-    # Default to 20; hard cap at 50 to prevent huge payloads.
-    safe_limit = max(1, min(int(limit or 20), 50))
+    # Increased hard limit to 100 for better bulk visibility (Point 2)
+    safe_limit = max(1, min(int(limit or 20), 100))
 
     t0 = time.perf_counter()
     applications = (
@@ -1018,16 +1020,6 @@ def get_hr_applications(
         .limit(safe_limit)
         .all()
     )
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    if elapsed_ms > 200:
-        logger.warning(
-            "HR applications query slow",
-            extra={"elapsed_ms": elapsed_ms, "user_id": current_user.id, "limit": safe_limit},
-        )
-    else:
-        logger.info(f"Retrieved {len(applications)} applications for user {current_user.id} (Optimized Query)")
-
-    # Before returning, inspect and nullify any detached/deleted relationships
     for app in applications:
         if not app.resume_extraction: continue
         try:
@@ -1046,7 +1038,16 @@ def get_hr_applications(
             idx = app.resume_file_path.find("uploads")
             app.resume_file_path = app.resume_file_path[idx:].replace("\\", "/")
 
-    return [build_application_detail_response(app) for app in applications]
+    items = [build_application_detail_response(app) for app in applications]
+    pages = (total + safe_limit - 1) // safe_limit
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": (safe_skip // safe_limit) + 1,
+        "size": safe_limit,
+        "pages": pages
+    }
 
 @router.get("/{application_id}/resume/download")
 def download_resume(

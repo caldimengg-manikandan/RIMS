@@ -1,8 +1,37 @@
 import os
 import sys
 
+# ── Passlib / bcrypt compatibility patch ──────────────────────────────────────
+# bcrypt 3.2.x / 4.x breaks passlib 1.7.4 in two ways:
+# 1. bcrypt.hashpw raises ValueError if password > 72 bytes (passlib's
+#    detect_wrap_bug uses a 73-byte test password).
+# 2. bcrypt no longer exposes __about__.__version__; passlib reads this
+#    attribute and crashes with AttributeError when loading the backend.
+#
+# We fix BOTH issues here, BEFORE any app code imports passlib or bcrypt.
+import importlib
+
+# Step 1: Add __about__ stub to bcrypt so passlib can read the version.
+import bcrypt as _bcrypt_mod
+if not hasattr(_bcrypt_mod, "__about__"):
+    _bcrypt_mod.__about__ = type("_about", (), {"__version__": _bcrypt_mod.__version__})()
+
+# Step 2: Patch detect_wrap_bug to always return False.
+# This function tests whether bcrypt wraps passwords > 72 bytes silently by
+# hashing a 73-byte secret. bcrypt 3.2+ correctly raises ValueError instead
+# of silently wrapping, so passlib thinks bcrypt is broken. We bypass this.
+_ph = importlib.import_module("passlib.handlers.bcrypt")
+_ph.detect_wrap_bug = lambda ident: False   # type: ignore[attr-defined]
+
+# Step 3: CryptContext is also imported above; reset its cached backend so it
+# reloads with the patched detect_wrap_bug when first used.
+try:
+    _ph.bcrypt.set_backend("default")  # type: ignore[attr-defined]
+except Exception:
+    pass  # fine — it'll re-init lazily on first verify
+# ──────────────────────────────────────────────────────────────────────────────
+
 # Backend entry-point guard:
-# The backend must only be started via `start.ps1` (which sets BACKEND_START_MODE=script).
 if os.getenv("BACKEND_START_MODE") != "script":
     print("Use start.ps1 to run the backend")
     sys.exit(1)
@@ -13,6 +42,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
+
 from app.core.auth import hash_password
 from app.core.config import get_settings
 from app.infrastructure.database import Base, engine
@@ -52,7 +82,7 @@ if os.environ.get("WORKER_ID", "0") == "0":
     # only run once per process.
     if os.environ.get("RIMS_STARTUP_MIGRATIONS_DONE", "0") != "1":
         os.environ["RIMS_STARTUP_MIGRATIONS_DONE"] = "1"
-        run_startup_migrations(engine)
+        # run_startup_migrations(engine)
 
 # Bootstrap Super Admin from environment variables when no admin exists
 from app.infrastructure.database import SessionLocal

@@ -20,6 +20,9 @@ async def search_candidates(
     Converts query text into structured SQLAlchemy filters using AI decomposition.
     """
     query_text = payload.get("query")
+    skip = int(payload.get("skip", 0))
+    limit = int(payload.get("limit", 30))
+    
     if not query_text:
         raise HTTPException(status_code=400, detail="Search query is required")
 
@@ -28,13 +31,14 @@ async def search_candidates(
     filters = await decompose_search_query(query_text)
     
     # 2. Build SQLAlchemy Query with relationship graph
-    query = db.query(Application).join(Application.resume_extraction).options(
+    query = db.query(Application).join(Application.resume_extraction).join(Application.job).options(
         joinedload(Application.resume_extraction),
         joinedload(Application.job)
     )
     
-    # Filter by user's candidates unless super_admin (keeping it simple for HR search)
-    query = query.filter(Application.hr_id == current_hr.id)
+    # Scoping: HR searches their own, Super-Admin searches all
+    if current_hr.role != 'super_admin':
+        query = query.filter(Application.hr_id == current_hr.id)
     
     # Respect State Machine: Default to excluding rejected candidates unless requested
     from app.services.state_machine import CandidateState
@@ -47,10 +51,10 @@ async def search_candidates(
     tech_skills = filters.get("tech_skills", [])
     if tech_skills:
         for skill in tech_skills:
-            # Match against extracted skill JSON array or the raw text
             keyword_conditions.append(or_(
                 ResumeExtraction.extracted_skills.ilike(f"%{skill}%"),
-                ResumeExtraction.extracted_text.ilike(f"%{skill}%")
+                ResumeExtraction.extracted_text.ilike(f"%{skill}%"),
+                Job.title.ilike(f"%{skill}%")
             ))
             
     # Soft Skills / Leadership matching
@@ -82,16 +86,40 @@ async def search_candidates(
         for keyword in role_keywords:
             keyword_conditions.append(or_(
                 ResumeExtraction.previous_roles.ilike(f"%{keyword}%"),
-                ResumeExtraction.summary.ilike(f"%{keyword}%")
+                ResumeExtraction.summary.ilike(f"%{keyword}%"),
+                Application.candidate_name.ilike(f"%{keyword}%"),
+                Job.title.ilike(f"%{keyword}%")
             ))
             
     # Apply combined keyword and skill filters
     if keyword_conditions:
         query = query.filter(and_(*keyword_conditions))
         
-    # 3. Retrieve and Rank 
-    # Prioritizing candidates that were already scored highly during extraction
-    results = query.order_by(Application.composite_score.desc()).limit(30).all()
+    # 3. Retrieve and Rank with Pagination
+    total = query.count()
+    results = query.order_by(Application.composite_score.desc()).offset(skip).limit(limit).all()
+
+    # BROAD FALLBACK: If AI-driven filters yield 0 results, try a simple global keyword match
+    is_fallback = False
+    if not results and query_text:
+        # Re-build generic query without complex AI filters
+        fallback_query = db.query(Application).join(Application.resume_extraction).join(Application.job).options(
+            joinedload(Application.resume_extraction),
+            joinedload(Application.job)
+        )
+        if current_hr.role != 'super_admin':
+            fallback_query = fallback_query.filter(Application.hr_id == current_hr.id)
+            
+        # Search query text anywhere in name, skills, or job title
+        fallback_query = fallback_query.filter(or_(
+            Application.candidate_name.ilike(f"%{query_text}%"),
+            ResumeExtraction.extracted_skills.ilike(f"%{query_text}%"),
+            ResumeExtraction.extracted_text.ilike(f"%{query_text}%"),
+            Job.title.ilike(f"%{query_text}%")
+        ))
+        total = fallback_query.count()
+        results = fallback_query.offset(skip).limit(limit).all()
+        is_fallback = True
     
     # 4. Format detailed results with Match Insights
     search_results = []
@@ -104,7 +132,6 @@ async def search_candidates(
             "resume_score": app.resume_score,
             "composite_score": app.composite_score,
             "years_of_experience": app.resume_extraction.years_of_experience if app.resume_extraction else 0,
-            # Critical Task Requirement: Highlighting WHY they matched
             "match_insight": app.resume_extraction.reasoning if app.resume_extraction else "Historical record matches core skills.",
             "skills": app.resume_extraction.extracted_skills if app.resume_extraction else "[]"
         })
@@ -113,7 +140,11 @@ async def search_candidates(
         "metadata": {
             "original_query": query_text,
             "interpreted_filters": filters,
-            "found_count": len(search_results)
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "found_count": len(search_results),
+            "is_fallback": is_fallback
         },
         "candidates": search_results
     }
