@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { APIClient } from '@/app/dashboard/lib/api-client'
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { Building2, Mail, Image as ImageIcon, FileText, Save, Loader2, ShieldAlert } from 'lucide-react'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
@@ -15,7 +15,6 @@ import { useRouter } from 'next/navigation'
 export default function SettingsPage() {
     const { user } = useAuth()
     const router = useRouter()
-    const { toast } = useToast()
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [settings, setSettings] = useState({
@@ -47,11 +46,7 @@ export default function SettingsPage() {
             const data = await APIClient.get('/api/settings') as any
             setSettings(data)
         } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to load settings",
-                variant: "destructive"
-            })
+            toast.error("Failed to load settings")
         } finally {
             setLoading(false)
         }
@@ -61,16 +56,9 @@ export default function SettingsPage() {
         setSaving(true)
         try {
             await APIClient.post('/api/settings', settings)
-            toast({
-                title: "Success",
-                description: "Settings updated successfully",
-            })
+            toast.success("Saved successfully")
         } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to update settings",
-                variant: "destructive"
-            })
+            toast.error("Failed to update settings")
         } finally {
             setSaving(false)
         }

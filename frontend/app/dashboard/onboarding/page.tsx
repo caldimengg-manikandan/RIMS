@@ -93,7 +93,7 @@ export default function OnboardingPage() {
 
     const handleGenerateID = async (id: number) => {
         try {
-            const res = await APIClient.post(`/api/onboarding/applications/${id}/generate-id-card`, {})
+            const res = await APIClient.post(`/api/onboarding/applications/${id}/generate-id-card`, {}) as any
             toast({ title: "Success", description: `ID Card generated. Employee ID: ${res.employee_id}` })
             mutate()
         } catch (error) {
@@ -327,7 +327,7 @@ export default function OnboardingPage() {
                                                                 Generate ID
                                                             </Button>
                                                         ) : (
-                                                            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500 hover:bg-emerald-50" onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/${candidate.id_card_url}`, '_blank')}>
+                                                            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500 hover:bg-emerald-50" onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000'}/${candidate.id_card_url}`, '_blank')}>
                                                                 <Download className="h-3.5 w-3.5" />
                                                                 Download ID
                                                             </Button>
@@ -396,57 +396,6 @@ export default function OnboardingPage() {
                 </Card>
             </div>
 
-            {user?.role === 'super_admin' && (
-                <FailuresPanel />
-            )}
-
-            <Dialog open={isApproveOpen} onOpenChange={setIsApproveOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <ShieldAlert className="h-5 w-5 text-amber-600" />
-                            Final Approval Review
-                        </DialogTitle>
-                        <DialogDescription>
-                            Please confirm the offer details before generating the immutable PDF and notifying the candidate.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {approvingCandidate && (
-                        <div className="py-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <div>
-                                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Candidate</p>
-                                    <p className="font-bold">{approvingCandidate.candidate_name}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Job Role</p>
-                                    <p className="font-bold">{approvingCandidate.job?.title}</p>
-                                </div>
-                                <div className="col-span-2 pt-2 border-t">
-                                    <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest leading-loose">Joining Date</p>
-                                    <p className="font-black text-primary text-lg">
-                                        {new Date(approvingCandidate.joining_date).toLocaleDateString(undefined, { dateStyle: 'full' })}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-lg text-xs text-amber-800">
-                                <FileText className="h-4 w-4 shrink-0" />
-                                <p>This will freeze the current template snapshot and generate the final contract.</p>
-                            </div>
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsApproveOpen(false)}>Cancel</Button>
-                        <Button 
-                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
-                            onClick={() => handleApprove(approvingCandidate)}
-                        >
-                            Confirm & Send Final Offer
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
             {activeCaptureId && (
                 <CapturePhotoDialog 
                     isOpen={isCaptureOpen}
@@ -456,72 +405,5 @@ export default function OnboardingPage() {
                 />
             )}
         </div>
-    )
-}
-
-function FailuresPanel() {
-    const { data: failures, isLoading, mutate } = useSWR<any[]>('/api/applications/failures', fetcher)
-    const { toast } = useToast()
-
-    const handleRetry = async (id: number) => {
-        try {
-            await APIClient.post(`/api/applications/retry-resume-parsing`, { application_id: id })
-            toast({ title: "Retry Triggered", description: "Background process restarted." })
-            mutate()
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to trigger retry", variant: "destructive" })
-        }
-    }
-
-    if (!failures || failures.length === 0) return null
-
-    return (
-        <Card className="border-destructive/20 bg-destructive/5 overflow-hidden">
-            <CardHeader className="bg-destructive/10 border-b flex flex-row items-center justify-between py-3">
-                <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    <div>
-                        <CardTitle className="text-sm font-black text-destructive uppercase tracking-widest">Reliability Monitoring</CardTitle>
-                        <CardDescription className="text-[10px] text-destructive/60">System failures requiring administrator attention</CardDescription>
-                    </div>
-                </div>
-                <Badge variant="destructive" className="h-5">{failures.length} Issues</Badge>
-            </CardHeader>
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader className="bg-destructive/5">
-                        <TableRow>
-                            <TableHead className="text-xs font-bold py-2">Candidate</TableHead>
-                            <TableHead className="text-xs font-bold">Retries</TableHead>
-                            <TableHead className="text-xs font-bold">Last Error</TableHead>
-                            <TableHead className="text-xs font-bold text-right pr-6">Recovery</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {failures.map((fail) => (
-                            <TableRow key={fail.id} className="hover:bg-destructive/10 transition-colors">
-                                <TableCell className="py-2 text-xs font-bold">{fail.candidate_name}</TableCell>
-                                <TableCell>
-                                    <Badge variant="outline" className={`text-[10px] ${fail.retry_count >= 3 ? 'bg-red-500 text-white' : 'text-destructive border-destructive/20'}`}>
-                                        {fail.retry_count}/3
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="max-w-[300px]">
-                                    <div className="text-[10px] text-destructive/80 font-mono truncate" title={fail.failure_reason}>
-                                        {fail.failure_reason || 'Unknown internal error'}
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-right pr-6">
-                                    <Button size="xs" variant="ghost" className="h-7 text-[10px] font-bold text-destructive hover:bg-destructive/20 gap-1" onClick={() => handleRetry(fail.id)}>
-                                        <RefreshCw className="h-3 w-3" />
-                                        Force Retry
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
     )
 }

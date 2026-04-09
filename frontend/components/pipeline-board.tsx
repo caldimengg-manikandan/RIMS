@@ -64,7 +64,8 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
     const apiPath = jobId
         ? `/api/applications?job_id=${jobId}&limit=49`
         : '/api/applications?limit=49'
-    const { data: rawApplications = [], error, isLoading, mutate } = useSWR<any[]>(apiPath, (url: string) => fetcher<any[]>(url))
+    const { data: swrData, error, isLoading, mutate } = useSWR<any>(apiPath, (url: string) => fetcher<any>(url))
+    const rawApplications = swrData?.items || (Array.isArray(swrData) ? swrData : [])
 
     const applications: Application[] = rawApplications.map((app: any) => ({
         id: app.id,
@@ -113,8 +114,11 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
             actionFn,
             {
                 lockKey: `pipeline-bulk-delete-${jobId ?? 'all'}`,
-                optimisticData: (current) => 
-                    (current || []).filter(app => !itemsToDelete.includes(app.id)),
+                optimisticData: (current: any) => {
+                    const items = Array.isArray(current) ? current : (current?.items || []);
+                    const newItems = items.filter((app: any) => !itemsToDelete.includes(app.id));
+                    return Array.isArray(current) ? newItems : { ...current, items: newItems };
+                },
                 successMessage: `Successfully deleted ${itemsToDelete.length} candidate(s)`,
                 invalidateKeys: ['/api/analytics/dashboard']
             }
@@ -135,12 +139,15 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
             actionFn,
             {
                 lockKey: `application-${applicationId}`,
-                optimisticData: (current) => 
-                    (current || []).map(app =>
+                optimisticData: (current: any) => {
+                    const items = Array.isArray(current) ? current : (current?.items || []);
+                    const newItems = items.map((app: any) =>
                         app.id === applicationId 
                             ? { ...app, status: action === 'reject' ? 'rejected' : app.status } 
                             : app
-                    ),
+                    );
+                    return Array.isArray(current) ? newItems : { ...current, items: newItems };
+                },
                 invalidateKeys: ['/api/analytics/dashboard']
             }
         )

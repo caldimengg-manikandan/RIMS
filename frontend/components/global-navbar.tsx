@@ -37,37 +37,13 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
           <NotificationBell />
           <UserNav />
         </div>
-      ) : isAuth ? (
-        <Link href={pathname === '/auth/login' ? '/auth/register' : '/auth/login'} className="w-full">
-          <Button variant="outline" className="w-full md:w-auto rounded-full border-white/20 text-white hover:bg-white/10 transition-colors font-semibold">
-            {pathname === '/auth/login' ? 'Create Account' : 'Sign In'}
+      ) : isAuthenticated ? (
+        <Link href={user?.role === 'candidate' ? '/jobs' : '/dashboard/hr'} className="w-full md:w-auto">
+          <Button className="w-full md:w-auto rounded-full px-6 bg-primary text-primary-foreground hover:bg-primary/90 font-bold transition-all shadow-lg shadow-primary/20">
+            {user?.role === 'candidate' ? 'Browse Jobs' : 'Go to Dashboard'} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         </Link>
-      ) : (
-        !isAuthenticated ? (
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4 w-full">
-            <Link href="/auth/login" className="w-full md:w-auto">
-              <Button
-                variant="ghost"
-                className="w-full md:w-auto text-white/80 hover:text-white hover:bg-white/10 font-semibold"
-              >
-                Log in
-              </Button>
-            </Link>
-            <Link href="/auth/register" className="w-full md:w-auto">
-              <Button className="w-full md:w-auto rounded-full px-6 bg-primary text-primary-foreground hover:bg-primary/90 font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20">
-                Get Started <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <Link href={user?.role === 'candidate' ? '/jobs' : '/dashboard/hr'} className="w-full md:w-auto">
-            <Button className="w-full md:w-auto rounded-full px-6 bg-primary text-primary-foreground hover:bg-primary/90 font-bold transition-all shadow-lg shadow-primary/20">
-              {user?.role === 'candidate' ? 'Browse Jobs' : 'Go to Dashboard'} <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </Link>
-        )
-      )}
+      ) : null}
     </div>
   )
 
