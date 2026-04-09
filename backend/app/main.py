@@ -138,6 +138,12 @@ app = FastAPI(
     redirect_slashes=True
 )
 
+import os
+from fastapi.staticfiles import StaticFiles
+mock_storage_dir = os.path.join(os.getcwd(), "tmp", "mock_storage")
+os.makedirs(mock_storage_dir, exist_ok=True)
+app.mount("/mock_storage", StaticFiles(directory=mock_storage_dir), name="mock_storage")
+
 import time
 app.state.start_time = time.time()
 
@@ -344,7 +350,7 @@ async def general_exception_handler(request: FastAPIRequest, exc: Exception):
     logger.error(error_msg)
     
     detail = str(exc) if settings.debug else "An unexpected internal server error occurred."
-    return JSONResponse(
+    response = JSONResponse(
         status_code=500,
         content={
             "detail": detail,
@@ -368,4 +374,3 @@ async def general_exception_handler(request: FastAPIRequest, exc: Exception):
 # Note:
 # This module must NOT start a server itself.
 # Entrypoint is enforced via `start.ps1` and `BACKEND_START_MODE=script`.
-

@@ -552,10 +552,13 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             file_ext = abs_file_path.lower().split('_')[-1].split('.')[-1] if '.' in abs_file_path else 'pdf'
             
             if file_ext == 'pdf':
-                from pypdf import PdfReader
-                reader = PdfReader(file_stream)
-                for page in reader.pages:
-                    resume_text += page.extract_text() + "\n"
+                if response.startswith(b'%PDF'):
+                    from pypdf import PdfReader
+                    reader = PdfReader(file_stream)
+                    for page in reader.pages:
+                        resume_text += page.extract_text() + "\n"
+                else:
+                    resume_text = response.decode('utf-8', errors='ignore')
             elif file_ext in ['docx', 'doc']:
                 import docx
                 doc = docx.Document(file_stream)
@@ -568,12 +571,23 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             cand_service.create_audit_log(None, "RESUME_TEXT_EXTRACTION_SKIPPED", "Application", application_id, {"reason": str(e)})
             resume_text = "Parsing skipped: Storage unavailable or file missing."
         
-        if not resume_text.strip():
-            resume_text = "No readable text found."
-
-        # AI Parsing
-        extraction_data = await parse_resume_with_ai(resume_text, job_id, job.description, job.experience_level)
-        extraction_degraded_flag = extraction_data.pop("extraction_degraded", False)
+        if not resume_text.strip() or resume_text.startswith("Parsing skipped:"):
+            # Skip AI if no text or explicitly skipped due to streaming/parsing failure
+            extraction_data = {
+                "summary": "AI extraction skipped: " + resume_text,
+                "skills": ["Unparsable File"],
+                "experience": 0,
+                "score": 0.0,
+                "match_percentage": 0,
+                "extraction_degraded": True,
+                "is_resume": False,
+                "reasoning": {"ai_justification": "System detected a corrupted, missing, or unparsable file. Standard AI evaluation was skipped."}
+            }
+            extraction_degraded_flag = True
+        else:
+            # AI Parsing
+            extraction_data = await parse_resume_with_ai(resume_text, job_id, job.description, job.experience_level)
+            extraction_degraded_flag = extraction_data.pop("extraction_degraded", False)
 
         # Store extraction (Versioning + Upsert pattern)
         resume_extraction = db.query(ResumeExtraction).filter(ResumeExtraction.application_id == application_id).first()
@@ -1576,6 +1590,11 @@ async def delete_application(
     validate_hr_ownership(app, current_user, resource_name="application")
 
     try:
+        # Explicitly delete ResumeExtraction to prevent ForeignKeyViolation
+        # (Table missing ON DELETE CASCADE and relationship has passive_deletes=True)
+        from app.domain.models import ResumeExtraction
+        db.query(ResumeExtraction).filter(ResumeExtraction.application_id == application_id).delete()
+        
         db.delete(app)
         db.commit()
     except Exception as e:

@@ -390,6 +390,17 @@ class ResumeExtractionResponse(BaseModel):
     reasoning: Optional[dict] = None
     created_at: datetime
     
+    @field_validator('reasoning', mode='before')
+    @classmethod
+    def parse_reasoning(cls, v):
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except Exception:
+                pass
+        return v
+    
     class Config:
         from_attributes = True
 
@@ -421,6 +432,17 @@ class InterviewReportResponse(BaseModel):
     confidence_score: Optional[float] = None
     reasoning: Optional[dict] = None
     created_at: datetime
+    
+    @field_validator('reasoning', mode='before')
+    @classmethod
+    def parse_reasoning(cls, v):
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except Exception:
+                pass
+        return v
     
     class Config:
         from_attributes = True

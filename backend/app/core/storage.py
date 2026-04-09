@@ -72,7 +72,16 @@ def upload_file(bucket: str, path: str, content: bytes, content_type: str = "app
         log_json(logger, "storage_upload_mock_skipped", level="warning", extra={"bucket": bucket, "path": path, "error": "File too large"})
         return None
     
-    logger.info(f"MOCK STORAGE: Uploaded {len(content)} bytes to {bucket}/{path}")
+    import os
+    mock_storage_dir = os.path.join(settings.base_dir, "..", "tmp", "mock_storage", bucket)
+    os.makedirs(mock_storage_dir, exist_ok=True)
+    # Flatten the path to avoid directory traversal
+    safe_path = path.replace("/", "_").replace("\\", "_")
+    file_path = os.path.join(mock_storage_dir, safe_path)
+    with open(file_path, "wb") as f:
+        f.write(content)
+        
+    logger.info(f"MOCK STORAGE: Saved {len(content)} bytes to {file_path}")
     return path
 
 def delete_file(bucket: str, path: str):
@@ -84,10 +93,12 @@ def get_signed_url(bucket: str, path: str, expires_in: int = 3600) -> Optional[s
     """MOCK: Generate a placeholder signed URL."""
     if not path:
         return None
-    return f"https://mock-storage.local/{bucket}/{path}?expires={expires_in}"
+    safe_path = path.replace("/", "_").replace("\\", "_")
+    return f"http://localhost:10000/mock_storage/{bucket}/{safe_path}"
 
 def get_public_url(bucket: str, path: str) -> Optional[str]:
     """MOCK: Generate a placeholder public URL."""
     if not path:
         return None
-    return f"https://mock-storage.local/public/{bucket}/{path}"
+    safe_path = path.replace("/", "_").replace("\\", "_")
+    return f"http://localhost:10000/mock_storage/{bucket}/{safe_path}"
