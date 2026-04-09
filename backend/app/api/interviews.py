@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, BackgroundTasks, Body
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload, load_only
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
@@ -1785,14 +1785,15 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     interview.first_level_score = interview_score
     
     # 2.5 Update Application Status via State Machine
-    if interview.application and interview.status == "completed":
+    if interview.application:
         from app.services.state_machine import CandidateStateMachine, TransitionAction
         fsm = CandidateStateMachine(db)
         try:
-            fsm.transition(interview.application, TransitionAction.SYSTEM_INTERVIEW_COMPLETE)
+            # Ifすでに interview_completed ならスキップ
+            if interview.application.status != "interview_completed":
+                fsm.transition(interview.application, TransitionAction.SYSTEM_INTERVIEW_COMPLETE)
         except Exception as e:
             logger.warning(f"FSM transition failed for interview {interview_id}: {e}")
-            # Fallback only if FSM fails (shouldn't happen with system action)
             interview.application.status = "interview_completed"
             
         # ── Phase 6: Critical Audit Logging ──
@@ -1877,7 +1878,7 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
         if isinstance(detailed_feedback_val, (dict, list)):
             detailed_feedback_val = json.dumps(detailed_feedback_val)
             
-        rec_raw = str(report_data.get("recommendation", "consider")).lower()
+        rec_val = str(report_data.get("recommendation", "consider")).lower()
         if existing_report:
             report = existing_report
             report.overall_score = report_data["overall_score"]
@@ -1947,7 +1948,7 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
 async def end_interview(
     request: Request,
     interview_id: int,
-    data: dict = None,
+    data: dict = Body(None),
     interview_session: Interview = Depends(get_current_interview),
     db: Session = Depends(get_db)
 ):
@@ -2006,6 +2007,23 @@ async def end_interview(
         if len(answered) < len(questions) and len(questions) > 0:
             if len(questions) - len(answered) > 3:
                 raise HTTPException(status_code=400, detail=f"Please answer all questions before ending. Missing: {len(questions) - len(answered)}")
+
+    # 1.5 Handle termination reason if provided
+    if data and data.get("termination_reason"):
+        from app.domain.models import InterviewIssue
+        reason = data["termination_reason"]
+        logger.warning(f"Manual termination requested for interview {interview_id}: {reason}")
+        _set_interview_status(interview, "terminated")
+        issue = InterviewIssue(
+            interview_id=interview_id,
+            candidate_name=interview.application.candidate_name if interview.application else "Candidate",
+            candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
+            issue_type="proctoring",
+            description=reason,
+            status="resolved"
+        )
+        db.add(issue)
+        db.commit()
 
     # 2. Finalize and Generate Report
     report = await _finalize_interview_and_report_internal(db, interview_id)
