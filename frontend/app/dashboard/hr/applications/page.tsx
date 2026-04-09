@@ -124,16 +124,17 @@ export default function HRApplicationsPage() {
   }, [statusFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
 
   const {
-    data: swrApplications = [],
+    data: paginatedData,
     error,
     isLoading: isSwrLoading,
     mutate,
-  } = useSWR<Application[]>(
+  } = useSWR<{ items: Application[]; total: number; pages: number }>(
     applicationsListUrl,
-    (url: string) => fetcher<Application[]>(url),
+    (url: string) => fetcher<{ items: Application[]; total: number; pages: number }>(url),
     { keepPreviousData: true },
   );
 
+  const swrApplications = paginatedData?.items || [];
   const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const isLoading = isSwrLoading || isMagicLoading;
 
@@ -239,7 +240,7 @@ export default function HRApplicationsPage() {
     new Set(applications.map((app) => app.job.title)),
   ).sort(), [applications]);
 
-  const hasMoreApplications = applications.length === APPLICATIONS_PAGE_SIZE;
+  const hasMoreApplications = paginatedData ? applicationsPage < paginatedData.pages : false;
 
   const getStatusColor = (status: string) => {
     switch (status) {

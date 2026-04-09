@@ -381,7 +381,9 @@ export default function HRApplicationDetailPage() {
                                                             <TooltipContent className="max-w-xs border-indigo-100 shadow-xl p-3">
                                                                 <p className="text-xs font-bold mb-1 text-indigo-900">AI Scoring Reasoning</p>
                                                                 <p className="text-[11px] leading-relaxed text-slate-700">
-                                                                    {resumeExtraction.reasoning || "Automated analysis based on core skill density and experience verification."}
+                                                                    {(typeof resumeExtraction.reasoning === 'object' && resumeExtraction.reasoning !== null) 
+                                                                        ? (resumeExtraction.reasoning.ai_justification || "Automated analysis based on core skill density and experience verification.") 
+                                                                        : (resumeExtraction.reasoning || "Automated analysis based on core skill density and experience verification.")}
                                                                 </p>
                                                             </TooltipContent>
                                                         </Tooltip>
@@ -552,7 +554,9 @@ export default function HRApplicationDetailPage() {
                                                         <TooltipContent className="max-w-xs border-orange-100 shadow-xl p-3">
                                                             <p className="text-xs font-bold mb-1 text-orange-900">Interview Insight</p>
                                                             <p className="text-[11px] leading-relaxed text-slate-700">
-                                                                {report.reasoning || "Composite score derived from technical accuracy, communication, and depth analysis."}
+                                                                {(typeof report.reasoning === 'object' && report.reasoning !== null) 
+                                                                    ? (report.reasoning.ai_summary || "Composite score derived from technical accuracy, communication, and depth analysis.") 
+                                                                    : (report.reasoning || "Composite score derived from technical accuracy, communication, and depth analysis.")}
                                                             </p>
                                                         </TooltipContent>
                                                     </Tooltip>
