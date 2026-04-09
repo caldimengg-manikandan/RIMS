@@ -1,11 +1,11 @@
-import PyPDF2
+import pypdf
 import docx
 import io
 
 def parse_pdf(file) -> str:
     """Extract text from a PDF file."""
     try:
-        pdf_reader = PyPDF2.PdfReader(file)
+        pdf_reader = pypdf.PdfReader(file)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() + "\n"

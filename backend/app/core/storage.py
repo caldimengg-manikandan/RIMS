@@ -8,12 +8,8 @@ from app.core.observability import log_json
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Define buckets that should be stored locally
-LOCAL_BUCKETS = {
-    settings.supabase_bucket_resumes,
-    settings.supabase_bucket_id_photos,
-    settings.supabase_bucket_id_cards
-}
+# Define buckets that should be stored locally (empty by default to use Supabase Cloud)
+LOCAL_BUCKETS = set()
 
 # Local storage configuration
 LOCAL_STORAGE_BASE = Path("local_storage")
@@ -105,106 +101,115 @@ def get_supabase_client() -> Optional[Any]:
 
 def upload_file(bucket: str, path: str, content: bytes, content_type: str = "application/octet-stream") -> Optional[str]:
     """
-    Upload a file. RESUMES, PHOTOS, and ID CARDS are stored LOCALLY.
-    Others go to Supabase.
+    Dual-Write Strategy: Uploads the file to BOTH Local Storage and Supabase Cloud.
+    Returns the Supabase path if successful, or local path as fallback.
     """
-    if bucket in LOCAL_BUCKETS:
-        try:
-            local_file_path = _get_local_path(bucket, path)
-            with open(local_file_path, "wb") as f:
-                f.write(content)
-            logger.info(f"LOCAL STORAGE: Saved {bucket} to {local_file_path}")
-            return path
-        except Exception as e:
-            logger.error(f"Failed local upload to {bucket}/{path}: {e}")
-            return None
-    
-    # Supabase fallback
-    proxy = get_supabase_client()
-    if not proxy or not proxy.storage.real_storage:
-        logger.warning(f"Supabase not configured for cloud-only bucket: {bucket}")
-        return None
-    
+    success_flags = []
+
+    # 1. Attempt Local Write (for backup/fast access)
     try:
-        proxy.storage.real_storage.from_(bucket).upload(path, content, {"content-type": content_type, "upsert": "true"})
-        return path
+        local_file_path = _get_local_path(bucket, path)
+        local_file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(local_file_path, "wb") as f:
+            f.write(content)
+        logger.info(f"STORAGE: Saved local copy to {local_file_path}")
+        success_flags.append("local")
     except Exception as e:
-        logger.error(f"Supabase upload failed for {bucket}/{path}: {e}")
+        logger.warning(f"STORAGE: Local backup failed for {bucket}/{path}: {e}")
+
+    # 2. Attempt Supabase Upload (for cloud persistence)
+    proxy = get_supabase_client()
+    if proxy and proxy.storage.real_storage:
+        try:
+            proxy.storage.real_storage.from_(bucket).upload(
+                path, 
+                content, 
+                {"content-type": content_type, "upsert": "true"}
+            )
+            logger.info(f"STORAGE: Uploaded to Supabase bucket: {bucket}")
+            success_flags.append("cloud")
+        except Exception as e:
+            logger.error(f"STORAGE: Supabase upload failed for {bucket}/{path}: {e}")
+
+    # Return success indicator (prefer path if at least one succeeded)
+    if not success_flags:
         return None
+    return path
 
 def download_file(bucket: str, path: str) -> Optional[bytes]:
     """
-    Download a file from local storage or Supabase.
+    Hybrid Download Strategy: Prefers Local Storage (fast), fallbacks to Supabase (cloud).
     """
-    if bucket in LOCAL_BUCKETS:
-        local_file_path = _get_local_path(bucket, path)
-        if local_file_path.exists():
-            try:
-                with open(local_file_path, "rb") as f:
-                    return f.read()
-            except Exception as e:
-                logger.error(f"Failed to read local file {local_file_path}: {e}")
-                return None
-        return None
+    # 1. Try Local First
+    local_file_path = _get_local_path(bucket, path)
+    if local_file_path.exists():
+        try:
+            with open(local_file_path, "rb") as f:
+                logger.debug(f"STORAGE: Cache hit (local) for {bucket}/{path}")
+                return f.read()
+        except Exception as e:
+            logger.warning(f"STORAGE: Failed to read local copy: {e}")
 
-    # Supabase fallback
+    # 2. Fallback to Supabase
     proxy = get_supabase_client()
-    if not proxy or not proxy.storage.real_storage:
-        return None
-    
-    try:
-        return proxy.storage.real_storage.from_(bucket).download(path)
-    except Exception as e:
-        logger.error(f"Supabase download failed for {bucket}/{path}: {e}")
-        return None
+    if proxy and proxy.storage.real_storage:
+        try:
+            logger.info(f"STORAGE: Fetching from cloud for {bucket}/{path}")
+            return proxy.storage.real_storage.from_(bucket).download(path)
+        except Exception as e:
+            logger.error(f"STORAGE: Cloud download failed for {bucket}/{path}: {e}")
+            return None
+            
+    return None
 
 def delete_file(bucket: str, path: str):
     """
-    Delete a file from local storage or Supabase.
+    Delete a file from BOTH local storage and Supabase.
     """
-    if bucket in LOCAL_BUCKETS:
-        local_file_path = _get_local_path(bucket, path)
-        if local_file_path.exists():
-            try:
-                os.remove(local_file_path)
-                logger.info(f"LOCAL STORAGE: Deleted {local_file_path}")
-                return [path]
-            except Exception:
-                return []
-        return []
+    # 1. Delete Local
+    local_file_path = _get_local_path(bucket, path)
+    if local_file_path.exists():
+        try:
+            os.remove(local_file_path)
+            logger.info(f"STORAGE: Deleted local copy of {bucket}/{path}")
+        except Exception as e:
+            logger.warning(f"STORAGE: Failed to delete local copy: {e}")
 
-    # Supabase fallback
+    # 2. Delete Supabase
     proxy = get_supabase_client()
-    if not proxy or not proxy.storage.real_storage:
-        return []
-    
-    try:
-        return proxy.storage.real_storage.from_(bucket).remove([path])
-    except Exception:
-        return []
+    if proxy and proxy.storage.real_storage:
+        try:
+            return proxy.storage.real_storage.from_(bucket).remove([path])
+        except Exception:
+            return []
+    return []
 
 def get_signed_url(bucket: str, path: str, expires_in: int = 3600) -> Optional[str]:
     """
-    Get a URL. Local files return a static FastAPI URL. Others return Supabase signed URL.
+    Get a URL. Prefers Supabase signed URL for cloud accessibility, 
+    but provides a local API link if cloud is unavailable and file exists locally.
     """
     if not path:
         return None
         
-    if bucket in LOCAL_BUCKETS:
+    # Always attempt Cloud Signed URL first (better for sharing/prod)
+    proxy = get_supabase_client()
+    if proxy and proxy.storage.real_storage:
+        try:
+            res = proxy.storage.real_storage.from_(bucket).create_signed_url(path, expires_in)
+            if isinstance(res, dict) and "signedURL" in res:
+                 return res["signedURL"]
+            if res and not str(res).startswith("Error"):
+                return str(res)
+        except Exception:
+            pass
+
+    # Fallback to Local URL if file exists on disk
+    local_file_path = _get_local_path(bucket, path)
+    if local_file_path.exists():
         return _get_local_url(bucket, path)
 
-    # Supabase fallback
-    proxy = get_supabase_client()
-    if not proxy or not proxy.storage.real_storage:
-        return None
-    
-    try:
-        res = proxy.storage.real_storage.from_(bucket).create_signed_url(path, expires_in)
-        if isinstance(res, dict) and "signedURL" in res:
-             return res["signedURL"]
-        return str(res)
-    except Exception:
-        return None
+    return None
 
 def get_public_url(bucket: str, path: str) -> Optional[str]:
     """
