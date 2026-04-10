@@ -33,9 +33,25 @@ export async function POST(req: NextRequest) {
           margin: 0;
         }
         body {
-          margin: 0;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+          display: block !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
+        }
+        .page {
+          width: 210mm !important; /* Force exact A4 width */
+          height: 297mm !important; /* Force exact A4 height */
+          min-height: 297mm !important;
+          box-shadow: none !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+          position: relative !important;
+        }
+        .content {
+          padding: 80px 60px !important; /* Ensure content spacing is maintained */
         }
         * {
           -webkit-print-color-adjust: exact !important;

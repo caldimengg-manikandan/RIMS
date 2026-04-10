@@ -691,6 +691,16 @@ def complete_onboarding(
     
     check_hr_permission(current_user, application, db)
         
+    # Guard: Onboarding only allowed on or after joining date (Point 2)
+    if application.joining_date:
+        today = datetime.now(timezone.utc).date()
+        joining_date = application.joining_date.date()
+        if joining_date > today:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Candidate's joining date ({joining_date.strftime('%d %b %Y')}) has not arrived yet. Cannot onboard early."
+            )
+
     from app.services.state_machine import CandidateStateMachine, TransitionAction
     fsm = CandidateStateMachine(db)
     try:

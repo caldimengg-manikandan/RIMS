@@ -192,14 +192,96 @@ export default function OfferRespondPage() {
                         <div className="p-4 bg-red-50 text-red-700 border border-red-100 rounded-xl text-sm font-medium">
                             {message}
                         </div>
-                        <p className="text-muted-foreground text-sm">
-                            If you believe this is an error, please contact our recruitment team directly.
-                        </p>
-                        <div className="pt-6">
-                            <Button onClick={() => window.location.reload()} className="w-full h-12 rounded-xl">
-                                Contact Support
-                            </Button>
-                        </div>
+                        
+                        {!isSubmitting ? (
+                            <div className="space-y-4 pt-4 border-t">
+                                <p className="text-muted-foreground text-sm font-medium">
+                                    Experiencing an issue? Raise a support ticket and our team will get back to you.
+                                </p>
+                                
+                                <div className="space-y-3">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider ml-1">Your Registered Email</p>
+                                        <input 
+                                            type="email"
+                                            className="w-full p-3 text-sm border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+                                            placeholder="Enter the email you applied with..."
+                                            value={offerData?.candidate_email || ''}
+                                            onChange={(e) => setOfferData(prev => ({ ...prev, candidate_email: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider ml-1">Describe the Problem</p>
+                                        <textarea 
+                                            className="w-full min-h-[100px] p-4 text-sm border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+                                            placeholder="e.g. My joining date is incorrect, or the Accept button is showing an error..."
+                                            value={message}
+                                            onChange={(e) => setMessage(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <Button 
+                                    disabled={!message || !(offerData?.candidate_email)}
+                                    onClick={async () => {
+                                        setIsSubmitting(true)
+                                        const emailToUse = offerData?.candidate_email?.trim()
+                                        try {
+                                            const res = await fetch('/api/support/ticket', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ 
+                                                    email: emailToUse, 
+                                                    access_key: token || 'onboarding_error', 
+                                                    grievance_type: 'Onboarding Issue', 
+                                                    description: message 
+                                                })
+                                            })
+                                            if (res.ok) {
+                                                setMessage('')
+                                                setOfferData(prev => ({...prev, candidate_email: emailToUse}))
+                                                setView('error')
+                                                // Reset view with success msg
+                                                const d = await res.json()
+                                                alert("Ticket #"+d.id+" has been raised successfully. We will contact you at " + emailToUse)
+                                            } else {
+                                                const d = await res.json()
+                                                // If token verification failed, try with magic key automatically
+                                                if (res.status === 401 || res.status === 404) {
+                                                     const retryRes = await fetch('/api/support/ticket', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ 
+                                                            email: emailToUse, 
+                                                            access_key: 'onboarding_error', 
+                                                            grievance_type: 'Onboarding Issue (Link Error)', 
+                                                            description: `[AUTO_FALLBACK_LINK_ERROR]\nOriginal Token: ${token}\nMessage: ${message}` 
+                                                        })
+                                                     })
+                                                     if (retryRes.ok) {
+                                                        const d2 = await retryRes.json()
+                                                        alert("Ticket #"+d2.id+" raised using onboarding fallback. We found your record.")
+                                                        return
+                                                     }
+                                                }
+                                                alert(d.detail || 'Failed to raise ticket.')
+                                            }
+                                        } catch (e) {
+                                            alert('Network error.')
+                                        } finally {
+                                            setIsSubmitting(false)
+                                        }
+                                    }} 
+                                    className="w-full h-12 rounded-xl font-bold bg-slate-900 hover:bg-slate-800"
+                                >
+                                    Raise Support Ticket
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex justify-center py-4">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        )}
                     </CardContent>
                 )}
             </Card>

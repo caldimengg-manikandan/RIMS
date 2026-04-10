@@ -82,6 +82,7 @@ export default function HRApplicationsPage() {
   const [magicSearchResults, setMagicSearchResults] = useState<Application[] | null>(null);
   const [magicSearchTotal, setMagicSearchTotal] = useState(0);
   const [isMagicLoading, setIsMagicLoading] = useState(false);
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
@@ -162,7 +163,10 @@ export default function HRApplicationsPage() {
   const swrApplications = paginatedData?.items || [];
   const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const isLoading = isSwrLoading || isMagicLoading;
-  const hasMoreApplications = (applicationsPage * APPLICATIONS_PAGE_SIZE) < totalCount;
+  
+  const totalCount = isMagicSearch ? magicSearchTotal : (paginatedData?.total || 0);
+  const totalPages = isMagicSearch ? Math.ceil(magicSearchTotal / APPLICATIONS_PAGE_SIZE) : (paginatedData?.pages || 0);
+  const hasMoreApplications = applicationsPage < totalPages;
 
   const handleDecision = useCallback(async (
     applicationId: number,
@@ -318,8 +322,6 @@ export default function HRApplicationsPage() {
   const jobTitles = useMemo(() => Array.from(
     new Set(applications.map((app) => app.job.title)),
   ).sort(), [applications]);
-
-  const hasMoreApplications = paginatedData ? applicationsPage < paginatedData.pages : false;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -770,7 +772,7 @@ export default function HRApplicationsPage() {
                 </Button>
                 
                 <div className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-bold text-slate-600 border border-slate-200">
-                  Page {applicationsPage} {totalCount > 0 ? `of ${Math.ceil(totalCount / APPLICATIONS_PAGE_SIZE)}` : ''}
+                  Page {applicationsPage} {totalPages > 0 ? `of ${totalPages}` : ''}
                 </div>
 
                 <Button

@@ -102,11 +102,6 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
         .order_by(Interview.created_at.desc())
         .all()
     )
-    if not interviews:
-        raise HTTPException(
-            status_code=404,
-            detail="No interview found for this email. Please ensure you've been invited.",
-        )
 
     interview = None
     application = None

@@ -69,6 +69,8 @@ export default function OnboardingPage() {
     const [isApproveOpen, setIsApproveOpen] = useState(false)
     const [isCaptureOpen, setIsCaptureOpen] = useState(false)
     const [activeCaptureId, setActiveCaptureId] = useState<number | null>(null)
+    const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
     const handleApprove = async (candidate: any) => {
         try {
@@ -77,7 +79,7 @@ export default function OnboardingPage() {
             mutate()
             setIsApproveOpen(false)
         } catch (error) {
-            toast({ title: "Error", description: "Only Super Admin can approve offer letters", variant: "destructive" })
+            toast({ title: "Error", description: "Failed to approve offer letter. Please check permissions.", variant: "destructive" })
         }
     }
 
@@ -98,6 +100,16 @@ export default function OnboardingPage() {
             mutate()
         } catch (error) {
             toast({ title: "Error", description: "Failed to generate ID card", variant: "destructive" })
+        }
+    }
+
+    const handlePreviewOffer = async (id: number) => {
+        try {
+            const res = await APIClient.get(`/api/onboarding/applications/${id}/offer-preview`) as any
+            setPreviewHtml(res.html)
+            setIsPreviewOpen(true)
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to load offer preview", variant: "destructive" })
         }
     }
 
@@ -161,10 +173,8 @@ export default function OnboardingPage() {
                         <TableHeader>
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
                                 <TableHead className="font-bold py-4">Candidate</TableHead>
-                                <TableHead className="font-bold">Joining Date</TableHead>
-                                <TableHead className="font-bold text-center">Approval</TableHead>
-                                <TableHead className="font-bold text-center">Email Status</TableHead>
-                                <TableHead className="font-bold text-center">Response</TableHead>
+                                <TableHead className="font-bold">Job & Joining</TableHead>
+                                <TableHead className="font-bold text-center">Lifecycle Status</TableHead>
                                 <TableHead className="font-bold text-right pr-6">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -203,86 +213,56 @@ export default function OnboardingPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {candidate.joining_date ? (
-                                                <div className="flex items-center gap-2 text-sm font-medium">
-                                                    <Calendar className="h-3.5 w-3.5 text-primary opacity-60" />
-                                                    {new Date(candidate.joining_date).toLocaleDateString()}
+                                            <div>
+                                                <div className="text-sm font-medium">{candidate.job?.title || 'Unknown Role'}</div>
+                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1">
+                                                    <Calendar className="h-3 w-3 opacity-60" />
+                                                    {candidate.joining_date ? new Date(candidate.joining_date).toLocaleDateString() : 'Date TBD'}
                                                 </div>
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground italic">Not Set</span>
-                                            )}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Badge 
-                                                variant="outline"
-                                                className={`text-[10px] uppercase font-bold tracking-tighter ${
-                                                    candidate.offer_approval_status === 'approved' 
-                                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                                                        : candidate.status === 'pending_approval'
-                                                            ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                                            : 'bg-slate-50 text-slate-400'
-                                                }`}
-                                            >
-                                                {candidate.offer_approval_status || 'pending'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            {(() => {
-                                                const isExpired = candidate.offer_token_expiry && new Date(candidate.offer_token_expiry) < new Date();
-                                                if (isExpired && candidate.offer_response_status === 'pending') {
-                                                    return <Badge variant="destructive" className="text-[10px] uppercase font-bold tracking-tighter bg-red-600">Expired</Badge>;
-                                                }
-                                                if (candidate.offer_email_status === 'sent') {
-                                                    return <Badge className="bg-blue-500 text-[10px] uppercase font-bold tracking-tighter">Sent</Badge>;
-                                                }
-                                                if (candidate.offer_email_status === 'failed') {
-                                                    return (
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <Badge variant="destructive" className="text-[10px] uppercase font-bold tracking-tighter">Failed</Badge>
-                                                            {candidate.offer_email_retry_count > 0 && (
-                                                                <span className="text-[9px] text-amber-600 font-bold uppercase">Retry #{candidate.offer_email_retry_count}</span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                }
-                                                return <span className="text-[10px] text-muted-foreground">-</span>;
-                                            })()}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <Badge 
-                                                    variant="outline"
-                                                    className={`text-[10px] uppercase font-bold tracking-tighter ${
-                                                        candidate.offer_response_status === 'accepted' 
-                                                            ? 'bg-emerald-500 text-white border-none' 
-                                                            : candidate.offer_response_status === 'rejected'
-                                                                ? 'bg-destructive text-white border-none'
-                                                                : 'bg-slate-100 text-slate-400'
-                                                    }`}
-                                                >
-                                                    {candidate.offer_response_status || 'pending'}
-                                                </Badge>
-                                                {candidate.offer_token_used && candidate.offer_response_status !== 'pending' && (
-                                                    <span className="text-[9px] text-emerald-600 font-bold uppercase">Response Verified</span>
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                {(() => {
+                                                    if (candidate.status === 'onboarded') return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] uppercase">🏁 Onboarded</Badge>;
+                                                    if (candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
+                                                    if (candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
+                                                    
+                                                    if (candidate.offer_email_status === 'sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
+                                                    if (candidate.status === 'pending_approval') return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] uppercase animate-pulse">⏳ Approval Pending</Badge>;
+                                                    
+                                                    return <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">📄 Staging</Badge>;
+                                                })()}
+                                                
+                                                {candidate.offer_token_expiry && new Date(candidate.offer_token_expiry) < new Date() && candidate.offer_response_status === 'pending' && (
+                                                    <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter">Link Expired</span>
                                                 )}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             <div className="flex items-center justify-end gap-2">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    className="h-8 w-8 p-0"
+                                                    onClick={() => handlePreviewOffer(candidate.id)}
+                                                >
+                                                    <Eye className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
                                                 {candidate.status === 'hired' && (
                                                     <SendOfferDialog 
                                                         applicationId={candidate.id}
                                                         candidateName={candidate.candidate_name}
                                                         onSuccess={() => mutate()}
                                                         trigger={
-                                                            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs border-primary text-primary hover:bg-primary/10">
+                                                            <Button size="sm" className="h-8 gap-1.5 text-xs font-black shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
                                                                 <Send className="h-3.5 w-3.5" />
-                                                                Request Offer
+                                                                Issue Offer Letter
                                                             </Button>
                                                         }
                                                     />
                                                 )}
-                                                {candidate.status === 'pending_approval' && user?.role === 'super_admin' && (
+                                                {candidate.status === 'pending_approval' && (user?.role === 'super_admin' || user?.role === 'hr') && (
                                                     <Button 
                                                         size="sm" 
                                                         variant="outline" 
@@ -319,7 +299,7 @@ export default function OnboardingPage() {
                                                                 }}
                                                             >
                                                                 <Camera className="h-3.5 w-3.5" />
-                                                                Capture Photo
+                                                                Add Photo
                                                             </Button>
                                                         ) : !candidate.id_card_url ? (
                                                             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-amber-600 border-amber-500 hover:bg-amber-50" onClick={() => handleGenerateID(candidate.id)}>
@@ -404,6 +384,87 @@ export default function OnboardingPage() {
                     onSuccess={() => mutate()}
                 />
             )}
+
+            <Dialog open={isApproveOpen} onOpenChange={setIsApproveOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Finalize Offer Approval</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to approve the offer for <strong>{approvingCandidate?.candidate_name}</strong>? 
+                            This will generate the final PDF and email it to the candidate immediately.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsApproveOpen(false)}>Cancel</Button>
+                        <Button 
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                            onClick={() => handleApprove(approvingCandidate)}
+                        >
+                            Confirm & Send
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+                    <DialogHeader className="p-6 border-b bg-muted/30">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <DialogTitle className="flex items-center gap-2 text-xl">
+                                    <Eye className="h-5 w-5 text-blue-500" />
+                                    Offer Letter Preview
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Review the generated offer letter. This is exactly what the candidate will see.
+                                </DialogDescription>
+                            </div>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-2"
+                                onClick={() => {
+                                    const win = window.open('', '_blank');
+                                    win?.document.write(previewHtml || '');
+                                    win?.document.close();
+                                }}
+                            >
+                                <Download className="h-3.5 w-3.5" />
+                                Open in New Tab
+                            </Button>
+                        </div>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 bg-muted/10 p-4 md:p-8 overflow-y-auto overflow-x-hidden flex justify-center items-start">
+                        <div className="w-full flex justify-center origin-top transform scale-75 md:scale-85 lg:scale-90 transition-transform duration-300">
+                            <Card className="w-[210mm] min-h-[297mm] bg-white shadow-2xl overflow-hidden border-none">
+                                {previewHtml ? (
+                                    <iframe 
+                                        className="w-full h-full min-h-[297mm] border-none"
+                                        srcDoc={previewHtml}
+                                        title="Offer Preview"
+                                    />
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-96 text-muted-foreground gap-4">
+                                        <RefreshCw className="h-8 w-8 animate-spin opacity-20" />
+                                        <p className="italic font-medium">Rendering pixel-perfect preview...</p>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+                    </div>
+                    
+                    <DialogFooter className="p-4 border-t bg-white">
+                        <Button 
+                            variant="secondary" 
+                            className="font-bold border-none"
+                            onClick={() => setIsPreviewOpen(false)}
+                        >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

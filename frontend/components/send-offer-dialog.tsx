@@ -23,14 +23,19 @@ export function SendOfferDialog({ applicationId, candidateName, onSuccess, trigg
 
         setLoading(true)
         try {
-            await APIClient.post(`/api/onboarding/applications/${applicationId}/send-offer?joining_date=${joiningDate}`, {})
-            toast({ title: "Request Sent", description: `Offer approval request sent to Super Admin for ${candidateName}` })
+            // Always auto_approve for job owners as requested
+            const url = `/api/onboarding/applications/${applicationId}/send-offer?joining_date=${joiningDate}&auto_approve=true`
+            await APIClient.post(url, {})
+            toast({ 
+                title: "Offer Released", 
+                description: `Offer letter has been sent directly to ${candidateName}.` 
+            })
             setOpen(false)
             onSuccess()
         } catch (error: any) {
             toast({ 
                 title: "Failed", 
-                description: error.response?.data?.detail || error.message || "Could not request offer approval", 
+                description: error.response?.data?.detail || error.message || "Could not process offer", 
                 variant: "destructive" 
             })
         } finally {
@@ -45,33 +50,36 @@ export function SendOfferDialog({ applicationId, candidateName, onSuccess, trigg
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Request Offer Approval</DialogTitle>
+                    <DialogTitle className="text-xl font-black">Issue Offer Letter</DialogTitle>
                     <DialogDescription>
-                        Stage the offer for {candidateName}. This will be sent to the Super Admin for final approval.
+                        Set the joining date and release the offer letter to <strong>{candidateName}</strong> immediately.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="joining_date">Expected Joining Date</Label>
+                        <Label htmlFor="joining_date" className="font-bold">Joining Date</Label>
                         <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                             <Input 
                                 id="joining_date" 
                                 type="date" 
-                                className="pl-10"
+                                className="pl-10 h-10 border-primary/20 focus-visible:ring-primary"
                                 value={joiningDate}
                                 onChange={(e) => setJoiningDate(e.target.value)}
                             />
                         </div>
                     </div>
-                    <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-700 font-medium font-sans leading-relaxed">
-                        Important: Once you request approval, the offer template will be snapshot. Ensure Branding and HR Email are correct in Settings before proceeding.
-                    </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSend} disabled={loading} className="font-bold">
-                        {loading ? "Staging..." : "Request Approval"}
+                    <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handleSend} 
+                        disabled={loading} 
+                        className="font-black bg-primary hover:bg-primary/90 px-8"
+                    >
+                        {loading ? "Releasing..." : "Release Offer"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

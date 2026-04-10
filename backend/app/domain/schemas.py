@@ -276,9 +276,17 @@ class TransitionResponse(BaseModel):
     email_type: Optional[str] = None
 
 
+class JobSummary(BaseModel):
+    id: int
+    title: str
+
+    class Config:
+        from_attributes = True
+
 class ApplicationResponse(BaseModel):
     id: int
     job_id: int
+    job: Optional[JobSummary] = None
     candidate_name: str
     candidate_email: str
     candidate_phone: Optional[str] = None
