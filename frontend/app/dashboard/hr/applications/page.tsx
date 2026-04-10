@@ -159,10 +159,12 @@ export default function HRApplicationsPage() {
     { keepPreviousData: true },
   );
 
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
+
   const swrApplications = paginatedData?.items || [];
   const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
+  const totalCount = isMagicSearch ? magicSearchTotal : (paginatedData?.total || 0);
   const isLoading = isSwrLoading || isMagicLoading;
-  const hasMoreApplications = (applicationsPage * APPLICATIONS_PAGE_SIZE) < totalCount;
 
   const handleDecision = useCallback(async (
     applicationId: number,

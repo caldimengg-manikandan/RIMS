@@ -186,12 +186,12 @@ async def apply_for_job(
     db: Session = Depends(get_db)
 ):
     """Apply for a job with resume (Public endpoint)"""
-    # Strict input validation
-    # Name: at least two words, alphabetic only (plus spaces)
-    if not candidate_name or len(candidate_name.split()) < 2 or not all(part.isalpha() for part in candidate_name.split()):
+    # Name: at least two words, alphabetic-focused regex (allows hyphens, apostrophes, and spaces)
+    name_regex = r"^[a-zA-Z]+(?:['\-\s][a-zA-Z]+)*$"
+    if not candidate_name or len(candidate_name.split()) < 2 or not re.match(name_regex, candidate_name.strip()):
         raise HTTPException(
             status_code=400,
-            detail="Valid full name required (at least two words, alphabetic characters only)."
+            detail="Valid full name required (at least two words, containing letters, hyphens, or apostrophes)."
         )
 
     request_id = None

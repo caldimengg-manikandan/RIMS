@@ -67,11 +67,14 @@ function InterviewAccessForm() {
     const paramHash = `${e}-${k}`
     if (e && k && hasAttemptedRef.current !== paramHash) {
       hasAttemptedRef.current = paramHash
-      setLoading(true)
+      
+      // Auto-trigger security check
+      if (!loading) setLoading(true)
+      
       autoAccessStartedRef.current = setTimeout(() => {
         autoAccessStartedRef.current = null
         void handleSubmit(e, k)
-      }, 1000)
+      }, 600)
     }
 
     return () => {

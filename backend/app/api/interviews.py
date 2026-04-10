@@ -1749,8 +1749,8 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     from app.services.ai_service import generate_interview_report
     from app.domain.models import InterviewReport, InterviewQuestion, InterviewAnswer, Notification
     
-    # 1. Fetch live interview state
-    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    # 1. Fetch live interview state with row-level lock to prevent double reporting
+    interview = db.query(Interview).filter(Interview.id == interview_id).with_for_update().first()
     if not interview:
         logger.error(f"Finalization failed: Interview {interview_id} not found.")
         return None
@@ -2177,6 +2177,11 @@ def get_interview_report(
         InterviewReport.interview_id == interview_id
     ).first()
     
+    # Task: On-the-fly report generation fallback
+    if not report and interview.status in ["completed", "terminated"]:
+        logger.info(f"Report missing for finished interview {interview_id}. Generating on-the-fly.")
+        report = await _finalize_interview_and_report_internal(db, interview_id)
+        
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

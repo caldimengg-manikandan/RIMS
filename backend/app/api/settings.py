@@ -3,13 +3,16 @@ from sqlalchemy.orm import Session
 from app.infrastructure.database import get_db
 from app.domain.models import User, GlobalSettings
 from app.domain.schemas import GlobalSettingsUpdate, GlobalSettingsResponse
-from app.core.auth import get_current_hr
+from app.core.auth import get_current_user, get_current_hr
 import json
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 @router.get("/", response_model=GlobalSettingsResponse)
-def get_settings(db: Session = Depends(get_db)):
+def get_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Fetch global settings."""
     settings_records = db.query(GlobalSettings).all()
     settings_dict = {s.key: s.value for s in settings_records}

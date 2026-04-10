@@ -26,7 +26,7 @@ async def process_interview_message(session_id: str, data: dict):
     try:
         # 1. Fetch persistent session state
         interview_id = int(session_id) if str(session_id).isdigit() else 0
-        interview = db.query(Interview).filter(Interview.id == interview_id).first()
+        interview = db.query(Interview).filter(Interview.id == interview_id).with_for_update().first()
         
         if not interview:
             await session_manager.send_personal_message({"type": "error", "message": "Invalid session."}, session_id)
@@ -93,19 +93,25 @@ async def process_interview_message(session_id: str, data: dict):
             # Immediate acknowledgment
             await session_manager.send_personal_message({"type": "system", "message": "Evaluating your answer..."}, session_id)
 
-            # Evaluate answer (using existing orchestrator)
+            # Evaluate answer using the rubric from the question (if available)
+            rubric = current_q.expected_points if isinstance(current_q.expected_points, list) else []
             eval_result = await evaluate_answer(
                 current_q.question_text,
                 answer_text,
-                "technical" 
+                rubric or ["Technical concept", "Practical application"]
             )
 
-            # Persist the answer
+            # Persist the answer with detailed metrics
             ans = InterviewAnswer(
                 interview_id=interview_id,
                 question_id=current_q.id,
                 answer_text=answer_text,
                 answer_score=eval_result.get("technical_accuracy", 5.0),
+                technical_score=eval_result.get("technical_accuracy", 5.0),
+                completeness_score=eval_result.get("completeness", 5.0),
+                clarity_score=eval_result.get("clarity", 5.0),
+                depth_score=eval_result.get("depth", 5.0),
+                practicality_score=eval_result.get("practicality", 5.0),
                 answer_evaluation=json.dumps(eval_result)
             )
             db.add(ans)
@@ -129,6 +135,14 @@ async def process_interview_message(session_id: str, data: dict):
                 interview.status = "completed"
                 interview.ended_at = datetime.now(timezone.utc)
                 db.commit()
+                
+                # Critical: Trigger final report generation for WebSocket interviews
+                try:
+                    from app.api.interviews import _finalize_interview_and_report_internal
+                    await _finalize_interview_and_report_internal(db, interview_id)
+                except Exception as final_err:
+                    logger.error(f"Failed to auto-generate report on finish: {final_err}")
+                
                 await session_manager.send_personal_message({"type": "end", "message": "Interview Complete. Grading..."}, session_id)
             else:
                 await _generate_and_send_next_question(db, interview, session_id)
@@ -159,20 +173,24 @@ async def _generate_and_send_next_question(db, interview, session_id: str):
         interview.current_difficulty or "medium"
     )
     
-    question_text = ""
-    if isinstance(question_data_list, list) and len(question_data_list) > 0:
+    # Extract question and rubric
+    question_text = "Describe your experience with production systems."
+    expected_points = ["Technical depth", "Problem solving"]
+    
+    if isinstance(question_data_list, dict):
+        question_text = question_data_list.get("question", question_text)
+        expected_points = question_data_list.get("expected_points", expected_points)
+    elif isinstance(question_data_list, list) and len(question_data_list) > 0:
+        # Fallback for older list-based legacy response
         question_text = question_data_list[0]
-    elif isinstance(question_data_list, dict):
-        question_text = question_data_list.get("question", "Describe your experience with production systems.")
-    else:
-        question_text = str(question_data_list)
 
-    # Persist the question
+    # Persist the question with its rubric
     new_q = InterviewQuestion(
         interview_id=interview.id,
         question_number=interview.questions_asked + 1,
         question_text=question_text,
-        question_type="adaptive"
+        question_type="adaptive",
+        expected_points=expected_points
     )
     db.add(new_q)
     db.commit()

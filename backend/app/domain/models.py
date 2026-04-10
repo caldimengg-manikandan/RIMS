@@ -307,11 +307,12 @@ class InterviewQuestion(Base):
     interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, index=True)
     question_number = Column(Integer, nullable=False)
     question_text = Column(Text, nullable=False)
-    question_type = Column(String(50))  # 'aptitude', 'behavioral', 'technical', 'follow_up'
+    question_type = Column(String(100))  # 'aptitude', 'behavioral', 'technical', 'follow_up'
+    expected_points = Column(JSON, nullable=True) # AI-generated rubric for this question
     options = Column(Text, nullable=True)  # JSON array for multiple choice options
     correct_answer = Column(Text, nullable=True)
-    ai_generated_at = Column(DateTime, default=datetime.datetime.now(timezone.utc))
-    created_at = Column(DateTime, default=datetime.datetime.now(timezone.utc))
+    ai_generated_at = Column(DateTime, default=datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
     
     # Relationships
     interview = relationship("Interview", back_populates="questions")

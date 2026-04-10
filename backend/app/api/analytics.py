@@ -84,7 +84,8 @@ async def get_interview_reports(
         # We now include ALL interviews that have been completed, terminated, or are in a review/hired/rejected state.
         REPORTABLE_APPLICATION_STATUSES = [
             "interview_completed", "review_later", "hired", "rejected", 
-            "offer_sent", "pending_approval", "accepted", "onboarded"
+            "offer_sent", "pending_approval", "accepted", "onboarded",
+            "physical_interview"
         ]
         
         query = query.filter(or_(
