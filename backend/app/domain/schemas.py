@@ -299,10 +299,10 @@ class ApplicationResponse(BaseModel):
     video_url: Optional[str] = None
     
     # Enterprise Scoring (Point 2)
-    resume_score: Optional[float] = 0
-    aptitude_score: Optional[float] = 0
-    interview_score: Optional[float] = 0
-    composite_score: float = 0.0
+    resume_score: Optional[float] = 0.0
+    aptitude_score: Optional[float] = 0.0
+    interview_score: Optional[float] = 0.0
+    composite_score: Optional[float] = 0.0
     recommendation: Optional[str] = None
     
     applied_at: datetime

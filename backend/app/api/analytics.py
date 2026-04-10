@@ -179,7 +179,13 @@ async def get_interview_reports(
                     if ans:
                         if ans.answer_evaluation:
                             try:
-                                evaluation = json.loads(ans.answer_evaluation) if isinstance(ans.answer_evaluation, str) else ans.answer_evaluation
+                                if isinstance(ans.answer_evaluation, str):
+                                    if ans.answer_evaluation == "[DECRYPTION_ERROR]":
+                                        evaluation = {}
+                                    else:
+                                        evaluation = json.loads(ans.answer_evaluation)
+                                else:
+                                    evaluation = ans.answer_evaluation
                             except Exception:
                                 evaluation = {}
                         evaluation.setdefault("overall", ans.answer_score or 0)
@@ -219,7 +225,12 @@ async def get_interview_reports(
             # Fallback to detailed_feedback if no questions found
             if not question_evaluations and not aptitude_question_evaluations and hasattr(report, 'detailed_feedback') and report.detailed_feedback:
                 try:
-                    feedback_data = json.loads(report.detailed_feedback) if isinstance(report.detailed_feedback, str) else report.detailed_feedback
+                    raw_feedback = report.detailed_feedback
+                    if raw_feedback == "[DECRYPTION_ERROR]":
+                        feedback_data = {}
+                    else:
+                        feedback_data = json.loads(raw_feedback) if isinstance(raw_feedback, str) else raw_feedback
+                    
                     feedback_list = []
                     if isinstance(feedback_data, dict):
                         feedback_list = feedback_data.get("question_evaluations", [])

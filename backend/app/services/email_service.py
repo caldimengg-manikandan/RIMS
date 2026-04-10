@@ -406,10 +406,13 @@ async def send_simple_email(to_email: str, subject: str, message: str):
     result = await send_email_async(to_email, subject, body)
     return result["success"]
 
-async def send_offer_letter_email(to_email: str, candidate_name: str, company_name: str, offer_letter_path: str, accept_link: str = "", reject_link: str = ""):
+async def send_offer_letter_email(to_email: str, candidate_name: str, company_name: str, offer_letter_url: str, accept_link: str = "", reject_link: str = ""):
+    """
+    Sends offer letter email with attachment. 
+    Supports both local paths and cloud URLs (will download before attaching).
+    """
     subject = f"Offer Letter - {company_name}"
     
-    # Template with buttons (Point 2)
     body = f"""
     <html><body style="font-family:sans-serif; color:#333; line-height: 1.6;">
       <h2 style="color: #2563eb;">Hello {candidate_name},</h2>
@@ -430,13 +433,32 @@ async def send_offer_letter_email(to_email: str, candidate_name: str, company_na
     </body></html>
     """
     attachments = []
-    if offer_letter_path and os.path.exists(offer_letter_path):
-        with open(offer_letter_path, "rb") as f:
-            content = base64.b64encode(f.read()).decode("utf-8")
-            attachments.append({
-                "filename": os.path.basename(offer_letter_path),
-                "content": content,
-            })
+    if offer_letter_url:
+        try:
+            # Check if it's a URL or local path
+            if offer_letter_url.startswith("http"):
+                # Download from Cloud (e.g. Supabase)
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    logger.info(f"Downloading offer letter from cloud: {offer_letter_url}")
+                    resp = await client.get(offer_letter_url)
+                    if resp.status_code == 200:
+                        content = base64.b64encode(resp.content).decode("utf-8")
+                        attachments.append({
+                            "filename": f"Offer_Letter_{candidate_name.replace(' ', '_')}.pdf",
+                            "content": content,
+                        })
+                    else:
+                        logger.error(f"Failed to download offer letter for attachment: {resp.status_code}")
+            elif os.path.exists(offer_letter_url):
+                with open(offer_letter_url, "rb") as f:
+                    content = base64.b64encode(f.read()).decode("utf-8")
+                    attachments.append({
+                        "filename": os.path.basename(offer_letter_url),
+                        "content": content,
+                    })
+        except Exception as e:
+            logger.error(f"Email attachment processing failed: {e}")
+
     result = await send_email_async(to_email, subject, body, attachments if attachments else None)
     if not result["success"]:
         logger.warning(f"Offer Letter Email failed for {to_email}: {result['error']}")

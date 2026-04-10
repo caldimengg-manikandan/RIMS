@@ -136,7 +136,7 @@ class Application(Base):
     failure_reason = Column(String(1000))
     last_attempt_at = Column(DateTime)
     background_task_id = Column(String(100))
-    scoring_metadata = Column(Text) # JSON string of weights/logic
+    scoring_metadata = Column(JSON, nullable=True) # JSON string of weights/logic
 
     # Relationships
     job = relationship("Job", back_populates="applications")
@@ -429,7 +429,8 @@ class InterviewIssue(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, index=True)
+    interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=True, index=True)
+    application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=True, index=True)
     candidate_name = Column(String(255))
     candidate_email = Column(String(255), index=True)
     issue_type = Column(String(100), index=True)  # 'interruption', 'technical', 'misconduct_appeal'
@@ -441,6 +442,7 @@ class InterviewIssue(Base):
     resolved_at = Column(DateTime)
 
     # Relationships
+    application = relationship("Application", backref="interview_issues")
     interview = relationship("Interview", back_populates="issues")
 
 

@@ -27,6 +27,10 @@ import secrets
 import time
 from collections import defaultdict
 
+import httpx
+from jinja2 import Template
+from app.services.offer_letter_service import get_offer_letter_data
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -47,6 +51,18 @@ def generate_short_id():
     """Point 1: Secure URL-safe short IDs."""
     return secrets.token_urlsafe(8)
 
+def log_audit(db: Session, action: str, resource_id: int, user_id: Optional[int], details: dict, ip: str = "unknown", is_critical: bool = False):
+    """Helper to record audit logs without repeating logic."""
+    from app.services.candidate_service import CandidateService
+    CandidateService(db).create_audit_log(
+        user_id=user_id,
+        action=action,
+        resource_type="Application",
+        resource_id=resource_id,
+        details=details,
+        is_critical=is_critical
+    )
+
 async def get_application_by_short_id(db: Session, short_id: str, lock=False):
     """Secure lookup: short_id -> Application."""
     query = db.query(Application).filter(Application.offer_short_id == short_id)
@@ -56,24 +72,93 @@ async def get_application_by_short_id(db: Session, short_id: str, lock=False):
 
 from app.services.state_machine import CandidateStateMachine, TransitionAction, CandidateState
 
-def log_audit(db: Session, action: str, application_id: int, user_id: Optional[int], details: dict, ip: Optional[str] = None, is_critical: bool = False):
-    """Helper to record system events in AuditLog table."""
-    from app.domain.models import AuditLog
-    try:
-        log = AuditLog(
-            user_id=user_id,
-            action=action,
-            resource_type="Application",
-            resource_id=application_id,
-            details=json.dumps(details),
-            ip_address=ip,
-            is_critical=is_critical
-        )
-        db.add(log)
-        # Flush to DB but don't commit (let parent manage transaction)
-        db.flush()
-    except Exception as e:
-        logger.error(f"Audit log failed: {e}")
+def check_hr_permission(user: User, application: Application, db: Session):
+    """
+    Restrict HR access to only their own candidates/jobs.
+    Super Admins can access everything.
+    """
+    if user.role == "super_admin":
+        return True
+    
+    # Check if HR is the owner of the application or the job
+    job = application.job
+    if not job:
+        from app.domain.models import Job
+        job = db.query(Job).filter(Job.id == application.job_id).first()
+    
+    if application.hr_id == user.id or (job and job.hr_id == user.id):
+        return True
+        
+    raise HTTPException(
+        status_code=403, 
+        detail="Access denied: You can only manage candidates for your own jobs."
+    )
+
+async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: str) -> str:
+    """
+    Calls the frontend Puppeteer service to generate a pixel-perfect PDF.
+    Uploads the resulting binary to Supabase.
+    """
+    settings = get_settings()
+    # Call the Next.js API route we created
+    # Note: Using localhost:3000 assuming frontend is running there during dev
+    pdf_service_url = f"{settings.frontend_base_url}/api/generate-pdf"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                pdf_service_url,
+                json={"html": html_content},
+                timeout=30.0
+            )
+            if response.status_code != 200:
+                logger.error(f"Puppeteer service failed: {response.status_code} - {response.text}")
+                raise Exception("PDF Generation service is currently unavailable.")
+            
+            pdf_bytes = response.content
+            storage_path = f"onboarding/{filename}"
+            
+            # Upload to Supabase
+            return upload_file(bucket, storage_path, pdf_bytes, content_type="application/pdf")
+        except Exception as e:
+            logger.error(f"Puppeteer transition failed: {e}")
+            raise e
+
+@router.get("/applications/{application_id}/offer-preview")
+async def get_hr_offer_preview(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_hr)
+):
+    """HR-only preview of the rendered offer letter HTML."""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    check_hr_permission(current_user, application, db)
+    
+    settings_records = db.query(GlobalSettings).all()
+    gs = {s.key: s.value for s in settings_records}
+    
+    template_str = application.offer_template_snapshot or gs.get("offer_letter_template", "")
+    if not template_str:
+         raise HTTPException(status_code=400, detail="No offer template found. Set one in Settings.")
+    
+    data = get_offer_letter_data(
+        application.candidate_name,
+        application.job.title if application.job else "N/A",
+        (application.job.domain if application.job else "Engineering") or "Engineering",
+        application.joining_date or datetime.now(),
+        gs.get("company_name", "Our Company"),
+        gs.get("company_logo_url", ""),
+        gs.get("hr_email", ""),
+        gs.get("hr_name", ""),
+        gs.get("hr_phone", ""),
+        gs.get("company_address", "")
+    )
+    
+    template = Template(template_str)
+    return {"html": template.render(**data)}
 
 @router.get("/candidates", response_model=List[ApplicationResponse])
 def get_onboarding_candidates(
@@ -105,79 +190,131 @@ def get_onboarding_candidates(
 async def request_offer_approval(
     application_id: int,
     joining_date: str,
+    background_tasks: BackgroundTasks, # Added background_tasks here
+    auto_approve: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_hr)
 ):
-    """Stage offer for approval. Status moves to PENDING_APPROVAL."""
+    """Stage offer for approval or release directly if auto_approve is True."""
     application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
+    check_hr_permission(current_user, application, db)
+    
     # State Machine Hardening
     from app.services.state_machine import CandidateStateMachine, TransitionAction
     fsm = CandidateStateMachine(db)
-    try:
-        fsm.transition(application, TransitionAction.SEND_FOR_APPROVAL, user_id=current_user.id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
     
-    if application.offer_sent:
-        raise HTTPException(status_code=400, detail="Offer letter already sent")
-
     # Validation Layer
     if not application.candidate_email:
         raise HTTPException(status_code=400, detail="Candidate email is missing")
 
-    settings_records = db.query(GlobalSettings).all()
-    gs = {s.key: s.value for s in settings_records}
-    
     try:
         jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
     except:
         raise HTTPException(status_code=400, detail="Invalid joining date format")
 
-    # Update DB for approval flow
-    application.status = "pending_approval"
-    application.offer_approval_status = "pending"
+    settings_records = db.query(GlobalSettings).all()
+    gs = {s.key: s.value for s in settings_records}
+    
+    # Initialize basic offer fields
     application.joining_date = jdate
     application.offer_template_snapshot = gs.get("offer_letter_template")
-    
-    # Secure Token & Short ID (Point 1)
     application.offer_token = str(uuid.uuid4())
     application.offer_short_id = generate_short_id()
     application.offer_token_expiry = datetime.now(timezone.utc) + timedelta(days=7)
     application.offer_token_used = False
-    
-    db.add(application)
-    # log_audit no longer commits internally in my next step
-    log_audit(db, "OFFER_STAGED", application.id, current_user.id, {"joining_date": joining_date}, is_critical=True)
 
-    # Notify Super Admins
-    super_admins = db.query(User).filter(User.role == "super_admin").all()
-    for admin in super_admins:
-        notif = Notification(
-            user_id=admin.id,
-            notification_type="OFFER_PENDING",
-            title="Offer Approval Required",
-            message=f"HR {current_user.full_name} has requested approval for {application.candidate_name}'s offer letter.",
-            related_application_id=application.id
-        )
-        db.add(notif)
-    
-    db.commit()
-    return {"status": "success", "message": "Offer letter staged for approval"}
+    if auto_approve:
+        # Direct release path
+        try:
+            fsm.transition(application, TransitionAction.SEND_OFFER, user_id=current_user.id)
+            
+            # Generate PDF via Puppeteer (Phase 7 implementation)
+            filename = f"offer_{application.id}_{int(datetime.now().timestamp())}.pdf"
+            
+            data = get_offer_letter_data(
+                candidate_name=application.candidate_name,
+                job_role=application.job.title if application.job else "N/A",
+                department=(application.job.domain if application.job else "Engineering") or "Engineering",
+                joining_date=application.joining_date,
+                company_name=gs.get("company_name", "Our Company"),
+                logo_url=gs.get("company_logo_url", ""),
+                hr_email=gs.get("hr_email", ""),
+                hr_name=gs.get("hr_name", ""),
+                hr_phone=gs.get("hr_phone", ""),
+                company_address=gs.get("company_address", "")
+            )
+            
+            from jinja2 import Template
+            template_str = application.offer_template_snapshot or gs.get("offer_letter_template", "")
+            if not template_str:
+                raise Exception("No offer template found in settings.")
+            template = Template(template_str)
+            rendered_html = template.render(**data)
+            
+            final_path = await generate_pdf_via_puppeteer(rendered_html, filename, settings.supabase_bucket_offers)
+            
+            application.offer_pdf_path = final_path
+            application.offer_sent = True
+            application.offer_sent_date = datetime.now(timezone.utc)
+            application.offer_approval_status = "approved"
+            application.offer_approved_by = current_user.id
+            application.offer_approved_at = datetime.now(timezone.utc)
+            application.offer_email_status = "pending"
+            
+            db.add(application)
+            db.commit()
+            
+            background_tasks.add_task(process_offer_email, application.id, application.offer_pdf_path, gs.get("company_name", "Our Company"))
+            return {"status": "success", "message": "Offer released directly to candidate."}
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"OFFER_RELEASE_CRITICAL_FAILURE: {str(e)}\n{traceback.format_exc()}")
+            db.rollback()
+            raise HTTPException(status_code=400, detail=f"Direct release failed: {str(e)}")
+    else:
+        # Staging path
+        try:
+            fsm.transition(application, TransitionAction.SEND_FOR_APPROVAL, user_id=current_user.id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        application.status = "pending_approval"
+        application.offer_approval_status = "pending"
+        
+        db.add(application)
+        log_audit(db, "OFFER_STAGED", application.id, current_user.id, {"joining_date": joining_date}, is_critical=True)
+
+        # Notify Super Admins
+        super_admins = db.query(User).filter(User.role == "super_admin").all()
+        for admin in super_admins:
+            db.add(Notification(
+                user_id=admin.id,
+                notification_type="OFFER_PENDING",
+                title="Offer Approval Required",
+                message=f"HR {current_user.full_name} has requested approval for {application.candidate_name}'s offer letter.",
+                related_application_id=application.id
+            ))
+        
+        db.commit()
+        return {"status": "success", "message": "Offer letter staged for approval"}
 
 @router.post("/applications/{application_id}/approve-offer")
 async def approve_offer_letter(
     application_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_hr)
 ):
-    """Admin approves the offer. Only SUPER_ADMIN allowed."""
+    """HR/Admin approves the offer. Only the Job Owner or Super Admin allowed."""
     application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    check_hr_permission(current_user, application, db)
     
     # State Machine Hardening
     from app.services.state_machine import CandidateStateMachine, TransitionAction
@@ -190,14 +327,9 @@ async def approve_offer_letter(
     settings_records = db.query(GlobalSettings).all()
     gs = {s.key: s.value for s in settings_records}
     
-    # PDF Generation (In-memory to Supabase)
+    # PDF Generation (Puppeteer + Supabase)
     try:
-        from io import BytesIO
-        from xhtml2pdf import pisa
-        from jinja2 import Template
-        
         filename = f"offer_{application.id}_{int(datetime.now().timestamp())}.pdf"
-        storage_path = f"generated_offers/{filename}"
         
         data = get_offer_letter_data(
             candidate_name=application.candidate_name,
@@ -212,28 +344,23 @@ async def approve_offer_letter(
             company_address=gs.get("company_address", "")
         )
         
-        template = Template(application.offer_template_snapshot)
+        template_str = application.offer_template_snapshot or gs.get("offer_letter_template", "")
+        if not template_str:
+            raise Exception("Offer template missing")
+            
+        from jinja2 import Template
+        template = Template(template_str)
         rendered_html = template.render(**data)
         
-        pdf_buffer = BytesIO()
-        pisa_status = pisa.CreatePDF(rendered_html, dest=pdf_buffer)
+        # Call Puppeteer (Phase 7 implementation)
+        final_path = await generate_pdf_via_puppeteer(rendered_html, filename, settings.supabase_bucket_offers)
         
-        pdf_buffer.seek(0)
-
-        # Save PDF to a local temp file so the email task can attach it
-        import tempfile
-        pdf_dir = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "offer_pdfs")
-        os.makedirs(pdf_dir, exist_ok=True)
-        pdf_local_path = os.path.join(pdf_dir, filename)
-        with open(pdf_local_path, "wb") as f:
-            f.write(pdf_buffer.read())
-
-        application.offer_pdf_path = pdf_local_path
-        logger.info(f"Offer PDF generated and saved: {pdf_local_path}")
+        application.offer_pdf_path = final_path
+        logger.info(f"Offer PDF generated and uploaded to Supabase: {final_path}")
     except Exception as e:
-        logger.error(f"Offer PDF error: {e}")
+        logger.error(f"Puppeteer transition failed: {e}")
         log_audit(db, "OFFER_PDF_FAILED", application.id, current_user.id, {"error": str(e)})
-        raise HTTPException(status_code=500, detail="Document generation failure. Process aborted.")
+        raise HTTPException(status_code=500, detail=f"Document generation failure: {str(e)}")
 
     # Update Application State
     application.offer_sent = True
@@ -245,23 +372,20 @@ async def approve_offer_letter(
     
     db.add(application)
     
-    # Composite transaction: Status + Audit + Notifications (Phase 8 Fix)
-    # Status and Audit are handled by fsm.transition earlier, just updating extra fields here.
-
     # Notify HR
     if application.hr_id:
         db.add(Notification(
             user_id=application.hr_id,
             notification_type="OFFER_APPROVED",
             title="Offer Approved",
-            message=f"Offer letter for {application.candidate_name} has been approved.",
+            message=f"Offer letter for {application.candidate_name} has been approved and moved to transit.",
             related_application_id=application.id
         ))
 
     db.commit()
 
     background_tasks.add_task(process_offer_email, application.id, application.offer_pdf_path, gs.get("company_name", "Our Company"))
-    return {"status": "success", "message": "Offer letter approved and email triggered"}
+    return {"status": "success", "message": "Offer letter approved and email scheduled."}
 
 async def process_offer_email(application_id: int, storage_path: str, company_name: str):
     """Internal task with email-safe short links (Point 1)."""
@@ -271,18 +395,20 @@ async def process_offer_email(application_id: int, storage_path: str, company_na
         application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
         if not application or application.offer_email_status == "sent": return
 
-        final_path = application.offer_pdf_path or storage_path
+        final_storage_path = application.offer_pdf_path or storage_path
+        # Generate signed URL for attachment processing (Cloud Storage aware)
+        final_url = get_signed_url(settings.supabase_bucket_offers, final_storage_path)
         
-        # Link Safety: Use Short ID (Point 1)
+        # Link Safety: Use offer_token (UUID) for better uniqueness
         base_url = settings.frontend_base_url 
-        accept_link = f"{base_url}/offer/respond?ref={application.offer_short_id}&intent=accept"
-        reject_link = f"{base_url}/offer/respond?ref={application.offer_short_id}&intent=reject"
+        accept_link = f"{base_url}/offer/respond?token={application.offer_token}&intent=accept"
+        reject_link = f"{base_url}/offer/respond?token={application.offer_token}&intent=reject"
 
         await send_offer_letter_email(
             to_email=application.candidate_email,
             candidate_name=application.candidate_name,
             company_name=company_name,
-            offer_letter_path=final_path,
+            offer_letter_url=final_url,
             accept_link=accept_link,
             reject_link=reject_link
         )
@@ -303,10 +429,10 @@ async def process_offer_email(application_id: int, storage_path: str, company_na
         db.close()
 
 @router.get("/offer")
-async def get_offer_preview(request: Request, ref: str, db: Session = Depends(get_db)):
-    """Public preview with short_id support & rate limiting (Point 1 & 6)."""
+async def get_offer_preview(request: Request, token: str, db: Session = Depends(get_db)):
+    """Public preview with UUID token support & rate limiting."""
     rate_limit(request.client.host if request.client else "unknown")
-    application = await get_application_by_short_id(db, ref)
+    application = db.query(Application).filter(Application.offer_token == token).first()
     if not application:
         raise HTTPException(status_code=404, detail="Offer not found")
     
@@ -343,8 +469,10 @@ async def capture_photo(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    if application.status != "onboarded":
-        raise HTTPException(status_code=400, detail="Photo capture only allowed for onboarded candidates.")
+    check_hr_permission(current_user, application, db)
+    
+    if application.status not in ["accepted", "onboarded"]:
+        raise HTTPException(status_code=400, detail="Photo capture only allowed for candidates who have accepted the offer.")
 
     try:
         content = await photo.read()
@@ -367,7 +495,7 @@ async def capture_photo(
     return {"status": "success", "candidate_photo_path": application.candidate_photo_path}
 
 @router.post("/applications/{application_id}/generate-id-card")
-def generate_id_card(
+async def generate_id_card(
     application_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_hr)
@@ -376,72 +504,46 @@ def generate_id_card(
     application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    check_hr_permission(current_user, application, db)
         
     if not application.candidate_photo_path:
         raise HTTPException(status_code=400, detail="Cannot generate ID card without photo capture.")
 
     # 1. Generate unique Employee ID if not exists
     if not application.employee_id:
-        from app.services.candidate_service import CandidateService
         application.employee_id = generate_employee_id(db)
 
-    # 2. PDF Generation with ReportLab in-memory
+    # 2. Premium PDF Generation with Puppeteer
     try:
-        packet = BytesIO()
-        # ID Card Dimensions (Credit Card Size aprox 3.375 x 2.125 inches)
-        # We'll use 4x3 for a clear large card
-        c = canvas.Canvas(packet, pagesize=(4*inch, 3*inch))
+        from jinja2 import Environment, FileSystemLoader
+        templates_dir = os.path.join(os.path.dirname(__file__), "..", "resources", "templates")
+        env = Environment(loader=FileSystemLoader(templates_dir))
+        template = env.get_template("id_card_template.html")
         
-        # Draw Border
-        c.setStrokeColorRGB(0.1, 0.1, 0.4)
-        c.rect(0.1*inch, 0.1*inch, 3.8*inch, 2.8*inch, stroke=1, fill=0)
+        gs = {s.key: s.value for s in db.query(GlobalSettings).all()}
         
-        # Header / Company Name
-        settings_dict = {s.key: s.value for s in db.query(GlobalSettings).all()}
-        company_name = settings_dict.get("company_name", "RIMS RECRUITMENT")
-        c.setFont("Helvetica-Bold", 14)
-        c.drawCentredString(2*inch, 2.6*inch, company_name)
+        # Get Candidate Photo (signed URL)
+        photo_url = get_signed_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
         
-        # Draw Photo from Supabase
-        try:
-            supabase = get_supabase_client()
-            photo_bytes = supabase.storage.from_(settings.supabase_bucket_id_photos).download(application.candidate_photo_path)
-            if photo_bytes:
-                img_stream = BytesIO(photo_bytes)
-                from reportlab.lib.utils import ImageReader
-                c.drawImage(ImageReader(img_stream), 0.2*inch, 0.8*inch, width=1.2*inch, height=1.4*inch)
-            else:
-                c.rect(0.2*inch, 0.8*inch, 1.2*inch, 1.4*inch, stroke=1)
-                c.setFont("Helvetica", 8)
-                c.drawString(0.3*inch, 1.5*inch, "PHOTO MISSING")
-        except Exception as e:
-            logger.error(f"Error fetching photo for ID card: {e}")
-            c.rect(0.2*inch, 0.8*inch, 1.2*inch, 1.4*inch, stroke=1)
-            c.setFont("Helvetica", 8)
-            c.drawString(0.3*inch, 1.5*inch, "FETCH ERROR")
-
-        # Details
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(1.5*inch, 2.0*inch, f"NAME: {application.candidate_name}")
-        c.setFont("Helvetica", 10)
-        c.drawString(1.5*inch, 1.8*inch, f"ID: {application.employee_id}")
-        c.drawString(1.5*inch, 1.6*inch, f"ROLE: {application.job.title if application.job else 'N/A'}")
-        c.drawString(1.5*inch, 1.4*inch, f"DEPT: {(application.job.domain if application.job else 'Engineering') or 'HR'}")
-        c.drawString(1.5*inch, 1.2*inch, f"JOINING: {application.joining_date.strftime('%Y-%m-%d') if application.joining_date else 'N/A'}")
+        data = {
+            "company_name": gs.get("company_name", "CALDIM ENGINEERING"),
+            "logo_url": gs.get("company_logo_url", ""),
+            "candidate_name": application.candidate_name,
+            "employee_id": application.employee_id,
+            "job_role": application.job.title if application.job else "N/A",
+            "department": (application.job.domain if application.job else "Engineering") or "HR",
+            "joining_date": application.joining_date.strftime('%d %b %Y') if application.joining_date else "N/A",
+            "photo_url": photo_url
+        }
         
-        c.setFont("Helvetica-Oblique", 8)
-        c.drawCentredString(2*inch, 0.3*inch, "This card is company property. If found return to HR.")
+        rendered_html = template.render(**data)
         
-        c.showPage()
-        c.save()
-        
-        # Upload to Supabase
         filename = f"id_card_{application.employee_id}.pdf"
-        storage_path = f"{application_id}/{filename}"
-        packet.seek(0)
-        returned_path = upload_file(settings.supabase_bucket_id_cards, storage_path, packet.read(), content_type="application/pdf")
+        cloud_path = await generate_pdf_via_puppeteer(rendered_html, filename, settings.supabase_bucket_id_cards)
         
-        application.id_card_url = returned_path
+        application.id_card_url = cloud_path
+        
         from app.services.candidate_service import CandidateService
         CandidateService(db).create_audit_log(current_user.id, "ID_CARD_GENERATED", "Application", application_id, {"employee_id": application.employee_id})
         db.commit()
@@ -475,10 +577,10 @@ async def respond_to_offer(request: Request, response_req: OfferResponseRequest,
     """Public response with Row Locking & Short ID support (Point 1, 2, 6)."""
     rate_limit(request.client.host if request.client else "unknown")
     
-    # Use Short ID lookup with ROW LOCKING (Point 2)
-    application = await get_application_by_short_id(db, response_req.token, lock=True)
+    # Use offer_token (UUID) lookup with ROW LOCKING
+    application = db.query(Application).filter(Application.offer_token == response_req.token).with_for_update().first()
     if not application:
-        raise HTTPException(status_code=404, detail="Reference ID not found")
+        raise HTTPException(status_code=404, detail="Offer token not found")
     
     if application.offer_token_used:
          raise HTTPException(status_code=400, detail="Response already processed. Access locked.")
@@ -534,7 +636,7 @@ async def bulk_approve_offers(
     application_ids: List[int],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin)
+    current_user: User = Depends(get_current_hr)
 ):
     """Bulk approve offers."""
     results = {"success": [], "failed": []}
@@ -586,6 +688,8 @@ def complete_onboarding(
     application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    check_hr_permission(current_user, application, db)
         
     from app.services.state_machine import CandidateStateMachine, TransitionAction
     fsm = CandidateStateMachine(db)

@@ -122,6 +122,7 @@ _TRANSITION_TABLE: Dict[Tuple[CandidateState, TransitionAction], CandidateState]
     # 7. hired -> pending_approval -> offer_sent
     (CandidateState.HIRED, TransitionAction.SEND_FOR_APPROVAL): CandidateState.PENDING_APPROVAL,
     (CandidateState.PENDING_APPROVAL, TransitionAction.SEND_OFFER): CandidateState.OFFER_SENT,
+    (CandidateState.HIRED, TransitionAction.SEND_OFFER): CandidateState.OFFER_SENT,
     (CandidateState.PENDING_APPROVAL, TransitionAction.REJECT): CandidateState.REJECTED,
     (CandidateState.HIRED, TransitionAction.REJECT): CandidateState.REJECTED,
 

@@ -109,15 +109,53 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
         )
 
     interview = None
+    application = None
+    
+    # Try finding an interview first (standard flow)
+    interviews = (
+        db.query(Interview)
+        .join(Application)
+        .filter(Application.candidate_email == email)
+        .options(
+            joinedload(Interview.application).joinedload(Application.job),
+            joinedload(Interview.report),
+        )
+        .order_by(Interview.created_at.desc())
+        .all()
+    )
+    
     for inv in interviews:
         try:
             if inv.access_key_hash and verify_password(access_key, inv.access_key_hash):
                 interview = inv
+                application = inv.application
                 break
         except Exception:
             continue
 
-    if not interview:
+    # Magic bypass for onboarding errors (as requested)
+    if not interview and access_key == "onboarding_error":
+        application = db.query(Application).filter(Application.candidate_email == email).first()
+        if not application:
+            log_json(
+                logger,
+                "support_ticket_rejected",
+                request_id=get_request_id(request),
+                endpoint="/api/support/ticket",
+                status=404,
+                level="warning",
+                extra={"reason": "candidate_not_found", "email_hash": safe_hash(email)},
+            )
+            raise HTTPException(status_code=404, detail="No application found for this email.")
+
+    # If no interview matched, try finding by offer_token (standard onboarding flow)
+    if not interview and not application:
+        application = db.query(Application).filter(
+            Application.candidate_email == email,
+            Application.offer_token == access_key # Candidates use their offer token as key
+        ).first()
+        
+    if not application and not interview:
         log_json(
             logger,
             "support_ticket_rejected",
@@ -125,36 +163,36 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
             endpoint="/api/support/ticket",
             status=401,
             level="warning",
-            extra={"reason": "invalid_access_key", "email_hash": safe_hash(email)},
+            extra={"reason": "invalid_credentials", "email_hash": safe_hash(email)},
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid access key. Use the key from your invitation email.",
+            detail="Invalid credentials. Use the access key from your email.",
         )
 
-    # Ensure support applies only to valid finished sessions.
-    report = getattr(interview, "report", None)
-    termination_reason = getattr(report, "termination_reason", None) if report else None
-    valid_states = {"completed", "cancelled"}
-    if interview.status not in valid_states and not termination_reason:
-        log_json(
-            logger,
-            "support_ticket_rejected",
-            request_id=get_request_id(request),
-            endpoint="/api/support/ticket",
-            status=400,
-            level="warning",
-            extra={
-                "reason": "invalid_interview_state",
-                "email_hash": safe_hash(email),
-                "interview_id": interview.id,
-                "interview_status": interview.status,
-            },
-        )
-        raise HTTPException(
-            status_code=400,
-            detail="Support requests can only be created after an interview is completed or terminated.",
-        )
+    # Ensure support applies only to valid states (if interview exists)
+    if interview:
+        report = getattr(interview, "report", None)
+        termination_reason = getattr(report, "termination_reason", None) if report else None
+        valid_states = {"completed", "cancelled"}
+        if interview.status not in valid_states and not termination_reason:
+            log_json(
+                logger,
+                "support_ticket_rejected",
+                request_id=get_request_id(request),
+                endpoint="/api/support/ticket",
+                status=400,
+                level="warning",
+                extra={
+                    "reason": "invalid_interview_state",
+                    "email_hash": safe_hash(email),
+                    "interview_id": interview.id,
+                },
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Support requests can only be created after an interview is completed or terminated.",
+            )
 
     # Prevent duplicate active tickets for same interview.
     existing_pending = (
@@ -199,13 +237,17 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
         f"interview_id={interview.id}",
         f"candidate_name={candidate_name or ''}",
         f"job_role={job_role or ''}",
-        f"interview_status={interview.status or ''}",
+        f"interview_status={interview.status if interview else 'N/A'}",
         f"termination_reason={termination_reason or ''}",
     ]
     composed_description = f"{description.strip()}\n\n" + "\n".join(structured_context)
 
+    interview_id = interview.id if interview else None
+    app_id = application.id if application else None
+
     ticket = InterviewIssue(
-        interview_id=interview.id,
+        interview_id=interview_id,
+        application_id=app_id,
         candidate_name=candidate_name,
         candidate_email=email,
         issue_type=issue_type,

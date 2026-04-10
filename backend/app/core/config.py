@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_bucket_resumes: str = "resumes"
+    supabase_bucket_offers: str = "offers"
     supabase_bucket_id_cards: str = "id-cards"
     supabase_bucket_id_photos: str = "id-photos"
     supabase_bucket_videos: str = "videos"

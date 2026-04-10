@@ -88,35 +88,31 @@ def encrypt_field(plaintext: str) -> str:
 def decrypt_field(ciphertext: str) -> str:
     """Decrypt a Fernet token back to plaintext.
     
-    - None → returns None
-    - Empty string → returns empty string
-    - Not encrypted (plain text) → returns as-is (backward compatibility)
-    - Invalid Fernet token → raises ValueError with explicit message
+    - None -> returns None
+    - Empty string -> returns empty string
+    - Not encrypted (plain text) -> returns as-is
+    - Invalid Fernet token -> returns "[DECRYPTION_ERROR]"
     """
     if ciphertext is None:
         return None
-    if not isinstance(ciphertext, str):
+    if not isinstance(ciphertext, str) or not ciphertext:
         return ciphertext
-    if not ciphertext:
-        return ciphertext  # Empty string passthrough
-    if not is_encrypted(ciphertext):
-        return ciphertext  # Plain text — backward compat for pre-migration data
     
-    f = _get_fernet()
+    # Backward compatibility: if it doesn't look like a Fernet token, assume it's plain text
+    if not is_encrypted(ciphertext):
+        return ciphertext
+    
     try:
+        f = _get_fernet()
         plaintext = f.decrypt(ciphertext.encode("utf-8"))
         return plaintext.decode("utf-8")
-    except InvalidToken:
-        # Graceful fallback: log the error but do NOT crash the application.
-        # This allows the buyer to see that a key mismatch exists without the app becoming unusable.
+    except (InvalidToken, Exception) as e:
+        # Graceful fallback to avoid crashing endpoints like /api/notifications
         logger.warning(
-            f"DECRYPTION FAILURE: The current ENCRYPTION_KEY cannot decrypt this value. "
-            f"Data may have been encrypted with a different key. "
-            f"Check .env or secrets.txt. Ciphertext preview: {ciphertext[:20]}..."
+            f"DECRYPTION FAILURE: {type(e).__name__} during decryption. "
+            f"Data may be corrupted or encrypted with a different key. "
+            f"Placeholder returned. Preview: {ciphertext[:15]}..."
         )
-        return "[DECRYPTION_ERROR]"
-    except Exception as e:
-        logger.error(f"Unexpected error during decryption: {e}")
         return "[DECRYPTION_ERROR]"
 
 

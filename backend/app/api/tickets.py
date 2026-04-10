@@ -130,12 +130,12 @@ def get_ticket_count(
     q = (
         db.query(InterviewIssue)
         .outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
-        .outerjoin(Application, Interview.application_id == Application.id)
+        .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
         .outerjoin(Job, Application.job_id == Job.id)
         .filter(InterviewIssue.status == "pending")
     )
     if current_user.role != "super_admin":
-        q = q.filter(Job.hr_id == current_user.id)
+        q = q.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
     count = q.count()
     return {"count": count}
 
@@ -150,15 +150,17 @@ def get_tickets(
     query = db.query(InterviewIssue).options(
         joinedload(InterviewIssue.interview)
         .joinedload(Interview.application)
+        .joinedload(Application.job),
+        joinedload(InterviewIssue.application)
         .joinedload(Application.job)
     )
     query = (
         query.outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
-        .outerjoin(Application, Interview.application_id == Application.id)
+        .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
         .outerjoin(Job, Application.job_id == Job.id)
     )
     if current_user.role != "super_admin":
-        query = query.filter(Job.hr_id == current_user.id)
+        query = query.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
     if status != 'all':
         query = query.filter(InterviewIssue.status == status)
 
@@ -166,23 +168,23 @@ def get_tickets(
     
     # Hybrid population
     for t in tickets:
-        if t.interview:
-            t.application_id = t.interview.application_id
-            t.test_id = t.interview.test_id
-            if t.interview.application:
-                t.job_id = t.interview.application.job_id
-                if t.interview.application.job:
-                    t.job_identifier = t.interview.application.job.job_id
-                else:
-                    t.job_identifier = None
+        app = t.application or (t.interview.application if t.interview else None)
+        if app:
+            t.application_id = app.id
+            t.job_id = app.job_id
+            if app.job:
+                t.job_identifier = app.job.job_id
             else:
-                t.job_id = None
                 t.job_identifier = None
         else:
             t.application_id = None
-            t.test_id = None
             t.job_id = None
             t.job_identifier = None
+            
+        if t.interview:
+            t.test_id = t.interview.test_id
+        else:
+            t.test_id = None
         
     return tickets
 
@@ -206,12 +208,13 @@ async def resolve_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    interview = ticket.interview
-    if not interview or not interview.application or not interview.application.job:
-        if current_user.role != "super_admin":
-            raise HTTPException(status_code=404, detail="Ticket not found")
-    elif current_user.role != "super_admin":
-        validate_hr_ownership(interview.application.job, current_user, resource_name="ticket")
+    app = ticket.application or (ticket.interview.application if ticket.interview else None)
+    job = app.job if app else None
+
+    if current_user.role != "super_admin":
+        if not job:
+            raise HTTPException(status_code=403, detail="Unauthorized to resolve this ticket.")
+        validate_hr_ownership(job, current_user, resource_name="ticket")
 
     # Status update logic
     if resolution.action == 'reissue_key':
@@ -225,9 +228,9 @@ async def resolve_ticket(
     ticket.hr_response = resolution.hr_response
     ticket.resolved_at = datetime.now() if ticket.status != 'pending' else None
     
-    interview = ticket.interview
-    if not interview:
-        # If interview is missing, we can only update the ticket status, not send emails or reissue
+    app = ticket.application or (ticket.interview.application if ticket.interview else None)
+    if not app:
+        # If application is missing, we can only update the ticket status, not send emails or reissue
         db.commit()
         db.refresh(ticket)
         ticket.application_id = None
@@ -236,7 +239,7 @@ async def resolve_ticket(
         ticket.job_identifier = None
         return ticket
 
-    application = interview.application
+    job_title = app.job.title if app.job else "your applied position"
     
     if resolution.action == 'reissue_key':
         # Generate new access key
@@ -262,16 +265,16 @@ async def resolve_ticket(
                 to_email=ticket.candidate_email,
                 issue_type=ticket.issue_type,
                 hr_response=resolution.hr_response,
-                job_title=application.job.title
+                job_title=job_title
             )
 
     db.commit()
     db.refresh(ticket)
     
     # Populate extra fields for response
-    ticket.application_id = application.id
-    ticket.test_id = interview.test_id
-    ticket.job_id = application.job_id
-    ticket.job_identifier = application.job.job_id
+    ticket.application_id = app.id
+    ticket.test_id = ticket.interview.test_id if ticket.interview else None
+    ticket.job_id = app.job_id
+    ticket.job_identifier = app.job.job_id if app.job else None
     
     return ticket
