@@ -2,6 +2,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
+  History,
+  AlertCircle,
+  FileCheck,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -23,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 interface Application {
   id: number;
   status: string;
+  file_status: string;
   applied_at: string;
   candidate_name: string;
   candidate_email: string;
@@ -51,6 +59,14 @@ interface Application {
 }
 
 // Backend caps `limit` to <50 for performance.
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+}
+
 const APPLICATIONS_PAGE_SIZE = 49;
 
 export default function HRApplicationsPage() {
@@ -64,6 +80,7 @@ export default function HRApplicationsPage() {
   const [dateTo, setDateTo] = useState("");
   const [isMagicSearch, setIsMagicSearch] = useState(false);
   const [magicSearchResults, setMagicSearchResults] = useState<Application[] | null>(null);
+  const [magicSearchTotal, setMagicSearchTotal] = useState(0);
   const [isMagicLoading, setIsMagicLoading] = useState(false);
 
   useEffect(() => {
@@ -71,20 +88,27 @@ export default function HRApplicationsPage() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  const handleMagicSearch = useCallback(async () => {
+  const handleMagicSearch = useCallback(async (page: number = 1) => {
     if (!searchTerm.trim()) return;
     setIsMagicLoading(true);
+    setIsMagicSearch(true);
+    setApplicationsPage(page);
     try {
-      const resp = await APIClient.post<{candidates: any[]}>(
+      const resp = await APIClient.post<any>(
         "/api/search/candidates", 
-        { query: searchTerm }
+        { 
+          query: searchTerm,
+          skip: (page - 1) * APPLICATIONS_PAGE_SIZE,
+          limit: APPLICATIONS_PAGE_SIZE
+        }
       );
-      // Map basic candidate results to Application interface for table compatibility
-      const mappedResults = resp.candidates.map(c => ({
+      
+      // Map results to the frontend Application interface
+      const mappedResults = (resp.candidates || []).map((c: any) => ({
         id: c.id,
         candidate_name: c.candidate_name,
         status: c.current_status,
-        applied_at: new Date().toISOString(), // Mock if missing, usually search returns list
+        applied_at: new Date().toISOString(), // Fallback
         job: { title: c.job_title, id: 0, job_id: "" },
         resume_extraction: { 
             resume_score: c.resume_score, 
@@ -92,10 +116,11 @@ export default function HRApplicationsPage() {
             extracted_skills: c.skills
         }
       })) as Application[];
+
       setMagicSearchResults(mappedResults);
-      setIsMagicSearch(true);
+      setMagicSearchTotal(resp.metadata?.total || 0);
     } catch (err) {
-      console.error("Magic Search Error:", err);
+      console.error("Magic Search error", err);
       alert("Magic Search failed. Falling back to keyword search.");
     } finally {
       setIsMagicLoading(false);
@@ -137,6 +162,7 @@ export default function HRApplicationsPage() {
   const swrApplications = paginatedData?.items || [];
   const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const isLoading = isSwrLoading || isMagicLoading;
+  const hasMoreApplications = (applicationsPage * APPLICATIONS_PAGE_SIZE) < totalCount;
 
   const handleDecision = useCallback(async (
     applicationId: number,
@@ -144,6 +170,7 @@ export default function HRApplicationsPage() {
     reason?: string,
     notes?: string,
   ) => {
+    setProcessingIds(prev => new Set(prev).add(applicationId));
     const actionFn = () => {
       let userComments = `Candidate ${decision} via quick action in applications list.`;
       if (decision === "rejected") {
@@ -158,24 +185,36 @@ export default function HRApplicationsPage() {
       );
     };
 
-    await performMutation<Application[]>(
-      applicationsListUrl,
-      mutate,
-      actionFn,
-      {
-        lockKey: `application-${applicationId}`,
-        optimisticData: (current: any) => {
-          if (!current) return current;
-          const items = current.items || (Array.isArray(current) ? current : []);
-          const mapped = items.map((app: any) =>
-            app.id === applicationId ? { ...app, status: decision } : app
-          );
-          return Array.isArray(current) ? mapped : { ...current, items: mapped };
-        },
-        successMessage: `Candidate ${decision} successfully`,
-        invalidateKeys: ["/api/analytics/dashboard"]
-      }
-    );
+    try {
+      await performMutation<PaginatedResponse<Application>>(
+        applicationsListUrl,
+        mutate,
+        actionFn,
+        {
+          lockKey: `application-${applicationId}`,
+          optimisticData: (current) => {
+            const defaultResp = { items: [], total: 0, page: 1, size: 20, pages: 1 };
+            const data = current || defaultResp;
+            return {
+              ...data,
+              items: data.items.map((app) =>
+                app.id === applicationId
+                  ? { ...app, status: decision }
+                  : app
+              )
+            };
+          },
+          successMessage: `Candidate ${decision} successfully`,
+          invalidateKeys: ["/api/analytics/dashboard"]
+        }
+      );
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(applicationId);
+        return next;
+      });
+    }
   }, [mutate, applicationsListUrl]);
 
   const handleTransition = useCallback(async (
@@ -183,6 +222,7 @@ export default function HRApplicationsPage() {
     action: string,
     notes?: string,
   ) => {
+    setProcessingIds(prev => new Set(prev).add(applicationId));
     let nextStatus = "applied";
     if (action === "approve_for_interview") nextStatus = "ai_interview";
     else if (action === "reject") nextStatus = "rejected";
@@ -195,23 +235,36 @@ export default function HRApplicationsPage() {
       hr_notes: notes || `Action: ${action}`,
     });
 
-    await performMutation<Application[]>(
-      applicationsListUrl,
-      mutate,
-      actionFn,
-      {
-        lockKey: `application-${applicationId}`,
-        optimisticData: (current: any) => {
-          if (!current) return current;
-          const items = current.items || (Array.isArray(current) ? current : []);
-          const mapped = items.map((app: any) =>
-            app.id === applicationId ? { ...app, status: nextStatus } : app
-          );
-          return Array.isArray(current) ? mapped : { ...current, items: mapped };
-        },
-        invalidateKeys: ["/api/analytics/dashboard"]
-      }
-    );
+    try {
+      await performMutation<PaginatedResponse<Application>>(
+        applicationsListUrl,
+        mutate,
+        actionFn,
+        {
+          lockKey: `application-${applicationId}`,
+          optimisticData: (current) => {
+            const defaultResp = { items: [], total: 0, page: 1, size: 20, pages: 1 };
+            const data = current || defaultResp;
+            return {
+              ...data,
+              items: data.items.map((app) =>
+                app.id === applicationId
+                  ? { ...app, status: nextStatus }
+                  : app
+              )
+            };
+          },
+          successMessage: `Candidate moved to ${nextStatus}`,
+          invalidateKeys: ["/api/analytics/dashboard"]
+        }
+      );
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(applicationId);
+        return next;
+      });
+    }
   }, [mutate, applicationsListUrl]);
 
   const handleHire = useCallback(async (
@@ -220,6 +273,7 @@ export default function HRApplicationsPage() {
     offerLetter: File,
     notes: string,
   ) => {
+    setProcessingIds(prev => new Set(prev).add(applicationId));
     const actionFn = () => {
       const formData = new FormData();
       formData.append("joining_date", joiningDate);
@@ -228,24 +282,36 @@ export default function HRApplicationsPage() {
       return APIClient.postFormData(`/api/decisions/applications/${applicationId}/hire`, formData);
     };
 
-    await performMutation<Application[]>(
-      applicationsListUrl,
-      mutate,
-      actionFn,
-      {
-        lockKey: `application-${applicationId}`,
-        optimisticData: (current: any) => {
-          if (!current) return current;
-          const items = current.items || (Array.isArray(current) ? current : []);
-          const mapped = items.map((app: any) =>
-            app.id === applicationId ? { ...app, status: "hired" } : app
-          );
-          return Array.isArray(current) ? mapped : { ...current, items: mapped };
-        },
-        successMessage: "Candidate hired successfully",
-        invalidateKeys: ["/api/analytics/dashboard"]
-      }
-    );
+    try {
+      await performMutation<PaginatedResponse<Application>>(
+        applicationsListUrl,
+        mutate,
+        actionFn,
+        {
+          lockKey: `application-${applicationId}`,
+          optimisticData: (current) => {
+            const defaultResp = { items: [], total: 0, page: 1, size: 20, pages: 1 };
+            const data = current || defaultResp;
+            return {
+              ...data,
+              items: data.items.map((app) =>
+                app.id === applicationId
+                  ? { ...app, status: "hired" }
+                  : app
+              )
+            };
+          },
+          successMessage: "Candidate hired successfully",
+          invalidateKeys: ["/api/analytics/dashboard"]
+        }
+      );
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(applicationId);
+        return next;
+      });
+    }
   }, [mutate, applicationsListUrl]);
 
   // Get unique job titles for the filter dropdown
@@ -317,7 +383,7 @@ export default function HRApplicationsPage() {
                 />
               </div>
               <Button 
-                onClick={handleMagicSearch}
+                onClick={() => handleMagicSearch()}
                 disabled={!searchTerm.trim() || isMagicLoading}
                 className={`h-11 px-6 rounded-xl font-bold transition-all shadow-sm ${isMagicSearch ? 'bg-primary text-primary-foreground scale-105' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
               >
@@ -550,12 +616,16 @@ export default function HRApplicationsPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={processingIds.has(app.id)}
                           className="border-primary text-primary hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
                           onClick={(e) => {
                             e.preventDefault();
                             handleTransition(app.id, "approve_for_interview");
                           }}
                         >
+                          {processingIds.has(app.id) ? (
+                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                          ) : null}
                           APPROVE FOR INTERVIEW
                         </Button>
                       )}
@@ -565,12 +635,16 @@ export default function HRApplicationsPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={processingIds.has(app.id)}
                           className="border-teal-500 text-teal-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
                           onClick={(e) => {
                             e.preventDefault();
                             handleTransition(app.id, "call_for_interview");
                           }}
                         >
+                          {processingIds.has(app.id) ? (
+                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                          ) : null}
                           CALL FOR INTERVIEW
                         </Button>
                       )}
@@ -580,12 +654,16 @@ export default function HRApplicationsPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={processingIds.has(app.id)}
                           className="border-amber-500 text-amber-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
                           onClick={(e) => {
                             e.preventDefault();
                             handleTransition(app.id, "review_later");
                           }}
                         >
+                          {processingIds.has(app.id) ? (
+                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                          ) : null}
                           REVIEW LATER
                         </Button>
                       )}
@@ -599,8 +677,12 @@ export default function HRApplicationsPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              disabled={processingIds.has(app.id)}
                               className="border-emerald-500 text-emerald-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
                             >
+                              {processingIds.has(app.id) ? (
+                                <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                              ) : null}
                               HIRE
                             </Button>
                           }
@@ -618,8 +700,12 @@ export default function HRApplicationsPage() {
                             <Button
                               variant="outline"
                               size="sm"
+                              disabled={processingIds.has(app.id)}
                               className="border-red-500 text-red-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
                             >
+                              {processingIds.has(app.id) ? (
+                                <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                              ) : null}
                               REJECT
                             </Button>
                           }
@@ -629,11 +715,23 @@ export default function HRApplicationsPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {/* Status Badge */}
                   <span
                     className={`capsule-badge text-[10px] px-2 py-0.5 ${getStatusColor(app.status)}`}
                   >
                     {app.status.replace(/_/g, " ").toUpperCase()}
                   </span>
+
+                  {/* Missing File Indicator */}
+                  {app.file_status === 'missing' && (
+                    <span className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 text-[9px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      FILE MISSING
+                    </span>
+                  )}
+
                   <span className="text-primary text-xs font-medium group-hover:underline flex items-center gap-1">
                     View Details
                     <svg
@@ -655,30 +753,41 @@ export default function HRApplicationsPage() {
             </Card>
           ))}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
-            <p className="text-sm text-muted-foreground">
-              Page {applicationsPage}
-              {hasMoreApplications ? " · Up to " + APPLICATIONS_PAGE_SIZE + " per page" : ""}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={applicationsPage <= 1 || isLoading}
-                onClick={() => setApplicationsPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!hasMoreApplications || isLoading}
-                onClick={() => setApplicationsPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
+            <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    const nextPage = applicationsPage - 1;
+                    if (isMagicSearch) handleMagicSearch(nextPage);
+                    else setApplicationsPage(nextPage);
+                  }}
+                  disabled={applicationsPage <= 1 || isLoading}
+                  className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  id="applications-prev-page"
+                >
+                  <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                </Button>
+                
+                <div className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-bold text-slate-600 border border-slate-200">
+                  Page {applicationsPage} {totalCount > 0 ? `of ${Math.ceil(totalCount / APPLICATIONS_PAGE_SIZE)}` : ''}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    const nextPage = applicationsPage + 1;
+                    if (isMagicSearch) handleMagicSearch(nextPage);
+                    else setApplicationsPage(nextPage);
+                  }}
+                  disabled={!hasMoreApplications || isLoading}
+                  className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  id="applications-next-page"
+                >
+                  Next <ChevronRight className="ml-2 h-5 w-5" />
+                </Button>
+              </div>
           </div>
         </div>
       )}

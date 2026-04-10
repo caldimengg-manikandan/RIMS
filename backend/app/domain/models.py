@@ -145,7 +145,6 @@ class Application(Base):
         back_populates="application", 
         uselist=False, 
         cascade="all, delete-orphan",
-        passive_deletes=True,
         lazy='select'
     )
     interview = relationship("Interview", back_populates="application", uselist=False, cascade="all, delete-orphan")

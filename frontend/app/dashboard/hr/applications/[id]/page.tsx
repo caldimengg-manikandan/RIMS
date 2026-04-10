@@ -477,7 +477,7 @@ export default function HRApplicationDetailPage() {
                                                                     </div>
                                                                 </div>
                                                                 <div className="bg-slate-50 p-4 rounded-xl border whitespace-pre-wrap max-h-[40vh] overflow-y-auto text-sm text-slate-700">
-                                                                    {resumeExtraction.extracted_text || resumeExtraction.summary}
+                                                                    {resumeExtraction.summary || resumeExtraction.extracted_text}
                                                                 </div>
                                                             </div>
                                                         </DialogContent>

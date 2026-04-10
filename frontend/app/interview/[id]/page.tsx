@@ -409,7 +409,45 @@ export default function InterviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentIndex, questions, isListening])
 
+    const handleViolation = useCallback(async (type: string) => {
+        if (interviewStatusRef.current !== 'active') return
+        if (finishingInterviewRef.current) return
+
+        const newWarnings = warningsRef.current + 1
+        warningsRef.current = newWarnings
+        setWarnings(newWarnings)
+
+        if (newWarnings >= 3) {
+            if (!finishingInterviewRef.current) {
+                finishingInterviewRef.current = true
+                interviewStatusRef.current = 'finishing'
+                try {
+                    const reason = `Terminated due to multiple proctoring violations: ${type}`
+                    await APIClient.postWithRequestId(
+                        `/api/interviews/${interviewId}/end`,
+                        { termination_reason: reason },
+                        `rims-${interviewId}-end-violation`,
+                    )
+                    setInterviewStatus('completed')
+                    setShowIssueDialog(true)
+                    alert("Session Terminated: Multiple proctoring violations detected (tab switching or losing focus).")
+                } catch (error) {
+                    console.log("Failed to end interview", error)
+                    interviewStatusRef.current = 'active'
+                } finally {
+                    finishingInterviewRef.current = false
+                }
+            }
+        } else {
+            toast.error(`Proctoring Warning (${newWarnings}/2): ${type}. Switching tabs or losing focus is strictly prohibited.`, {
+                duration: 6000,
+                position: 'top-center',
+            })
+        }
+    }, [interviewId])
+
     useEffect(() => {
+
         const handleVisibilityChange = async () => {
             if (document.hidden) {
                 hiddenSinceRef.current = Date.now()
@@ -557,9 +595,19 @@ export default function InterviewPage() {
     useEffect(() => {
         if (interviewStatus === 'active') {
             const handleFullscreenChange = () => {
-                setIsFullscreen(!!document.fullscreenElement)
+                const isNowFullscreen = !!document.fullscreenElement
+                setIsFullscreen(isNowFullscreen)
+                
+                if (!isNowFullscreen && interviewStatus === 'active') {
+                    // Start a timer to enforce re-entry
+                    const timer = setTimeout(() => {
+                        if (!document.fullscreenElement && interviewStatusRef.current === 'active') {
+                             handleViolation("Fullscreen Exited")
+                        }
+                    }, 15000) // 15 seconds grace period to re-enter fullscreen
+                    return () => clearTimeout(timer)
+                }
             }
-
             document.addEventListener('fullscreenchange', handleFullscreenChange)
 
             // Initial check
@@ -570,7 +618,7 @@ export default function InterviewPage() {
 
             return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
         }
-    }, [interviewStatus])
+    }, [interviewStatus, handleViolation])
 
     const formatTime = (seconds: number | null) => {
         if (seconds === null) return '--:--'
@@ -1121,6 +1169,32 @@ export default function InterviewPage() {
             <div className="w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm">
                 <div className="p-6 border-b border-slate-100">
                     <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Interview Sections</h2>
+
+                    {/* Integrity Section */}
+                    <div className="mb-8 p-4 bg-slate-900 rounded-2xl border border-white/5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-white font-black text-xs uppercase tracking-widest">Integrity Status</h3>
+                            <div className="flex gap-1">
+                                <div className={`w-2 h-2 rounded-full animate-pulse ${warnings >= 2 ? 'bg-red-500' : warnings === 1 ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 text-[10px] font-bold uppercase">Tab Warnings</span>
+                                <span className={`text-xs font-black ${warnings >= 2 ? 'text-red-400' : warnings === 1 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                    {warnings}/2
+                                </span>
+                            </div>
+                            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full transition-all duration-500 ${warnings >= 2 ? 'bg-red-500 w-full' : warnings === 1 ? 'bg-amber-500 w-1/2' : 'bg-green-500 w-0'}`}
+                                />
+                            </div>
+                            <p className="text-[9px] text-slate-500 font-medium leading-tight">
+                                3 violations will result in immediate session termination.
+                            </p>
+                        </div>
+                    </div>
 
                     {/* Aptitude Section */}
                     <div className="mb-8">

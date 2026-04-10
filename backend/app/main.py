@@ -138,6 +138,12 @@ app = FastAPI(
 )
 app.router.route_class = StandardizedAPIRoute
 
+import os
+from fastapi.staticfiles import StaticFiles
+mock_storage_dir = os.path.join(os.getcwd(), "tmp", "mock_storage")
+os.makedirs(mock_storage_dir, exist_ok=True)
+app.mount("/mock_storage", StaticFiles(directory=mock_storage_dir), name="mock_storage")
+
 import time
 app.state.start_time = time.time()
 
@@ -289,8 +295,10 @@ async def database_exception_handler(request: FastAPIRequest, exc: SQLAlchemyErr
 @app.exception_handler(Exception)
 async def general_exception_handler(request: FastAPIRequest, exc: Exception):
     import traceback
-    logger.error(f"UNHANDLED EXCEPTION: {str(exc)}\n{traceback.format_exc()}")
-    error_msg = str(exc) if settings.debug else "Internal Server Error"
+    error_msg = f"INTERNAL SERVER ERROR: {str(exc)}\n{traceback.format_exc()}"
+    logger.error(error_msg)
+    
+    detail = str(exc) if settings.debug else "An unexpected internal server error occurred."
     response = JSONResponse(
         status_code=500,
         content={
@@ -305,3 +313,9 @@ async def general_exception_handler(request: FastAPIRequest, exc: Exception):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
+
+
+#
+# Note:
+# This module must NOT start a server itself.
+# Entrypoint is enforced via `start.ps1` and `BACKEND_START_MODE=script`.

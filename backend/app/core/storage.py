@@ -134,6 +134,8 @@ def upload_file(bucket: str, path: str, content: bytes, content_type: str = "app
     # Return success indicator (prefer path if at least one succeeded)
     if not success_flags:
         return None
+    
+    logger.info(f"MOCK STORAGE: Uploaded {len(content)} bytes to {bucket}/{path}")
     return path
 
 def download_file(bucket: str, path: str) -> Optional[bytes]:
@@ -192,24 +194,18 @@ def get_signed_url(bucket: str, path: str, expires_in: int = 3600) -> Optional[s
     if not path:
         return None
         
-    # Always attempt Cloud Signed URL first (better for sharing/prod)
     proxy = get_supabase_client()
     if proxy and proxy.storage.real_storage:
         try:
             res = proxy.storage.real_storage.from_(bucket).create_signed_url(path, expires_in)
-            if isinstance(res, dict) and "signedURL" in res:
-                 return res["signedURL"]
-            if res and not str(res).startswith("Error"):
-                return str(res)
-        except Exception:
-            pass
-
-    # Fallback to Local URL if file exists on disk
-    local_file_path = _get_local_path(bucket, path)
-    if local_file_path.exists():
-        return _get_local_url(bucket, path)
-
-    return None
+            if isinstance(res, dict):
+                return res.get("signedURL") or res.get("signedUrl")
+            elif isinstance(res, str):
+                return res
+        except Exception as e:
+            logger.warning(f"STORAGE: Failed to get signed URL from cloud: {e}")
+            
+    return _get_local_url(bucket, path)
 
 def get_public_url(bucket: str, path: str) -> Optional[str]:
     """
@@ -218,15 +214,13 @@ def get_public_url(bucket: str, path: str) -> Optional[str]:
     if not path:
         return None
         
-    if bucket in LOCAL_BUCKETS:
-        return _get_local_url(bucket, path)
-
-    # Supabase fallback
     proxy = get_supabase_client()
-    if not proxy or not proxy.storage.real_storage:
-        return None
+    if proxy and proxy.storage.real_storage:
+        try:
+            res = proxy.storage.real_storage.from_(bucket).get_public_url(path)
+            if isinstance(res, str):
+                return res
+        except Exception as e:
+            logger.warning(f"STORAGE: Failed to get public URL from cloud: {e}")
     
-    try:
-        return proxy.storage.real_storage.from_(bucket).get_public_url(path)
-    except Exception:
-        return None
+    return _get_local_url(bucket, path)

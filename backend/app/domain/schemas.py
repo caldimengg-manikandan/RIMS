@@ -649,6 +649,8 @@ class GlobalSettingsUpdate(BaseModel):
     company_name: Optional[str] = None
     company_address: Optional[str] = None
     hr_email: Optional[str] = None
+    hr_name: Optional[str] = None
+    hr_phone: Optional[str] = None
     offer_letter_template: Optional[str] = None
 
 class GlobalSettingsResponse(BaseModel):
@@ -656,6 +658,8 @@ class GlobalSettingsResponse(BaseModel):
     company_name: Optional[str] = ""
     company_address: Optional[str] = ""
     hr_email: Optional[str] = ""
+    hr_name: Optional[str] = ""
+    hr_phone: Optional[str] = ""
     offer_letter_template: Optional[str] = ""
 
 # ============================================================================
