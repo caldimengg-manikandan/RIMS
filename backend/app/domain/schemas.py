@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from datetime import datetime
 import re
-from typing import Optional, List
+import json
+from typing import Optional, List, Any
 
 # ============================================================================
 # Auth Schemas
@@ -392,15 +393,14 @@ class ResumeExtractionResponse(BaseModel):
     
     @field_validator('reasoning', mode='before')
     @classmethod
-    def parse_reasoning(cls, v):
-        if isinstance(v, str):
+    def parse_reasoning_safe(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip():
             try:
-                import json
                 return json.loads(v)
-            except Exception:
-                pass
+            except json.JSONDecodeError:
+                return {"error": "Invalid format", "raw": v}
         return v
-    
+
     class Config:
         from_attributes = True
 
@@ -435,15 +435,14 @@ class InterviewReportResponse(BaseModel):
     
     @field_validator('reasoning', mode='before')
     @classmethod
-    def parse_reasoning(cls, v):
-        if isinstance(v, str):
+    def parse_reasoning_safe(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip():
             try:
-                import json
                 return json.loads(v)
-            except Exception:
-                pass
+            except json.JSONDecodeError:
+                return {"error": "Invalid format", "raw": v}
         return v
-    
+
     class Config:
         from_attributes = True
 
@@ -487,6 +486,16 @@ class InterviewAnswerResponse(BaseModel):
     reasoning: Optional[dict] = None
     submitted_at: datetime
     
+    @field_validator('reasoning', mode='before')
+    @classmethod
+    def parse_reasoning_safe(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip():
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return {"error": "Invalid format", "raw": v}
+        return v
+
     class Config:
         from_attributes = True
 

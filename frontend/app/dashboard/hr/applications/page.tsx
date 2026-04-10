@@ -149,19 +149,18 @@ export default function HRApplicationsPage() {
   }, [statusFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
 
   const {
-    data: swrData,
+    data: paginatedData,
     error,
     isLoading: isSwrLoading,
     mutate,
-  } = useSWR<PaginatedResponse<Application>>(
+  } = useSWR<{ items: Application[]; total: number; pages: number }>(
     applicationsListUrl,
-    (url: string) => fetcher<PaginatedResponse<Application>>(url),
+    (url: string) => fetcher<{ items: Application[]; total: number; pages: number }>(url),
     { keepPreviousData: true },
   );
 
-  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
-  const applications = isMagicSearch ? (magicSearchResults || []) : (swrData?.items || []);
-  const totalCount = isMagicSearch ? magicSearchTotal : (swrData?.total || 0);
+  const swrApplications = paginatedData?.items || [];
+  const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const isLoading = isSwrLoading || isMagicLoading;
   const hasMoreApplications = (applicationsPage * APPLICATIONS_PAGE_SIZE) < totalCount;
 
@@ -314,6 +313,13 @@ export default function HRApplicationsPage() {
       });
     }
   }, [mutate, applicationsListUrl]);
+
+  // Get unique job titles for the filter dropdown
+  const jobTitles = useMemo(() => Array.from(
+    new Set(applications.map((app) => app.job.title)),
+  ).sort(), [applications]);
+
+  const hasMoreApplications = paginatedData ? applicationsPage < paginatedData.pages : false;
 
   const getStatusColor = (status: string) => {
     switch (status) {

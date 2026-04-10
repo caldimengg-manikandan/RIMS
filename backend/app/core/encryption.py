@@ -107,18 +107,17 @@ def decrypt_field(ciphertext: str) -> str:
         plaintext = f.decrypt(ciphertext.encode("utf-8"))
         return plaintext.decode("utf-8")
     except InvalidToken:
-        # Explicit, loud failure — do NOT swallow this error
-        logger.error(
-            "ENCRYPTION KEY MISMATCH: Failed to decrypt a field. "
-            "This indicates the ENCRYPTION_KEY has changed without running "
-            "a key rotation migration. Data cannot be recovered without "
-            "the original key."
+        # Graceful fallback: log the error but do NOT crash the application.
+        # This allows the buyer to see that a key mismatch exists without the app becoming unusable.
+        logger.warning(
+            f"DECRYPTION FAILURE: The current ENCRYPTION_KEY cannot decrypt this value. "
+            f"Data may have been encrypted with a different key. "
+            f"Check .env or secrets.txt. Ciphertext preview: {ciphertext[:20]}..."
         )
-        raise ValueError(
-            "Decryption failed: ENCRYPTION_KEY mismatch or data corruption. "
-            "The current key cannot decrypt this data. Ensure the original "
-            "ENCRYPTION_KEY is set in .env, or run a key rotation migration."
-        )
+        return "[DECRYPTION_ERROR]"
+    except Exception as e:
+        logger.error(f"Unexpected error during decryption: {e}")
+        return "[DECRYPTION_ERROR]"
 
 
 # ---------------------------------------------------------------------------

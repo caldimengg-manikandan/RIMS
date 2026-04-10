@@ -24,6 +24,7 @@ export const metadata: Metadata = {
 }
 
 import { GlobalNavbar } from '@/components/global-navbar'
+import { NavigationProgress } from '@/components/navigation-progress'
 
 export default function RootLayout({
   children,
@@ -48,6 +49,7 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <div className="app-shell-content flex flex-col min-h-screen flex-1" suppressHydrationWarning>
+                  <NavigationProgress />
                   <header className="shrink-0 flex flex-col">
                     <GlobalNavbar />
                   </header>
