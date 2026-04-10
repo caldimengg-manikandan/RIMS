@@ -19,6 +19,8 @@ def get_settings(db: Session = Depends(get_db)):
         "company_name": settings_dict.get("company_name", ""),
         "company_address": settings_dict.get("company_address", ""),
         "hr_email": settings_dict.get("hr_email", ""),
+        "hr_name": settings_dict.get("hr_name", ""),
+        "hr_phone": settings_dict.get("hr_phone", ""),
         "offer_letter_template": settings_dict.get("offer_letter_template", "")
     }
 

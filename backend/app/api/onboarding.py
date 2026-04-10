@@ -206,7 +206,10 @@ async def approve_offer_letter(
             joining_date=application.joining_date,
             company_name=gs.get("company_name", "Our Company"),
             logo_url=gs.get("company_logo_url", ""),
-            hr_email=gs.get("hr_email", "")
+            hr_email=gs.get("hr_email", ""),
+            hr_name=gs.get("hr_name", ""),
+            hr_phone=gs.get("hr_phone", ""),
+            company_address=gs.get("company_address", "")
         )
         
         template = Template(application.offer_template_snapshot)
@@ -215,17 +218,22 @@ async def approve_offer_letter(
         pdf_buffer = BytesIO()
         pisa_status = pisa.CreatePDF(rendered_html, dest=pdf_buffer)
         
-        if pisa_status.err:
-            raise Exception(f"xhtml2pdf error: {pisa_status.err}")
-            
-        # Skip storage uploads (DB-only mode)
-        # upload_file(settings.supabase_bucket_resumes, storage_path, pdf_buffer.read(), content_type="application/pdf")
-        
-        application.offer_pdf_path = None
+        pdf_buffer.seek(0)
+
+        # Save PDF to a local temp file so the email task can attach it
+        import tempfile
+        pdf_dir = os.path.join(os.path.dirname(__file__), "..", "..", "tmp", "offer_pdfs")
+        os.makedirs(pdf_dir, exist_ok=True)
+        pdf_local_path = os.path.join(pdf_dir, filename)
+        with open(pdf_local_path, "wb") as f:
+            f.write(pdf_buffer.read())
+
+        application.offer_pdf_path = pdf_local_path
+        logger.info(f"Offer PDF generated and saved: {pdf_local_path}")
     except Exception as e:
         logger.error(f"Offer PDF error: {e}")
         log_audit(db, "OFFER_PDF_FAILED", application.id, current_user.id, {"error": str(e)})
-        raise HTTPException(status_code=500, detail="Document storage failure. Process aborted.")
+        raise HTTPException(status_code=500, detail="Document generation failure. Process aborted.")
 
     # Update Application State
     application.offer_sent = True
@@ -252,7 +260,7 @@ async def approve_offer_letter(
 
     db.commit()
 
-    background_tasks.add_task(process_offer_email, application.id, storage_path, gs.get("company_name", "Our Company"))
+    background_tasks.add_task(process_offer_email, application.id, application.offer_pdf_path, gs.get("company_name", "Our Company"))
     return {"status": "success", "message": "Offer letter approved and email triggered"}
 
 async def process_offer_email(application_id: int, storage_path: str, company_name: str):

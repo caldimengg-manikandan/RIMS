@@ -33,7 +33,7 @@ def generate_offer_letter_pdf(template_html: str, data: dict, output_path: str):
         logger.error(f"Failed to generate offer letter PDF: {e}")
         return False
 
-def get_offer_letter_data(candidate_name, job_role, department, joining_date, company_name, logo_url, hr_email):
+def get_offer_letter_data(candidate_name, job_role, department, joining_date, company_name, logo_url, hr_email, hr_name="", hr_phone="", company_address=""):
     """ Helper to structure offer letter data """
     return {
         "candidate_name": candidate_name,
@@ -41,7 +41,11 @@ def get_offer_letter_data(candidate_name, job_role, department, joining_date, co
         "department": department,
         "joining_date": joining_date.strftime("%B %d, %Y") if joining_date else "TBD",
         "company_name": company_name,
-        "logo": logo_url,
+        "logo": logo_url,       # legacy compat
+        "logo_url": logo_url,   # new template variable
         "hr_email": hr_email,
+        "hr_name": hr_name,
+        "hr_phone": hr_phone,
+        "company_address": company_address,
         "offer_date": datetime.now().strftime("%B %d, %Y")
     }

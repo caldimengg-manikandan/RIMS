@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from "sonner"
-import { Building2, Mail, Image as ImageIcon, FileText, Save, Loader2, ShieldAlert } from 'lucide-react'
+import { Building2, Mail, Phone, User, Image as ImageIcon, FileText, Save, Loader2, ShieldAlert } from 'lucide-react'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
 
@@ -22,6 +22,8 @@ export default function SettingsPage() {
         company_name: '',
         company_address: '',
         hr_email: '',
+        hr_name: '',
+        hr_phone: '',
         offer_letter_template: ''
     })
 
@@ -99,6 +101,19 @@ export default function SettingsPage() {
                             />
                         </div>
                         <div className="space-y-2">
+                            <Label htmlFor="hr_name">HR Contact Name</Label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    id="hr_name" 
+                                    className="pl-10"
+                                    value={settings.hr_name} 
+                                    onChange={(e) => setSettings({...settings, hr_name: e.target.value})}
+                                    placeholder="e.g. Jane Smith"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
                             <Label htmlFor="hr_email">HR Contact Email</Label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -108,6 +123,19 @@ export default function SettingsPage() {
                                     value={settings.hr_email} 
                                     onChange={(e) => setSettings({...settings, hr_email: e.target.value})}
                                     placeholder="hr@company.com"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="hr_phone">HR Contact Phone</Label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    id="hr_phone" 
+                                    className="pl-10"
+                                    value={settings.hr_phone} 
+                                    onChange={(e) => setSettings({...settings, hr_phone: e.target.value})}
+                                    placeholder="+1 (555) 000-0000"
                                 />
                             </div>
                         </div>
@@ -162,7 +190,7 @@ export default function SettingsPage() {
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 text-sm">
                         <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">Available Placeholders</h4>
                         <div className="flex flex-wrap gap-2">
-                            {['candidate_name', 'job_role', 'department', 'joining_date', 'company_name', 'hr_email', 'offer_date'].map(p => (
+                            {['candidate_name', 'job_role', 'department', 'joining_date', 'company_name', 'hr_name', 'hr_email', 'hr_phone', 'offer_date'].map(p => (
                                 <code key={p} className="bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border">{'{{' + p + '}}'}</code>
                             ))}
                         </div>
