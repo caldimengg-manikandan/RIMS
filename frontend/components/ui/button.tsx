@@ -80,7 +80,7 @@ function Button({
       data-variant={variant}
       data-size={size}
       disabled={loading || props.disabled}
-      className={cn(buttonVariants({ variant, size, className }), "relative overflow-hidden")}
+      className={cn(buttonVariants({ variant, size, className }), "relative")}
       onClick={handleClick as any}
       {...props}
     >

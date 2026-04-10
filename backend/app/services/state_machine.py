@@ -23,6 +23,7 @@ from typing import Optional, Dict, List, Tuple
 from sqlalchemy.orm import Session
 
 from app.domain.models import Application, Job, AuditLog
+from app.services.email_service import send_interview_invitation_email
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ _TRANSITION_TABLE: Dict[Tuple[CandidateState, TransitionAction], CandidateState]
 EMAIL_TRIGGERS: Dict[Tuple[TransitionAction, CandidateState], str] = {
     (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.APTITUDE_ROUND): "approved_for_interview",
     (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.AI_INTERVIEW): "approved_for_interview",
+    (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.INTERVIEW_SCHEDULED): "approved_for_interview",
     (TransitionAction.REJECT, CandidateState.REJECTED): "rejected",
     (TransitionAction.CALL_FOR_INTERVIEW, CandidateState.PHYSICAL_INTERVIEW): "call_for_interview",
     (TransitionAction.HIRE, CandidateState.HIRED): "hired",
@@ -225,7 +227,7 @@ class CandidateStateMachine:
             )
 
         # Handle dynamic APPROVE transition
-        if action == TransitionAction.APPROVE_FOR_INTERVIEW and current == CandidateState.APPLIED:
+        if action == TransitionAction.APPROVE_FOR_INTERVIEW and current in (CandidateState.APPLIED, CandidateState.SCREENED):
             return self._resolve_approve_target(application)
 
         # Standard table lookup
@@ -275,6 +277,24 @@ class CandidateStateMachine:
             notes=notes,
             is_critical=is_critical,
         )
+
+        # ─── Fix: Interview Invitation Email Trigger ──────────────────
+        if target_state.value == "interview_scheduled":
+            try:
+                if not application or not application.candidate_email:
+                    logger.error(f"[EMAIL][FAILED] Missing email for App #{getattr(application, 'id', 'UNKNOWN')}")
+                elif getattr(application, "_email_sent", False):
+                    logger.warning(f"[EMAIL][SKIPPED] Duplicate prevented for App #{application.id}")
+                elif background_tasks:
+                   background_tasks.add_task(send_interview_invitation_email, application)
+                   application._email_sent = True
+                   logger.info(f"[EMAIL] Interview invitation queued for App #{application.id}")
+                else:
+                   logger.warning(f"[EMAIL][SKIPPED] background_tasks not available for App #{application.id}")
+            except Exception as e:
+                logger.error(f"[EMAIL][FAILED] Interview email for App #{getattr(application, 'id', 'UNKNOWN')}: {str(e)}")
+        # ──────────────────────────────────────────────────────────────
+
 
         # 5. Handle Automated Side Effects (Point 3)
         if target_state == CandidateState.INTERVIEW_COMPLETED and background_tasks:

@@ -161,6 +161,10 @@ class Application(Base):
     joining_date = Column(DateTime)
     onboarding_approval_status = Column(String(20), default='pending') # Legacy — Repurposing to offer_approval_status
     
+    # Persistent Email Tracking
+    email_sent_at = Column(DateTime, nullable=True)
+    email_status = Column(String(20), default='pending') # 'pending', 'sent', 'failed'
+    
     # Enhanced Onboarding V2
     offer_approval_status = Column(String(20), default='pending') # 'pending', 'approved', 'rejected'
     offer_approved_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)

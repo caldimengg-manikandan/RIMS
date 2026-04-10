@@ -49,6 +49,18 @@ SKILL_CATEGORIES = {
         "RFI management", "Steel construction", "fabrication packages"
     ],
 
+   # Electrical Domain
+    "electrical": [
+        "Electrical Engineering", "AutoCAD Electrical", "E3", "E-Plan", 
+        "Circuit design", "Wiring Harness", "Electronics", "Hardware design", 
+        "Panel Designing", "GA design", "Relay Interlocking", "Load Calculation", 
+        "Cable Routing", "Component Selection", "System Architecture", 
+        "Power Distribution", "Control Logic Design", "Industrial Automation", 
+        "PLC", "HMI", "Switch gears", "Sensors", "Switches", "Controllers", 
+        "Tool Handling", "Multimeter", "Clamp Meter", "Motor Analyser", 
+        "Basic Troubleshooting", "2D Drafting"
+    ],
+
     # Software Development
     "frontend": [
         "Frontend",
@@ -157,6 +169,187 @@ SKILL_CATEGORIES = {
         "IAM",
         "SIEM",
         "SOC Operations"
+    ],
+    "digital_marketing": [
+        "Digital Marketing", "SEO", "Search Engine Optimization",
+        "SEM", "Search Engine Marketing", "Google Ads",
+        "Content Marketing", "Social Media Marketing",
+        "Email Marketing", "PPC", "Marketing Analytics",
+        "Google Analytics", "Performance Marketing",
+        "Brand Management", "Copywriting", "Campaign Management",
+        "Marketing Automation", "HubSpot", "Mailchimp"
+    ],
+    "embedded_systems": [
+        "Embedded Systems", "Embedded C", "Embedded C++",
+        "RTOS", "FreeRTOS", "Bare Metal Programming",
+        "Arduino", "Raspberry Pi", "STM32", "ESP32",
+        "ARM Cortex", "8051", "AVR", "PIC",
+        "Microcontrollers", "Microprocessors",
+        "UART", "SPI", "I2C", "CAN", "RS485", "Modbus",
+        "Firmware Development", "Bootloader", "Device Drivers",
+        "GPIO", "ADC", "DAC", "PWM", "Interrupts",
+        "JTAG", "Oscilloscope", "Logic Analyzer",
+        "PCB Design", "Altium", "KiCad", "Eagle"
+    ],
+    "instrumentation": [
+        "Instrumentation Engineering", "Process Control",
+        "SCADA", "DCS", "PLC", "HMI",
+        "P&ID", "Loop Diagrams", "Instrument Data Sheets",
+        "Field Instruments", "Transmitters", "Sensors",
+        "Flow Meters", "Pressure Gauges", "Temperature Sensors",
+        "Level Sensors", "Control Valves", "Actuators",
+        "Calibration", "Loop Calibration", "HART Protocol",
+        "Foundation Fieldbus", "Profibus", "OPC",
+        "ISA Standards", "IEC 61511", "Functional Safety",
+        "SIL", "HAZOP", "Instrument Hook-up Drawings"
+    ],
+    "generative_ai": [
+        "Generative AI", "LLM", "Large Language Models",
+        "Prompt Engineering", "Prompt Design",
+        "LangChain", "LlamaIndex", "RAG",
+        "Retrieval Augmented Generation",
+        "Fine-tuning", "LoRA", "QLoRA",
+        "OpenAI", "Claude", "Gemini", "Mistral", "Llama",
+        "Hugging Face", "Transformers",
+        "Vector Databases", "Pinecone", "ChromaDB", "FAISS",
+        "Embeddings", "Semantic Search",
+        "AI Agents", "Tool Use", "Function Calling",
+        "ChatGPT", "GPT-4", "Anthropic API", "OpenAI API"
+    ],
+    "business_intelligence": [
+        "Business Intelligence", "BI",
+        "Power BI", "Tableau", "Looker", "QlikView", "Qlik Sense",
+        "DAX", "Power Query", "M Language",
+        "Data Visualization", "Dashboard Design",
+        "KPI Reporting", "Executive Reporting",
+        "SQL", "Data Modeling", "Star Schema", "Snowflake Schema",
+        "ETL", "Data Warehouse", "SSRS", "SSAS",
+        "Google Data Studio", "Metabase", "Superset",
+        "Excel Advanced", "Pivot Tables", "VBA"
+    ],
+    "database_admin": [
+        "Database Administration", "DBA",
+        "MySQL", "PostgreSQL", "Oracle", "SQL Server", "SQLite",
+        "MongoDB", "Cassandra", "Redis", "DynamoDB",
+        "Query Optimization", "Indexing", "Partitioning",
+        "Backup & Recovery", "Replication", "Clustering",
+        "Database Design", "ER Diagrams", "Normalization",
+        "Stored Procedures", "Triggers", "Views",
+        "Performance Tuning", "Execution Plans",
+        "Database Security", "Role Management",
+        "Migration", "Data Archiving"
+    ],
+    "project_management": [
+        "Project Management", "PMP", "PRINCE2",
+        "Agile", "Scrum", "Kanban", "SAFe",
+        "JIRA", "Confluence", "MS Project", "Asana", "Trello",
+        "Sprint Planning", "Backlog Grooming", "Retrospectives",
+        "Risk Management", "Issue Tracking", "Change Management",
+        "Stakeholder Management", "Resource Planning",
+        "Budget Management", "Project Scheduling",
+        "WBS", "Gantt Chart", "Critical Path Method",
+        "Earned Value Management", "SLA Management",
+        "Cross-functional Team Leadership"
+    ],
+    "business_analyst": [
+        "Business Analysis", "Business Analyst",
+        "Requirements Gathering", "BRD", "FRD", "SRS",
+        "Use Case Diagrams", "User Stories", "Acceptance Criteria",
+        "Process Mapping", "As-Is To-Be Analysis",
+        "Gap Analysis", "Impact Analysis", "SWOT Analysis",
+        "Wireframing", "Prototyping", "Mockups",
+        "Stakeholder Interviews", "Workshop Facilitation",
+        "JIRA", "Confluence", "Visio", "Lucidchart",
+        "SQL", "Excel", "Data Analysis",
+        "UAT", "Testing Support", "Change Management",
+        "Agile BA", "Scrum", "Domain Knowledge"
+    ],
+    "finance_accounting": [
+        "Finance", "Accounting", "Financial Analysis",
+        "Tally", "Tally ERP", "SAP FICO", "SAP S4 HANA",
+        "QuickBooks", "Zoho Books",
+        "GST", "TDS", "Income Tax", "Taxation",
+        "Financial Reporting", "MIS Reports", "Balance Sheet",
+        "P&L", "Cash Flow", "Budgeting", "Forecasting",
+        "Auditing", "Internal Audit", "Statutory Audit",
+        "Accounts Payable", "Accounts Receivable",
+        "Bank Reconciliation", "General Ledger",
+        "IFRS", "Ind AS", "GAAP", "Cost Accounting",
+        "Financial Modeling", "Variance Analysis"
+    ],
+    "sales_crm": [
+        "Sales", "CRM", "Business Development",
+        "Salesforce", "HubSpot CRM", "Zoho CRM", "Pipedrive",
+        "Lead Generation", "Cold Calling", "Cold Emailing",
+        "B2B Sales", "B2C Sales", "Inside Sales", "Field Sales",
+        "Account Management", "Key Account Management",
+        "Sales Funnel", "Pipeline Management",
+        "Negotiation", "Objection Handling", "Closing Skills",
+        "Target Achievement", "Revenue Growth",
+        "Presales", "Solution Selling", "Consultative Selling",
+        "Client Relationship Management", "Upselling", "Cross-selling"
+    ],
+    "customer_support": [
+        "Customer Support", "Customer Service", "Technical Support",
+        "L1 Support", "L2 Support", "L3 Support",
+        "Helpdesk", "Service Desk", "IT Support",
+        "Zendesk", "Freshdesk", "ServiceNow", "JIRA Service Desk",
+        "Ticketing System", "SLA Management", "CSAT",
+        "Incident Management", "Problem Management",
+        "Remote Support", "Desktop Support",
+        "Troubleshooting", "Root Cause Analysis",
+        "Chat Support", "Email Support", "Voice Support",
+        "ITIL", "ITSM", "Knowledge Base Management"
+    ],
+    "legal": [
+        "Legal", "Law", "Corporate Law",
+        "Contract Drafting", "Contract Review", "Contract Negotiation",
+        "Legal Research", "Legal Documentation",
+        "Compliance", "Regulatory Compliance", "GDPR",
+        "Intellectual Property", "IP Law", "Trademark", "Copyright", "Patent",
+        "Labour Law", "Employment Law",
+        "Litigation", "Arbitration", "Dispute Resolution",
+        "Company Law", "MCA Filings", "ROC Compliance",
+        "Due Diligence", "Legal Advisory",
+        "NDA", "MOU", "SLA Drafting"
+    ],
+    "healthcare_it": [
+        "Healthcare IT", "Health Informatics",
+        "HL7", "FHIR", "DICOM",
+        "EMR", "EHR", "Electronic Health Records",
+        "Hospital Information System", "HIS",
+        "Medical Coding", "ICD-10", "CPT Codes",
+        "Clinical Data Management", "CDM",
+        "Pharmacy Management System",
+        "Telemedicine", "Healthcare Analytics",
+        "HIPAA Compliance", "Patient Data Privacy",
+        "RCM", "Revenue Cycle Management",
+        "Lab Information System", "LIS",
+        "Radiology Information System", "RIS"
+    ],
+    "graphic_design": [
+        "Graphic Design", "Visual Design", "Creative Design",
+        "Adobe Photoshop", "Adobe Illustrator", "Adobe InDesign",
+        "Canva", "CorelDRAW", "Figma",
+        "Brand Identity", "Logo Design", "Typography",
+        "Color Theory", "Layout Design", "Print Design",
+        "Social Media Design", "Banner Design", "Poster Design",
+        "Packaging Design", "Brochure Design",
+        "Motion Graphics", "After Effects",
+        "UI Design", "Icon Design",
+        "Photo Editing", "Photo Retouching", "Image Manipulation"
+    ],
+    "video_editing": [
+        "Video Editing", "Video Production", "Post Production",
+        "Adobe Premiere Pro", "Final Cut Pro", "DaVinci Resolve",
+        "Adobe After Effects", "Motion Graphics",
+        "Color Grading", "Color Correction",
+        "Audio Editing", "Adobe Audition", "Sound Design",
+        "Storyboarding", "Script Writing",
+        "YouTube Content", "Reels Editing", "Short Form Video",
+        "Transitions", "Visual Effects", "VFX",
+        "3D Animation", "Blender", "Cinema 4D",
+        "Screen Recording", "OBS", "Camtasia"
     ]
 }
 

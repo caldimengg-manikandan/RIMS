@@ -11,6 +11,8 @@ import logging
 from urllib.parse import urlparse, urlencode
 import httpx
 import traceback
+import uuid
+from datetime import datetime
 from typing import Any, Optional
 
 settings = get_settings()
@@ -309,6 +311,99 @@ async def send_email_async(to_email: str, subject: str, html_body: str, attachme
 
     return {"success": False, "provider": "smtp", "error": f"Failed after {max_retries + 1} attempts: {last_error}", "deferred": False}
 
+async def execute_email_with_retries(
+    to_email: str, 
+    subject: str, 
+    body: str, 
+    application: Any = None, 
+    max_retries: int = 3,
+    event_type: str = "GENERIC",
+    attachments: list = None
+):
+    """Production-grade email wrapper with persistent idempotency and retries."""
+    event_id = str(uuid.uuid4())[:8]
+    logger.info(f"[EMAIL][QUEUE] {event_type} (Event: {event_id}) for {_safe_email_target(to_email)}")
+    
+    # 1. Atomic Idempotency Check (Persistent)
+    if application and hasattr(application, 'id'):
+        try:
+            from app.infrastructure.database import SessionLocal
+            from app.domain.models import Application
+            from sqlalchemy import update, and_
+            with SessionLocal() as db:
+                # Atomically set to 'processing' ONLY if not already processing/sent
+                stmt = (
+                    update(Application)
+                    .where(and_(
+                        Application.id == application.id,
+                        Application.email_status != 'processing',
+                        Application.email_status != 'sent'
+                    ))
+                    .values(email_status='processing')
+                )
+                res = db.execute(stmt)
+                db.commit()
+                if res.rowcount == 0:
+                    logger.warning(f"[EMAIL][SKIPPED] Atomic duplicate prevented (Event: {event_id}) for App #{application.id}")
+                    return True
+        except Exception as db_err:
+            logger.warning(f"[EMAIL][ATOMIC_GUARD_FAILED] Fallback to runtime check (Event: {event_id}): {db_err}")
+            if hasattr(application, 'email_sent_at') and application.email_sent_at:
+                return True
+
+    # 2. Retry Loop
+    for attempt in range(max_retries):
+        try:
+            result = await send_email_async(to_email, subject, body, attachments)
+            if result["success"]:
+                logger.info(f"[EMAIL][EXECUTED] (Event: {event_id}) successfully sent to {_safe_email_target(to_email)}")
+                
+                # 3. Update Persistence
+                if application and hasattr(application, 'id'):
+                    try:
+                        from app.infrastructure.database import SessionLocal
+                        from app.domain.models import Application
+                        from sqlalchemy import update
+                        with SessionLocal() as db:
+                            db.execute(
+                                update(Application)
+                                .where(Application.id == application.id)
+                                .values(email_sent_at=datetime.utcnow(), email_status='sent')
+                            )
+                            db.commit()
+                    except Exception as db_err:
+                        logger.warning(f"[EMAIL][DB_UPDATE_FAILED] Could not persist status (Event: {event_id}): {db_err}")
+                
+                return True
+            
+            error_msg = result.get("error")
+            logger.warning(f"[EMAIL][RETRY] (Event: {event_id}) Attempt {attempt+1}/{max_retries} failed: {error_msg}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt) # Exponential backoff
+            
+        except Exception as e:
+            logger.error(f"[EMAIL][RETRY_ERROR] (Event: {event_id}) Unexpected error: {str(e)}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1)
+
+    # 4. Final Failure Update
+    if application and hasattr(application, 'id'):
+        try:
+            from app.infrastructure.database import SessionLocal
+            from app.domain.models import Application
+            from sqlalchemy import update
+            with SessionLocal() as db:
+                db.execute(
+                    update(Application)
+                    .where(Application.id == application.id)
+                    .values(email_status='failed')
+                )
+                db.commit()
+        except: pass
+
+    logger.error(f"[EMAIL][PERMANENT_FAILURE] (Event: {event_id}) Failed after {max_retries} attempts for {to_email}")
+    return False
+
 # --- Email Templates ---
 
 async def send_otp_email(to_email: str, otp: str):
@@ -321,11 +416,19 @@ async def send_otp_email(to_email: str, otp: str):
     </body></html>
     """
     result = await send_email_async(to_email, subject, body)
-    if not result["success"]:
+    if result["success"]:
+        logger.info(f"[EMAIL][EXECUTED] OTP email sent to {_safe_email_target(to_email)}")
+    else:
         logger.warning(f"Email failed for {to_email}: {result['error']}")
     return result["success"]
 
-async def send_application_received_email(to_email: str, job_title: str):
+async def send_application_received_email(to_email_or_app: Any, job_title: str = None):
+    if hasattr(to_email_or_app, 'candidate_email'):
+        to_email = to_email_or_app.candidate_email
+        job_title = to_email_or_app.job.title
+    else:
+        to_email = to_email_or_app
+        
     subject = f"Application Received: {job_title}"
     body = f"""
     <html><body>
@@ -334,10 +437,47 @@ async def send_application_received_email(to_email: str, job_title: str):
       <p>Our team will review your profile shortly!</p>
     </body></html>
     """
-    result = await send_email_async(to_email, subject, body)
-    if not result["success"]:
-        logger.warning(f"Application Received Email failed for {to_email}: {result['error']}")
-    return result["success"]
+    return await execute_email_with_retries(
+        to_email, subject, body, 
+        application=to_email_or_app if hasattr(to_email_or_app, 'id') else None,
+        event_type="APP_RECEIVED"
+    )
+
+async def send_interview_invitation_email(application: Any, raw_access_key: str = ""):
+    """Wrapper for send_approved_for_interview_email to match requested pattern."""
+    if not raw_access_key:
+        # Fallback to current access key if not provided
+        if application.interview:
+            # We don't have the raw key here, but this is a safety fallback
+            pass
+            
+    # Production refinement: pass the whole application object for persistence
+    # This matches the execute_email_with_retries signature
+    subject = f"Congratulations! You're invited to interview for {application.job.title}"
+    frontend_url = settings.frontend_base_url
+    access_url = f"{frontend_url}/interview/access?email={application.candidate_email}&key={raw_access_key}"
+    support_url = f"{frontend_url}/support?{urlencode({'email': application.candidate_email, 'access_key': raw_access_key})}"
+    
+    body = f"""
+    <html><body style="font-family:sans-serif; color:#333;">
+      <h2>Interview Invitation</h2>
+      <p>Your application for <strong>{application.job.title}</strong> has been approved!</p>
+      <p>Please use the secure link below to access the interview portal.</p>
+      <div style="margin: 20px 0; text-align: center;">
+        <a href="{access_url}" style="background-color: #2563eb; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Begin Interview</a>
+      </div>
+      <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"/>
+      <p>Link: <a href="{access_url}">{access_url}</a></p>
+    </body></html>
+    """
+    
+    return await execute_email_with_retries(
+        application.candidate_email, 
+        subject, 
+        body, 
+        application=application,
+        event_type="INTERVIEW_INVITE"
+    )
 
 async def send_approved_for_interview_email(to_email: str, job_title: str, raw_access_key: str = ""):
     subject = f"Congratulations! You're invited to interview for {job_title}"
@@ -371,10 +511,9 @@ async def send_approved_for_interview_email(to_email: str, job_title: str, raw_a
       <p style="font-size:0.9em; color:#666;">If you did not apply for this role, please disregard this email.</p>
     </body></html>
     """
-    result = await send_email_async(to_email, subject, body)
-    if not result["success"]:
-        logger.warning(f"Interview Invitation Email failed for {to_email}: {result['error']}")
-    return result["success"]
+    # Note: We need the Application object for persistence, but this function only takes email.
+    # We rely on send_interview_invitation_email wrapper to pass the application object.
+    return await execute_email_with_retries(to_email, subject, body, event_type="INTERVIEW_INVITE")
 
 async def send_hired_email(to_email: str, job_title: str, interview=None, offer_letter_path: str = None):
     subject = "Congratulations! You have been selected"
@@ -395,10 +534,11 @@ async def send_hired_email(to_email: str, job_title: str, interview=None, offer_
                 "filename": os.path.basename(offer_letter_path),
                 "content": content,
             })
-    result = await send_email_async(to_email, subject, body, attachments if attachments else None)
-    if not result["success"]:
-        logger.warning(f"Hired Email failed for {to_email}: {result['error']}")
-    return result["success"]
+    return await execute_email_with_retries(
+        to_email, subject, body, 
+        attachments=attachments if attachments else None,
+        event_type="HIRED_NOTICE"
+    )
 
 async def send_simple_email(to_email: str, subject: str, message: str):
     """Utility for sending internal/simple notification emails."""
@@ -437,10 +577,11 @@ async def send_offer_letter_email(to_email: str, candidate_name: str, company_na
                 "filename": os.path.basename(offer_letter_path),
                 "content": content,
             })
-    result = await send_email_async(to_email, subject, body, attachments if attachments else None)
-    if not result["success"]:
-        logger.warning(f"Offer Letter Email failed for {to_email}: {result['error']}")
-    return result["success"]
+    return await execute_email_with_retries(
+        to_email, subject, body, 
+        attachments=attachments if attachments else None,
+        event_type="OFFER_LETTER"
+    )
 
 async def send_rejected_email(to_email: str, job_title: str, is_ai_auto_reject: bool = False):
     subject = f"Update on your application for {job_title}"
@@ -453,10 +594,7 @@ async def send_rejected_email(to_email: str, job_title: str, is_ai_auto_reject: 
       <p>We encourage you to apply for future roles that match your skills!</p>
     </body></html>
     """
-    result = await send_email_async(to_email, subject, body)
-    if not result["success"]:
-        logger.warning(f"Rejected Email failed for {to_email}: {result['error']}")
-    return result["success"]
+    return await execute_email_with_retries(to_email, subject, body, event_type="REJECTED_NOTICE")
 
 async def send_call_for_interview_email(to_email: str, job_title: str):
     subject = f"Interview Invitation — {job_title}"

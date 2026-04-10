@@ -164,11 +164,14 @@ export default function HRApplicationsPage() {
       actionFn,
       {
         lockKey: `application-${applicationId}`,
-        optimisticData: (current) => (current || []).map((app) =>
-          app.id === applicationId
-            ? { ...app, status: decision }
-            : app
-        ),
+        optimisticData: (current: any) => {
+          if (!current) return current;
+          const items = current.items || (Array.isArray(current) ? current : []);
+          const mapped = items.map((app: any) =>
+            app.id === applicationId ? { ...app, status: decision } : app
+          );
+          return Array.isArray(current) ? mapped : { ...current, items: mapped };
+        },
         successMessage: `Candidate ${decision} successfully`,
         invalidateKeys: ["/api/analytics/dashboard"]
       }
@@ -198,9 +201,14 @@ export default function HRApplicationsPage() {
       actionFn,
       {
         lockKey: `application-${applicationId}`,
-        optimisticData: (current) => (current || []).map((app) =>
-          app.id === applicationId ? { ...app, status: nextStatus } : app
-        ),
+        optimisticData: (current: any) => {
+          if (!current) return current;
+          const items = current.items || (Array.isArray(current) ? current : []);
+          const mapped = items.map((app: any) =>
+            app.id === applicationId ? { ...app, status: nextStatus } : app
+          );
+          return Array.isArray(current) ? mapped : { ...current, items: mapped };
+        },
         invalidateKeys: ["/api/analytics/dashboard"]
       }
     );
@@ -226,9 +234,14 @@ export default function HRApplicationsPage() {
       actionFn,
       {
         lockKey: `application-${applicationId}`,
-        optimisticData: (current) => (current || []).map((app) =>
-          app.id === applicationId ? { ...app, status: "hired" } : app
-        ),
+        optimisticData: (current: any) => {
+          if (!current) return current;
+          const items = current.items || (Array.isArray(current) ? current : []);
+          const mapped = items.map((app: any) =>
+            app.id === applicationId ? { ...app, status: "hired" } : app
+          );
+          return Array.isArray(current) ? mapped : { ...current, items: mapped };
+        },
         successMessage: "Candidate hired successfully",
         invalidateKeys: ["/api/analytics/dashboard"]
       }

@@ -59,6 +59,12 @@ export function NotificationBell() {
 
     const unreadCount = notifications.filter(n => !n.is_read).length
 
+    // Sort: unread first, then by date desc
+    const sortedNotifications = [...notifications].sort((a, b) => {
+        if (a.is_read !== b.is_read) return a.is_read ? 1 : -1
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
     if (!canViewNotifications) return null
 
     return (
@@ -67,13 +73,16 @@ export function NotificationBell() {
                 <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full text-slate-200 hover:text-white hover:bg-blue-800/50">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                        <span key={unreadCount} className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground animate-in zoom-in duration-300">
+                        <span 
+                            key={unreadCount} 
+                            className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground ring-2 ring-background animate-in zoom-in duration-300 pointer-events-none"
+                        >
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[380px] p-0" align="end">
+            <PopoverContent className="w-[380px] p-0 shadow-2xl border-primary/20 overflow-hidden rounded-2xl" align="end" sideOffset={8}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
                     <h4 className="font-semibold text-sm">Notifications</h4>
                     {unreadCount > 0 && (
@@ -82,14 +91,18 @@ export function NotificationBell() {
                         </span>
                     )}
                 </div>
-                <ScrollArea className="max-h-[400px]">
+                <ScrollArea className="max-h-[500px]">
                     {notifications.length === 0 ? (
-                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                            No notifications yet
+                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                                <Bell className="h-6 w-6 text-muted-foreground/40" />
+                            </div>
+                            <p className="text-sm font-semibold text-foreground">No new notifications</p>
+                            <p className="text-xs text-muted-foreground mt-1">We'll alert you when something happens.</p>
                         </div>
                     ) : (
                         <div className="flex flex-col">
-                            {notifications.slice(0, 10).map(n => (
+                            {sortedNotifications.map(n => (
                                 <button
                                     key={n.id}
                                     onClick={() => {
@@ -99,8 +112,8 @@ export function NotificationBell() {
                                             setIsOpen(false)
                                         }
                                     }}
-                                    className={`w-full text-left p-4 hover:bg-muted/50 transition-all border-l-4 group flex items-start gap-4 border-b border-border last:border-b-0
-                                        ${!n.is_read ? 'bg-primary/5 border-l-primary' : 'bg-background border-l-transparent'}
+                                    className={`w-full text-left p-4 hover:bg-muted/80 transition-all border-l-4 group flex items-start gap-4 border-b border-border last:border-b-0
+                                        ${!n.is_read ? 'bg-primary/[0.03] border-l-primary' : 'bg-background border-l-transparent'}
                                     `}
                                 >
                                     <div className="flex-1 min-w-0 pr-4 relative">

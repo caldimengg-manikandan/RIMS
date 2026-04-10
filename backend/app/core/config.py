@@ -178,27 +178,31 @@ class Settings(BaseSettings):
         import logging
         logger = logging.getLogger(__name__)
 
-        # 1. Mandatory Critical Settings (All Environments)
-        critical_required = {
+        # 1. Fatal Mandatory Settings (Must stop app if missing)
+        fatal_required = {
             "DATABASE_URL": self.database_url,
             "JWT_SECRET": self.jwt_secret,
+        }
+        missing_fatal = [k for k, v in fatal_required.items() if not v or v == ""]
+        if missing_fatal:
+            error_msg = f"FATAL CONFIG ERROR: Missing mandatory environment variables: {', '.join(missing_fatal)}. The server cannot start."
+            logger.critical(error_msg)
+            raise ValueError(error_msg)
+
+        # 2. Critical Settings (Warn in dev, fatal in production)
+        critical_required = {
             "SUPABASE_URL": self.supabase_url,
             "SUPABASE_KEY": self.supabase_key,
             "GROQ_API_KEY": self.groq_api_key,
         }
         missing_critical = [k for k, v in critical_required.items() if not v or v == ""]
-        
         if missing_critical:
-            error_msg = (
-                f"CRITICAL STARTUP ERROR: Missing mandatory environment variables: {', '.join(missing_critical)}. "
-                "The server cannot start. Please check your .env file."
-            )
-            logger.critical(error_msg)
-            # Only blow up if not in development OR if it's REALLY missing
-            if self.env == "production" or not self.database_url:
+            error_msg = f"CRITICAL CONFIG ERROR: Missing variables: {', '.join(missing_critical)}."
+            if self.env == "production":
+                logger.critical(error_msg)
                 raise ValueError(error_msg)
             else:
-                logger.warning("DEVELOPMENT MODE: Proceeding with missing/mocked critical settings.")
+                logger.warning(f"DEV WARNING: {error_msg} Proceeding with degraded functionality.")
 
         # 2. Production-Only Strict Mode
         if self.env == "production":

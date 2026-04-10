@@ -835,8 +835,6 @@ async def extract_questions_from_text(text: str) -> list:
 async def transcribe_audio(audio_file_path: str) -> str:
     """
     Transcribe audio file using Groq Whisper-large-v3.
-    Safe repair: one retry after 0.4s on transient errors; never raises — final fallback is ""
-    so the REST /transcribe handler returns 200 with empty text instead of 500 (prompts/schemas unchanged).
     """
     if ai_client.disabled or not ai_client.client:
         logger.warning("AI_DISABLED: Skipping local transcription")
@@ -845,9 +843,13 @@ async def transcribe_audio(audio_file_path: str) -> str:
     last_err: Exception | None = None
     for attempt in range(2):
         try:
+            filename = os.path.basename(audio_file_path)
+            # Ensure the file exists and has content
+            if not os.path.exists(audio_file_path) or os.path.getsize(audio_file_path) < 10:
+                return ""
+                
             with open(audio_file_path, "rb") as audio_file:
                 # Passing as a tuple (filename, file_object) is robust for format detection in Whisper APIs
-                filename = os.path.basename(audio_file_path)
                 transcript = await ai_client.client.audio.transcriptions.create(
                     file=(filename, audio_file),
                     model="whisper-large-v3",
@@ -856,26 +858,24 @@ async def transcribe_audio(audio_file_path: str) -> str:
                     temperature=0.0
                 )
                 
-                text = (transcript.text or "").strip()
+                text = (getattr(transcript, 'text', "") or "").strip()
                 if text:
                     return text
                 
-                # If text is empty, maybe it's just silence - log it
-                logger.info("Transcription yielded empty text for file: %s", filename)
+                logger.info("Transcription yielded empty text for file: %s (Silence/Too Short)", filename)
                 return ""
         except Exception as e:
             last_err = e
             logger.warning(
-                "Transcription attempt %s failed: %s",
+                "Transcription attempt %s failed for %s: %s",
                 attempt + 1,
-                str(e)[:200],
+                audio_file_path,
+                str(e)[:240],
             )
             if attempt == 0:
-                await asyncio.sleep(0.4)
-    logger.error(
-        "Transcription failed after retry; returning empty string (interview_id context in route logs). Error: %s",
-        last_err,
-    )
+                await asyncio.sleep(0.6) # Slightly longer backoff
+    
+    logger.error("Transcription failed after all retries: %s", last_err)
     return ""
 
 

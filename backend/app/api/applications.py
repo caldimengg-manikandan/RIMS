@@ -460,6 +460,20 @@ async def apply_for_job(
         from app.services.candidate_service import CandidateService
         CandidateService(db).create_audit_log(None, "APPLICATION_CREATED", "Application", new_application.id, {"job_id": job_id})
 
+        # [Trigger] Application Received Email
+        try:
+            if not new_application or not new_application.candidate_email:
+                logger.error(f"[EMAIL][FAILED] Missing email for App #{getattr(new_application, 'id', 'UNKNOWN')}")
+            elif getattr(new_application, "_email_sent", False):
+                logger.warning(f"[EMAIL][SKIPPED] Duplicate prevented for App #{new_application.id}")
+            else:
+                background_tasks.add_task(send_application_received_email, new_application)
+                new_application._email_sent = True
+                logger.info(f"[EMAIL] Application email queued for App #{new_application.id}")
+        except Exception as e:
+            logger.error(f"[EMAIL][FAILED] Application email for App #{getattr(new_application, 'id', 'UNKNOWN')}: {str(e)}")
+
+
     except Exception as e:
         db.rollback()
         logger.error(f"Application submission failed: {e}")
@@ -1349,7 +1363,9 @@ async def resend_interview_invitation(
             detail="Interview access key cannot be reissued unless interview is 'not_started'",
         )
 
-    raw_access_key = _ensure_interview_record(application, db)
+    from app.services.candidate_service import CandidateService
+    cand_service = CandidateService(db)
+    raw_access_key = cand_service.ensure_interview_record_exists(application)
     candidate_email = application.candidate_email
     job_title = application.job.title if application.job else "your applied position"
 
@@ -1445,7 +1461,9 @@ async def update_application_status(
 
     if action == TransitionAction.APPROVE_FOR_INTERVIEW:
         # Create or refresh interview record + access key
-        raw_access_key = _ensure_interview_record(application, db)
+        from app.services.candidate_service import CandidateService
+        cand_service = CandidateService(db)
+        raw_access_key = cand_service.ensure_interview_record_exists(application)
 
     if action == TransitionAction.HIRE:
         # Create HiringDecision record
@@ -1528,38 +1546,6 @@ async def update_application_status(
     }
 
 
-def _ensure_interview_record(application: Application, db) -> str:
-    """Create or refresh Interview record + access key for an application."""
-    import uuid
-    raw_access_key = secrets.token_urlsafe(16)
-    hashed_key = pwd_context.hash(raw_access_key)
-    expiration = datetime.now(timezone.utc) + timedelta(hours=24)
-
-    existing_interview = db.query(Interview).filter(
-        Interview.application_id == application.id
-    ).first()
-
-    if not existing_interview:
-        interview_stage = 'aptitude' if application.job.aptitude_enabled else 'first_level'
-        unique_test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
-
-        new_interview = Interview(
-            test_id=unique_test_id,
-            application_id=application.id,
-            status='not_started',
-            access_key_hash=hashed_key,
-            expires_at=expiration,
-            is_used=False,
-            interview_stage=interview_stage,
-        )
-        db.add(new_interview)
-    elif existing_interview.status == 'not_started':
-        existing_interview.access_key_hash = hashed_key
-        existing_interview.expires_at = expiration
-        if not existing_interview.test_id:
-            existing_interview.test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
-
-    return raw_access_key
 
 @router.delete("/{application_id}")
 async def delete_application(

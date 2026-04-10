@@ -93,7 +93,7 @@ async def background_generate_questions(interview_id: int, job_id_db: int, appli
 STAGE_APTITUDE = "aptitude"
 STAGE_FIRST_LEVEL = "first_level"
 STAGE_COMPLETED = "completed"
-VALID_INTERVIEW_STATUSES = {"not_started", "in_progress", "completed", "cancelled", "terminated"}
+VALID_INTERVIEW_STATUSES = {"not_started", "in_progress", "completed", "cancelled", "terminated", "expired"}
 
 APTITUDE_QUESTION_COUNT = 10  # Number of aptitude questions to pick from uploaded file
 
@@ -368,6 +368,11 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
             locked_skill = "CAE-MECHANICAL"
         elif any(k in job_text for k in ["tekla", "detailing", "steel detailing", "sds2", "aisc"]):
             locked_skill = "Steel_detailing"
+        elif any(k in job_text for k in ["electrical", "electronics", "circuit", "wiring", "power distribution"]):
+            if (experience or "mid").lower() in ["junior", "intern", "fresh", "fresher"]:
+                locked_skill = "electrical_junior"
+            else:
+                locked_skill = "electrical_senior"
         
         # Priority 2: Software domains (backend keyword 'python' is common in engineering, so check it AFTER mechanical)
         elif any(k in job_text for k in ["backend", "api", "rest", "python", "django", "fastapi", "microservice", "fast api"]):
@@ -382,6 +387,36 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
             locked_skill = "qa_testing"
         elif any(k in job_text for k in ["cyber", "security", "infosec", "network", "firewall"]):
             locked_skill = "cybersecurity"
+        elif any(k in job_text for k in ["marketing", "seo", "sem", "social media", "content strategy", "google ads", "branding", "copywriter"]):
+            locked_skill = "digital_marketing"
+        elif any(k in job_text for k in ["embedded", "microcontroller", "stm32", "rtos", "esp32", "firmware", "low level programming", "bare metal"]):
+            locked_skill = "embedded_systems"
+        elif any(k in job_text for k in ["instrumentation", "scada", "plc", "hmi", "dcs", "automation control", "field instruments"]):
+            locked_skill = "instrumentation"
+        elif any(k in job_text for k in ["genai", "generative ai", "llm", "large language model", "rag", "langchain", "prompt engineering"]):
+            locked_skill = "generative_ai"
+        elif any(k in job_text for k in ["power bi", "tableau", "business intelligence", "bi specialist", "looker", "dashboards"]):
+            locked_skill = "business_intelligence"
+        elif any(k in job_text for k in ["dba", "database administrator", "database performance", "oracle dba", "mysql dba", "postgres dba", "backup and recovery"]):
+            locked_skill = "database_admin"
+        elif any(k in job_text for k in ["project manager", "pmp", "scrum master", "project management", "delivery manager"]):
+            locked_skill = "project_management"
+        elif any(k in job_text for k in ["business analyst", "requirement gathering", "brd", "frd", "use case", "user stories", "gap analysis"]):
+            locked_skill = "business_analyst"
+        elif any(k in job_text for k in ["finance", "accounting", "tally", "taxation", "auditor", "chartered accountant", "accounts payable", "accounts receivable"]):
+            locked_skill = "finance_accounting"
+        elif any(k in job_text for k in ["sales", "crm", "business development", "lead generation", "b2b sales", "account executive"]):
+            locked_skill = "sales_crm"
+        elif any(k in job_text for k in ["customer support", "customer service", "helpdesk", "technical support officer", "zendesk", "ticketing"]):
+            locked_skill = "customer_support"
+        elif any(k in job_text for k in ["legal", "lawyer", "contracts", "compliance officer", "statutory", "litigation", "paralegal"]):
+            locked_skill = "legal"
+        elif any(k in job_text for k in ["healthcare it", "hl7", "fhir", "his", "emr", "ehr", "medical coding", "hospital management"]):
+            locked_skill = "healthcare_it"
+        elif any(k in job_text for k in ["graphic designer", "photoshop", "illustrator", "creative design", "branding design", "logo designer"]):
+            locked_skill = "graphic_design"
+        elif any(k in job_text for k in ["video editor", "premiere pro", "after effects", "motion graphics", "davinci resolve", "post production"]):
+            locked_skill = "video_editing"
         else:
             locked_skill = "general"
 
@@ -661,7 +696,6 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
 
 
 @router.post("/access")
-@limiter.limit("3/minute")
 async def access_interview(
     request: Request,
     data: InterviewAccess,
@@ -954,15 +988,19 @@ async def get_interview_stage(
             logger.warning(f"Session mismatch: token session {interview_session.id} vs requested {interview_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         
-        # Performance optimization: ensure application and job are loaded
-        # Use a localized query to ensure relationship consistency and avoid lazy-load errors
-        interview = db.query(Interview).options(
-            joinedload(Interview.application).joinedload(Application.job)
-        ).filter(Interview.id == interview_id).first()
-        
-        if not interview:
-            logger.error(f"Interview {interview_id} not found in DB during stage fetch")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview session not found.")
+        # Ensure relationships are loaded if not already present
+        # get_current_interview_any_status might return a session-cached object; 
+        # we ensure application and job are available without lazy-load failures.
+        interview = interview_session
+        if not hasattr(interview, 'application') or interview.application is None:
+            # Fallback re-fetch if relationship is detached or missing
+            interview = db.query(Interview).options(
+                joinedload(Interview.application).joinedload(Application.job)
+            ).filter(Interview.id == interview_id).first()
+            
+            if not interview:
+                logger.error(f"Interview {interview_id} record vanished during stage fetch")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview session not found.")
 
         # ── READINESS CHECK ──
         # Check if questions exist for the current stage (unless stage is COMPLETED)
@@ -1014,7 +1052,7 @@ async def get_interview_stage(
 @router.get("/{interview_id}/questions")
 async def get_all_questions(
     interview_id: int,
-    interview_session: Interview = Depends(get_current_interview),
+    interview_session: Interview = Depends(get_current_interview_any_status),
     db: Session = Depends(get_db)
 ):
     """Get ALL questions for the interview (all stages)."""
@@ -1993,8 +2031,9 @@ async def end_interview(
             "combined_score": interview.overall_score,
         }
     
-    # 1. Enforcement Check (Ensure sufficient answers if not already terminated)
-    if interview.status != "terminated":
+    # 1. Enforcement Check (Ensure sufficient answers if not already terminated or forced)
+    is_forced = isinstance(data, dict) and data.get("force") is True
+    if interview.status != "terminated" and not is_forced:
         questions = db.query(InterviewQuestion).filter(
             InterviewQuestion.interview_id == interview_id,
             InterviewQuestion.question_type != "aptitude"

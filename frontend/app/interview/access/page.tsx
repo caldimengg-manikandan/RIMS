@@ -20,11 +20,16 @@ function InterviewAccessForm() {
    * Named per interview access spec; value is a timer handle or null, not a boolean.
    */
   const autoAccessStartedRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasAttemptedRef = useRef<string | null>(null)
+  const isSubmittingRef = useRef(false)
 
   const handleSubmit = async (emailVal?: string, keyVal?: string) => {
     const finalEmail = emailVal ?? email
     const finalKey = keyVal ?? accessKey
     if (!finalEmail || !finalKey) return
+    if (loading || isSubmittingRef.current) return
+    
+    isSubmittingRef.current = true
     setLoading(true)
     setError('')
     try {
@@ -40,29 +45,33 @@ function InterviewAccessForm() {
       router.push('/interview/' + data.interview_id)
     } catch (err: any) {
       setError(err.message)
+      isSubmittingRef.current = false
     } finally {
       setLoading(false)
     }
   }
 
+  const e = searchParams.get('email')
+  const k = searchParams.get('key')
+
   useEffect(() => {
-    const e = searchParams.get('email')
-    const k = searchParams.get('key')
     if (e) setEmail(e)
     if (k) setAccessKey(k)
 
-    // Clear pending auto-submit on every effect re-run and on unmount (Strict Mode / param changes).
+    // Clear pending auto-submit on every effect re-run and on unmount
     if (autoAccessStartedRef.current !== null) {
       clearTimeout(autoAccessStartedRef.current)
       autoAccessStartedRef.current = null
     }
 
-    if (e && k) {
+    const paramHash = `${e}-${k}`
+    if (e && k && hasAttemptedRef.current !== paramHash) {
+      hasAttemptedRef.current = paramHash
       setLoading(true)
       autoAccessStartedRef.current = setTimeout(() => {
         autoAccessStartedRef.current = null
         void handleSubmit(e, k)
-      }, 300)
+      }, 1000)
     }
 
     return () => {
@@ -71,7 +80,7 @@ function InterviewAccessForm() {
         autoAccessStartedRef.current = null
       }
     }
-  }, [searchParams])
+  }, [e, k, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">

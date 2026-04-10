@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+APPROVALID_INTERVIEW_STATUSES = {"not_started", "in_progress", "completed", "cancelled", "terminated", "expired"}
 APPROVED_STAFF_ROLES = {"super_admin", "hr"}
 PENDING_STAFF_ROLE = "pending_hr"
 
@@ -238,22 +239,62 @@ def get_current_interview(
         interview_id = int(sub)
         
         interview = db.query(Interview).filter(Interview.id == interview_id).first()
-        if not interview or interview.status != "in_progress":
-            if not interview:
-                logger.warning(
-                    "Interview auth failed: interview not found "
-                    f"interview_id={interview_id}"
-                )
-            else:
-                logger.warning(
-                    "Interview auth failed: interview not active "
-                    f"interview_id={interview_id} status={interview.status}"
-                )
+        
+        # Check basic existence and active status
+        if not interview:
+            logger.warning(f"Interview auth failed: Record {interview_id} not found.")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: interview not found or not active",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Interview session not found. Please contact support.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        if interview.status != "in_progress":
+            logger.warning(f"Interview auth failed: interview {interview_id} is {interview.status}")
+            detail = "This interview session is no longer active."
+            if interview.status == "completed":
+                detail = "This interview has already been completed."
+            elif interview.status == "terminated":
+                detail = "This interview has been terminated due to a proctoring violation."
+                
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=detail,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Check for hard expiration timestamp
+        if interview.expires_at:
+            exp_at = interview.expires_at
+            if exp_at.tzinfo is None:
+                exp_at = exp_at.replace(tzinfo=timezone.utc)
+            if exp_at < datetime.now(timezone.utc):
+                if interview.status != "expired":
+                    logger.warning(f"Interview auth failed: Session {interview_id} expired at {exp_at}. Marking as expired.")
+                    try:
+                        interview.status = "expired"
+                        db.commit()
+                        
+                        # Lightweight audit log
+                        from app.domain.models import AuditLog
+                        import json
+                        log = AuditLog(
+                            action="INTERVIEW_EXPIRED",
+                            resource_type="Interview",
+                            resource_id=interview.id,
+                            details=json.dumps({"application_id": interview.application_id, "expired_at_timestamp": exp_at.isoformat()})
+                        )
+                        db.add(log)
+                        db.commit()
+                    except Exception as e:
+                        db.rollback()
+                        logger.warning(f"Failed to mark interview {interview_id} as expired: {e}")
+                
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Your interview session has expired. Please contact HR to re-issue your access key.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
         
         return interview
     except ValueError:
@@ -343,10 +384,31 @@ def get_current_interview_any_status(
                 f"interview_id={interview_id}"
             )
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: interview not found",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Interview session not found.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+            
+        # Check for hard expiration timestamp even for "any status" (read-only)
+        if interview.expires_at:
+            exp_at = interview.expires_at
+            if exp_at.tzinfo is None:
+                exp_at = exp_at.replace(tzinfo=timezone.utc)
+            if exp_at < datetime.now(timezone.utc) and interview.status != "completed":
+                # If completed, we might still want to allow viewing the report/thank you page
+                logger.warning(f"Interview auth failed (any status): Session {interview_id} expired at {exp_at}. Marking as expired.")
+                try:
+                    if interview.status not in ["completed", "expired"]:
+                        interview.status = "expired"
+                        db.commit()
+                except Exception as e:
+                    db.rollback()
+                
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Your interview link has expired.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
         return interview
     except ValueError:

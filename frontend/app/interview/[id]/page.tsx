@@ -59,6 +59,7 @@ export default function InterviewPage() {
     const [visitedIds, setVisitedIds] = useState<Set<number>>(new Set())
     const [isListening, setIsListening] = useState(false)
     const [isTranscribing, setIsTranscribing] = useState(false)
+    const answerRef = useRef('') // Live reference to avoid stale closures in async handlers
     const [isFaceDetected, setIsFaceDetected] = useState(true)
     const [isMultipleFacesDetected, setIsMultipleFacesDetected] = useState(false)
     const [isFocusingOnMonitor, setIsFocusingOnMonitor] = useState(true)
@@ -220,9 +221,12 @@ export default function InterviewPage() {
                 transcribeRid,
             )
             if (res.text && res.text.trim()) {
+                const transcribedText = res.text.trim();
                 setAnswer(prev => {
                     const trimmedPrev = prev.trim()
-                    return trimmedPrev ? `${trimmedPrev} ${res.text.trim()}` : res.text.trim()
+                    const newAnswer = trimmedPrev ? `${trimmedPrev} ${transcribedText}` : transcribedText
+                    answerRef.current = newAnswer;
+                    return newAnswer;
                 })
             } else {
                 toast.message('Could not transcribe; please type or try again.')
@@ -408,59 +412,75 @@ export default function InterviewPage() {
     useEffect(() => {
         const handleVisibilityChange = async () => {
             if (document.hidden) {
-                // Record when we became hidden
                 hiddenSinceRef.current = Date.now()
             } else {
-                // Document became visible again
-                const hiddenSince = hiddenSinceRef.current
-                hiddenSinceRef.current = null
+                processViolation()
+            }
+        }
 
-                if (hiddenSince === null) return
+        const handleBlur = () => {
+            if (!hiddenSinceRef.current) {
+                hiddenSinceRef.current = Date.now()
+            }
+        }
 
-                const hiddenDurationMs = Date.now() - hiddenSince
+        const handleFocus = () => {
+            processViolation()
+        }
 
-                // Only count as a violation if hidden for > 500ms
-                // (shorter durations are from browser-native UI: autocomplete, tooltips, enter key, etc.)
-                if (hiddenDurationMs < 500) return
+        const processViolation = async () => {
+            const hiddenSince = hiddenSinceRef.current
+            hiddenSinceRef.current = null
 
-                if (interviewStatusRef.current !== 'active') return
+            if (hiddenSince === null) return
 
-                const newWarnings = warningsRef.current + 1
-                warningsRef.current = newWarnings
-                setWarnings(newWarnings)
+            const hiddenDurationMs = Date.now() - hiddenSince
+            // Filter out micro-flashes (sometimes triggered by system dialogues)
+            if (hiddenDurationMs < 500) return
 
-                if (newWarnings >= 3) {
-                    if (!finishingInterviewRef.current) {
-                        finishingInterviewRef.current = true
-                        interviewStatusRef.current = 'finishing'
-                        try {
-                            await APIClient.postWithRequestId(
-                                `/api/interviews/${interviewId}/end`,
-                                {},
-                                `rims-${interviewId}-end`,
-                            )
-                            setInterviewStatus('completed')
-                            setShowIssueDialog(true)
-                        } catch (error) {
-                            console.log("Failed to end interview", error)
-                            interviewStatusRef.current = 'active'
-                        } finally {
-                            finishingInterviewRef.current = false
-                        }
+            const status = interviewStatusRef.current
+            const isActiveState = ['active', 'preparing', 'aptitude', 'in_progress'].includes(status)
+            if (!isActiveState) return
+
+            const newWarnings = warningsRef.current + 1
+            warningsRef.current = newWarnings
+            setWarnings(newWarnings)
+
+            toast.error(`Tab switch detected! Warning #${newWarnings}/3.`, { duration: 5000 })
+
+            if (newWarnings >= 3) {
+                if (!finishingInterviewRef.current) {
+                    finishingInterviewRef.current = true
+                    interviewStatusRef.current = 'finishing'
+                    try {
+                        await APIClient.postWithRequestId(
+                            `/api/interviews/${interviewId}/end`,
+                            { force: true },
+                            `rims-${interviewId}-end-force`,
+                        )
+                        setInterviewStatus('completed')
+                        setShowIssueDialog(true)
+                    } catch (error) {
+                        console.log("Failed to terminate interview", error)
+                        interviewStatusRef.current = 'active'
+                        finishingInterviewRef.current = false
                     }
-                } else {
-                    alert(`Warning ${newWarnings}/2: Switching away from this tab is not allowed. A third violation will terminate your session.`)
                 }
+            } else {
+                alert(`Warning ${newWarnings}/3: Tab switching is tracked. Reaching the limit will end your session.`)
             }
         }
 
         document.addEventListener('visibilitychange', handleVisibilityChange)
+        window.addEventListener('blur', handleBlur)
+        window.addEventListener('focus', handleFocus)
 
         loadData()
 
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange)
-            // Clear timers/intervals first so no callbacks run after teardown or during recorder stop.
+            window.removeEventListener('blur', handleBlur)
+            window.removeEventListener('focus', handleFocus)
             if (loadRetryTimeoutRef.current) {
                 clearTimeout(loadRetryTimeoutRef.current)
                 loadRetryTimeoutRef.current = null
@@ -545,16 +565,8 @@ export default function InterviewPage() {
             // Initial check
             setIsFullscreen(!!document.fullscreenElement)
 
-            const enterFullscreen = async () => {
-                try {
-                    if (!document.fullscreenElement) {
-                        await document.documentElement.requestFullscreen()
-                    }
-                } catch (err) {
-                    console.error("Fullscreen failed:", err)
-                }
-            }
-            enterFullscreen()
+            // NO AUTO-FULLSCREEN HERE. It causes "Permissions check failed".
+            // We rely on startInterviewManual and the manual button in the header.
 
             return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
         }
@@ -712,20 +724,35 @@ export default function InterviewPage() {
     }
 
     const handleSubmit = async () => {
-        if (!answer.trim() || !currentQuestion || isSubmitting) return
+        // Use ref for the latest value as state might be updated by transcription in the background
+        const currentAnswer = answerRef.current;
+        const isVoiceActive = isListening || isTranscribing || transcribeInFlightRef.current;
+        
+        if (!currentAnswer.trim() && !isVoiceActive) return
+        if (!currentQuestion || isSubmitting) return
+        
         setIsSubmitting(true)
 
-        // Stop listening on submit
+        // 1. If currently recording, stop it and wait for the transcription to start processing
         if (isListening) {
             stopRecording()
+            // Short grace period for the 'onstop' event and 'handleTranscribe' transition
+            await new Promise(r => setTimeout(r, 400));
         }
 
-        // --- Wait for any in-flight transcription ---
-        if (transcribeInFlightRef.current) {
+        // 2. Wait for any in-flight transcription to complete (max 15s)
+        if (isTranscribing || transcribeInFlightRef.current) {
             const startTime = Date.now();
-            while (transcribeInFlightRef.current && Date.now() - startTime < 8000) {
-                await new Promise(r => setTimeout(r, 100));
+            while ((isTranscribing || transcribeInFlightRef.current) && Date.now() - startTime < 15000) {
+                await new Promise(r => setTimeout(r, 200));
             }
+        }
+
+        // 3. Final validation with the latest answer from the ref
+        const finalAnswer = answerRef.current;
+        if (!finalAnswer.trim()) {
+            setIsSubmitting(false)
+            return
         }
 
         try {
@@ -733,7 +760,7 @@ export default function InterviewPage() {
                 `/api/interviews/${interviewId}/submit-answer`,
                 {
                     question_id: currentQuestion.id,
-                    answer_text: answer,
+                    answer_text: finalAnswer,
                 },
                 `rims-${interviewId}-q-${currentQuestion.id}`,
             )
@@ -763,6 +790,7 @@ export default function InterviewPage() {
             )
             setQuestions(updatedQuestions)
             setAnswer('')
+            answerRef.current = '';
 
             if (!isAptitudeQ) {
                 if (evalPollRef.current) clearInterval(evalPollRef.current)
@@ -836,15 +864,15 @@ export default function InterviewPage() {
         }
     }
 
-    const finishInterview = async (manualQuestions?: Question[]) => {
+    const finishInterview = async (manualQuestions?: Question[], isForced = false) => {
         if (finishingInterviewRef.current) return
 
         const qsToUse = manualQuestions || questions
-        // Double check all questions are answered
         const unansweredCount = qsToUse.filter(q => !q.is_answered).length
-        if (unansweredCount > 0) {
+
+        // If not forced and there are unanswered questions, block with alert
+        if (unansweredCount > 0 && !isForced) {
             alert(`Please answer all questions before finishing. You have ${unansweredCount} unanswered question(s).`)
-            // Find first unanswered and jump to it
             const firstUnanswered = qsToUse.findIndex(q => !q.is_answered)
             if (firstUnanswered !== -1) {
                 setCurrentIndex(firstUnanswered)
@@ -852,14 +880,25 @@ export default function InterviewPage() {
             return
         }
 
+        // Final confirmation for the user
+        const confirmMsg = unansweredCount > 0 
+            ? `You have ${unansweredCount} unanswered questions. Are you sure you want to end the interview? This will submit your current progress.`
+            : `Are you sure you want to end and submit your interview?`;
+            
+        if (!confirm(confirmMsg)) return
+
         finishingInterviewRef.current = true
         interviewStatusRef.current = 'finishing'
         try {
             setIsSubmitting(true)
             await stopOverallRecording()
+            
+            // Allow forced completion even if some questions are missed (if confirmation was given or due to violation)
+            const isForced = interviewStatusRef.current === 'finishing' || (manualQuestions === undefined);
+
             await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/end`,
-                {},
+                { force: isForced },
                 `rims-${interviewId}-end`,
             )
             setInterviewStatus('completed')
@@ -1101,6 +1140,7 @@ export default function InterviewPage() {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
                                         setAnswer('')
+                                        answerRef.current = ''
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1131,6 +1171,7 @@ export default function InterviewPage() {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
                                         setAnswer('')
+                                        answerRef.current = ''
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1161,6 +1202,7 @@ export default function InterviewPage() {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
                                         setAnswer('')
+                                        answerRef.current = ''
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1307,6 +1349,16 @@ export default function InterviewPage() {
                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Locked:</span>
                             <span className="text-xs font-bold tracking-wider">{interviewData?.locked_skill?.toUpperCase() || 'GENERAL'}</span>
                         </div>
+                        {!isFullscreen && interviewStatus === 'active' && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => document.documentElement.requestFullscreen().catch(() => {})}
+                                className="bg-red-50 border-red-200 text-red-600 font-bold animate-pulse hover:bg-red-100 h-8 px-4 rounded-full text-[10px]"
+                            >
+                                <ShieldAlert className="w-3 h-3 mr-2" /> GO FULLSCREEN
+                            </Button>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -1374,7 +1426,7 @@ export default function InterviewPage() {
                                     {options.map((opt: string, i: number) => (
                                         <button
                                             key={i}
-                                            onClick={() => setAnswer(i.toString())}
+                                            onClick={() => { setAnswer(i.toString()); answerRef.current = i.toString(); }}
                                             className={`p-8 rounded-3xl border-2 text-left transition-all duration-300 group relative
                                                 ${answer === i.toString()
                                                     ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-500/30 -translate-y-1'
@@ -1394,7 +1446,7 @@ export default function InterviewPage() {
                                 <div className="space-y-4">
                                     <textarea
                                         value={answer}
-                                        onChange={(e) => setAnswer(e.target.value)}
+                                        onChange={(e) => { setAnswer(e.target.value); answerRef.current = e.target.value; }}
                                         className="w-full h-48 bg-slate-50 border-2 border-slate-100 rounded-3xl p-8 text-lg font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none resize-none"
                                         placeholder="Type your detailed response here..."
                                     />
@@ -1447,20 +1499,30 @@ export default function InterviewPage() {
 
                                 <p className="text-xs font-bold text-slate-400 italic">Answer each question and submit to move forward</p>
 
-                                <Button
-                                    disabled={!answer.trim() || isSubmitting || currentQuestion?.is_answered}
-                                    onClick={handleSubmit}
-                                    className="h-16 px-10 rounded-[1.25rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-lg shadow-2xl shadow-blue-500/30 transition-all hover:-translate-y-1 active:scale-[0.98] disabled:opacity-30"
-                                >
-                                    {isSubmitting ? (
-                                        <Loader2 className="w-6 h-6 animate-spin" />
-                                    ) : (
-                                        <>
-                                            Submit Answer
-                                            <ChevronRight className="w-6 h-6 ml-1" />
-                                        </>
-                                    )}
-                                </Button>
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        className="h-16 px-8 rounded-[1.25rem] border-2 border-red-100 text-red-600 font-bold hover:bg-red-50 hover:border-red-200 transition-all"
+                                        onClick={() => finishInterview(undefined, true)}
+                                        disabled={isSubmitting}
+                                    >
+                                        End Interview
+                                    </Button>
+                                    <Button
+                                        disabled={!answer.trim() || isSubmitting || currentQuestion?.is_answered}
+                                        onClick={handleSubmit}
+                                        className="h-16 px-10 rounded-[1.25rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-lg shadow-2xl shadow-blue-500/30 transition-all hover:-translate-y-1 active:scale-[0.98] disabled:opacity-30"
+                                    >
+                                        {isSubmitting ? (
+                                            <Loader2 className="w-6 h-6 animate-spin" />
+                                        ) : (
+                                            <>
+                                                Submit Answer
+                                                <ChevronRight className="w-6 h-6 ml-1" />
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 

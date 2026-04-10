@@ -42,7 +42,7 @@ class AIClient:
             self.disabled = True
         else:
             try:
-                timeout_s = float(os.getenv("AI_TIMEOUT_SECONDS", "15") or "15")
+                timeout_s = float(os.getenv("AI_TIMEOUT_SECONDS", "45") or "45")
                 self.client = AsyncGroq(api_key=self.api_key, timeout=timeout_s)
             except Exception as e:
                 logger.warning(f"Failed to initialize Groq client: {e}. AI features disabled.")

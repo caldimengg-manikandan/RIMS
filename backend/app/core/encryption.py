@@ -107,17 +107,20 @@ def decrypt_field(ciphertext: str) -> str:
         plaintext = f.decrypt(ciphertext.encode("utf-8"))
         return plaintext.decode("utf-8")
     except InvalidToken:
-        # Graceful fallback: log the error but do NOT crash the application.
-        # This allows the buyer to see that a key mismatch exists without the app becoming unusable.
-        logger.warning(
-            f"DECRYPTION FAILURE: The current ENCRYPTION_KEY cannot decrypt this value. "
-            f"Data may have been encrypted with a different key. "
-            f"Check .env or secrets.txt. Ciphertext preview: {ciphertext[:20]}..."
-        )
-        return "[DECRYPTION_ERROR]"
+        # Cache previews to avoid log spam for the same failed records
+        _log_decrypt_failure_once(ciphertext[:20])
+        return "[UNREADABLE]"
     except Exception as e:
         logger.error(f"Unexpected error during decryption: {e}")
         return "[DECRYPTION_ERROR]"
+
+@functools.lru_cache(maxsize=100)
+def _log_decrypt_failure_once(preview: str):
+    """Log decryption failure once per unique record prefix to avoid spam."""
+    logger.warning(
+        f"DECRYPTION FAILURE: Key mismatch for record starting with '{preview}...'. "
+        "Returning [UNREADABLE]. Check ENCRYPTION_KEY."
+    )
 
 
 # ---------------------------------------------------------------------------
