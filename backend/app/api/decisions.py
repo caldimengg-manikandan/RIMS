@@ -28,7 +28,7 @@ def make_hiring_decision(
     )
     
     """Make hiring decision (HR only)"""
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     
     if not application:
         raise HTTPException(
@@ -59,6 +59,11 @@ def make_hiring_decision(
         decision_comments=decision_data.decision_comments,
         decided_at=datetime.now(timezone.utc)
     )
+    
+    # Populate ownership context for immediate response
+    hiring_decision.is_owner = True # Just created it
+    hiring_decision.assigned_hr_id = current_user.id
+    hiring_decision.assigned_hr_name = current_user.full_name
     
     
     try:
@@ -103,13 +108,14 @@ async def hire_candidate(
     from app.core.config import get_settings
     settings = get_settings()
 
-    application = db.query(Application).filter(Application.id == application_id).first()
+    application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     validate_hr_ownership(application, current_user, resource_name="application")
 
     # 1. State machine transition
     fsm = CandidateStateMachine(db)
+    
     try:
         result = fsm.transition(
             application=application,
@@ -117,53 +123,53 @@ async def hire_candidate(
             user_id=current_user.id,
             notes=notes or "Hired via formal process",
         )
-    except (InvalidTransitionError, DuplicateTransitionError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
-    # 2. Save the uploaded offer letter
-    # 2. Upload the base offer letter to Supabase
-    timestamp = int(datetime.now(timezone.utc).timestamp())
-    base_filename = f"offer_base_{application_id}_{timestamp}.pdf"
-    base_storage_path = f"offer_letters/{base_filename}"
-    
-    content = await offer_letter.read()
-    from app.core.storage import upload_file
-    upload_file(settings.supabase_bucket_resumes, base_storage_path, content, content_type=offer_letter.content_type)
+        # 2. Upload the base offer letter to Supabase
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        base_filename = f"offer_base_{application_id}_{timestamp}.pdf"
+        base_storage_path = f"offer_letters/{base_filename}"
+        
+        content = await offer_letter.read()
+        from app.core.storage import upload_file
+        upload_file(settings.supabase_bucket_resumes, base_storage_path, content, content_type=offer_letter.content_type)
 
-    # 3. Process the PDF (Overlay details in-memory)
-    try:
-        jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
-    except:
-        jdate = datetime.now(timezone.utc)
+        # 3. Process the PDF (Overlay details in-memory)
+        try:
+            jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
+        except:
+            jdate = datetime.now(timezone.utc)
+        
+        final_pdf_content = overlay_offer_letter_details(
+            content, 
+            application.candidate_name, 
+            application.job.title, 
+            jdate
+        )
+        
+        final_filename = f"offer_final_{application_id}_{timestamp}.pdf"
+        final_storage_path = f"offer_letters/{final_filename}"
+        upload_file(settings.supabase_bucket_resumes, final_storage_path, final_pdf_content, content_type="application/pdf")
 
-    final_pdf_content = overlay_offer_letter_details(
-        content, 
-        application.candidate_name, 
-        application.job.title, 
-        jdate
-    )
-    
-    final_filename = f"offer_final_{application_id}_{timestamp}.pdf"
-    final_storage_path = f"offer_letters/{final_filename}"
-    upload_file(settings.supabase_bucket_resumes, final_storage_path, final_pdf_content, content_type="application/pdf")
-
-    # 4. Create decision record
-    hiring_decision = HiringDecision(
-        application_id=application_id,
-        hr_id=current_user.id,
-        decision="hired",
-        decision_comments=notes,
-        joining_date=jdate,
-        offer_letter_path=final_storage_path,
-        decided_at=datetime.now(timezone.utc)
-    )
-    db.add(hiring_decision)
-
-    try:
+        # 4. Create decision record
+        hiring_decision = HiringDecision(
+            application_id=application_id,
+            hr_id=current_user.id,
+            decision="hired",
+            decision_comments=notes,
+            joining_date=jdate,
+            offer_letter_path=final_storage_path,
+            decided_at=datetime.now(timezone.utc)
+        )
+        db.add(hiring_decision)
         db.commit()
+    except (InvalidTransitionError, DuplicateTransitionError) as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save hiring decision")
+        logger.error(f"Hiring process failed for application {application_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to finalize hiring process and save decision.")
+
 
     # 5. Email with attachment (ONLY after successful commit)
     candidate_email = application.candidate_email
@@ -197,18 +203,26 @@ def get_application_decision(
     if current_user.role != "super_admin":
         # Allow only owner HR or candidate tied to this application email.
         if current_user.role == "hr":
-            validate_hr_ownership(application, current_user, resource_name="application")
+            # Global read access for HR
+            pass
         elif current_user.role == "candidate":
             if (application.candidate_email or "").lower() != (current_user.email or "").lower():
                 raise HTTPException(status_code=403, detail="Unauthorized access")
     
     
-    decision = db.query(HiringDecision).filter(
+    decision = db.query(HiringDecision).options(
+        joinedload(HiringDecision.hr)
+    ).filter(
         HiringDecision.application_id == application_id
     ).first()
     
     if not decision:
         return {"message": "Decision not yet made"}
+    
+    # Populate ownership context
+    decision.assigned_hr_id = decision.hr_id
+    decision.assigned_hr_name = decision.hr.full_name if decision.hr else "Unknown"
+    decision.is_owner = (decision.hr_id == current_user.id)
     
     return decision
 
@@ -224,6 +238,7 @@ def get_hiring_pipeline(
     
     query = db.query(Application).outerjoin(Job).options(
         joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id),
+        joinedload(Application.hr).load_only(User.id, User.full_name),
         joinedload(Application.interview).load_only(Interview.id, Interview.status, Interview.overall_score),
         joinedload(Application.hiring_decision).load_only(HiringDecision.decision, HiringDecision.decided_at),
         load_only(Application.id, Application.candidate_name, Application.status, Application.applied_at, Application.job_id, Application.hr_id)
@@ -235,9 +250,9 @@ def get_hiring_pipeline(
     if status_filter:
         query = query.filter(Application.status == status_filter)
 
-    if current_user.role != "super_admin":
-        query = query.filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
+    # Global pipeline visibility for HR and Super Admin.
     
+    total = query.count()
     applications = query.all()
     
     # Build detailed response — all data already loaded, zero extra queries
@@ -250,7 +265,10 @@ def get_hiring_pipeline(
             "status": app.status,
             "applied_at": app.applied_at,
             "interview": None,
-            "decision": None
+            "decision": None,
+            "assigned_hr_id": app.hr_id,
+            "assigned_hr_name": app.hr.full_name if app.hr else "Unknown",
+            "is_owner": (app.hr_id == current_user.id)
         }
         
         if app.interview:
@@ -268,4 +286,4 @@ def get_hiring_pipeline(
         
         pipeline.append(app_data)
     
-    return pipeline
+    return {"items": pipeline, "total": total}

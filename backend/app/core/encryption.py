@@ -106,14 +106,26 @@ def decrypt_field(ciphertext: str) -> str:
         f = _get_fernet()
         plaintext = f.decrypt(ciphertext.encode("utf-8"))
         return plaintext.decode("utf-8")
-    except (InvalidToken, Exception) as e:
-        # Graceful fallback to avoid crashing endpoints like /api/notifications
+    except InvalidToken:
+        # Cache previews to avoid log spam for the same failed records
+        _log_decrypt_failure_once(ciphertext[:20])
+        return "[UNREADABLE]"
+    except Exception as e:
         logger.warning(
             f"DECRYPTION FAILURE: {type(e).__name__} during decryption. "
             f"Data may be corrupted or encrypted with a different key. "
             f"Placeholder returned. Preview: {ciphertext[:15]}..."
         )
+
         return "[DECRYPTION_ERROR]"
+
+@functools.lru_cache(maxsize=100)
+def _log_decrypt_failure_once(preview: str):
+    """Log decryption failure once per unique record prefix to avoid spam."""
+    logger.warning(
+        f"DECRYPTION FAILURE: Key mismatch for record starting with '{preview}...'. "
+        "Returning [UNREADABLE]. Check ENCRYPTION_KEY."
+    )
 
 
 # ---------------------------------------------------------------------------

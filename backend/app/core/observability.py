@@ -61,7 +61,16 @@ def log_json(
     if status is not None:
         payload["status"] = status
     if extra:
-        payload["extra"] = extra
+        # PII Protection: Recursively scrub strings in the extra dict
+        def scrub_dict(d):
+            if isinstance(d, dict):
+                return {k: scrub_dict(v) for k, v in d.items()}
+            elif isinstance(d, list):
+                return [scrub_dict(x) for x in d]
+            elif isinstance(d, str):
+                return filter_pii(d)
+            return d
+        payload["extra"] = scrub_dict(extra)
 
     msg = json.dumps(payload, ensure_ascii=False)
     if level == "warning":
@@ -99,4 +108,3 @@ def log_ai_score_deviation(logger: logging.Logger, score: float, context: str, a
                 "threshold_breach": "low" if score < 2.0 else "high"
             }
         )
-

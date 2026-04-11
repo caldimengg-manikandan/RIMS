@@ -168,21 +168,26 @@ function getRecommendationColor(score: number) {
 }
 
 export default function ReportsPage() {
-  const { data: rawReports = [], error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<Report[]>('/api/analytics/reports', (url: string) => fetcher<Report[]>(url))
+  const { data: rawReportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], count: number, failed?: number }>('/api/analytics/reports', (url: string) => fetcher<{ reports: Report[], count: number, failed?: number }>(url))
+  console.log("DIAGNOSTIC - API RESPONSE:", rawReportsResponse);
+  const rawReports = Array.isArray(rawReportsResponse)
+    ? rawReportsResponse
+    : (rawReportsResponse?.reports || []);
+  console.log("DIAGNOSTIC - rawReports:", rawReports);
   const searchParams = useSearchParams()
   const urlReportId = searchParams.get('reportId')
   const urlSearch = searchParams.get('search')
 
   const reports = useMemo(() => {
-    return rawReports.map(report => {
+    const processed = rawReports.map(report => {
       let techSum = 0, behSum = 0, commSum = 0;
       let techCount = 0, behCount = 0, commCount = 0;
       
-      const allQ = [...(report.question_evaluations || []), ...(report.aptitude_question_evaluations || [])];
+      const allQ = [...(report?.question_evaluations || []), ...(report?.aptitude_question_evaluations || [])];
 
       allQ.forEach(q => {
-        const score = q.evaluation?.overall ?? q.score ?? 0;
-        const qType = (q.question_type || "technical").toLowerCase();
+        const score = q?.evaluation?.overall ?? q?.score ?? 0;
+        const qType = (q?.question_type || "technical").toLowerCase();
 
         if (qType === 'behavioral') {
           behSum += score;
@@ -192,26 +197,41 @@ export default function ReportsPage() {
           techCount++;
         }
 
-        if (q.evaluation?.clarity !== undefined) {
+        if (q?.evaluation?.clarity !== undefined) {
           commSum += q.evaluation.clarity;
           commCount++;
         }
       });
 
       // Aptitude Calculation
-      const aptQty = report.aptitude_question_evaluations?.length || 0;
-      const aptCorrect = report.aptitude_question_evaluations?.filter(q => q.correct).length || 0;
-      const aptScore = aptQty > 0 ? (aptCorrect / aptQty) * 10 : report.aptitude_score;
+      const aptQty = report?.aptitude_question_evaluations?.length || 0;
+      const aptCorrect = report?.aptitude_question_evaluations?.filter(q => q.correct).length || 0;
+      const aptScore = aptQty > 0 ? (aptCorrect / aptQty) * 10 : report?.aptitude_score;
 
       return {
         ...report,
-        tech_score: techCount > 0 ? techSum / techCount : report.tech_score,
-        behavioral_score: behCount > 0 ? behSum / behCount : report.behavioral_score,
+        tech_score: techCount > 0 ? techSum / techCount : report?.tech_score,
+        behavioral_score: behCount > 0 ? behSum / behCount : report?.behavioral_score,
         aptitude_score: aptScore,
-        comm_score: commCount > 0 ? commSum / commCount : report.comm_score,
+        comm_score: commCount > 0 ? commSum / commCount : report?.comm_score,
       };
     });
+    
+    // Developer Contract Validation Log
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[REPORTS] Pipeline: API(${rawReports.length}) -> Processed(${processed.length})`);
+    }
+
+    return processed;
   }, [rawReports])
+
+  // Contract Validation Warning
+  React.useEffect(() => {
+    if (rawReportsResponse && !Array.isArray(rawReportsResponse) && !rawReportsResponse.reports) {
+      console.warn("[REPORTS] API Contract Violation: Response missing 'reports' array.", rawReportsResponse);
+    }
+  }, [rawReportsResponse]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -278,43 +298,50 @@ export default function ReportsPage() {
   const filteredReports = useMemo(() => {
     return reports.filter(report => {
       // Derive display suggestion bucket, ensuring "Not Completed" is its own group
+      const score = Number(report?.overall_score || 0);
       const suggestion = isInterviewNotCompleted(report)
         ? 'Not Completed'
-        : getRecommendationLabel(report.overall_score)
+        : getRecommendationLabel(score)
+      
       const matchesStatus = statusFilter === 'All' || suggestion === statusFilter
-      const matchesScore = report.overall_score >= scoreRange[0] && report.overall_score <= scoreRange[1]
-      const matchesExp = experienceFilter === 'All' || report.candidate_profile.experience_level === experienceFilter
-
-      // Skill Filter Logic (Partial Match)
+      const matchesScore = score >= scoreRange[0] && score <= scoreRange[1]
+      const matchesExp = experienceFilter === 'All' || (report?.candidate_profile?.experience_level || 'N/A') === experienceFilter
+      
+      const skillFilterLower = skillFilter.toLowerCase()
       const matchesSkillFilter = skillFilter === 'All' ||
-        (report.candidate_profile.primary_skill?.toLowerCase() || '').includes(skillFilter.toLowerCase()) ||
-        (report.candidate_profile.skills?.some(s => s.toLowerCase().includes(skillFilter.toLowerCase())) || false)
+        (report?.candidate_profile?.primary_skill?.toLowerCase() || '').includes(skillFilterLower) ||
+        (report?.candidate_profile?.skills?.some(s => s.toLowerCase().includes(skillFilterLower)) || false)
 
-      // Date Filter Logic (matching YYYY-MM-DD in local time)
-      const reportDateStr = new Date(report.timestamp).toLocaleDateString('en-CA');
+      const reportDateStr = report?.timestamp ? new Date(report.timestamp).toLocaleDateString('en-CA') : "";
       const filterDateStr = dateFilter?.toLocaleDateString('en-CA');
       const matchesDate = !dateFilter || reportDateStr === filterDateStr;
 
-      // Basic search
       const searchLower = searchQuery.toLowerCase()
       const matchesSearch = searchQuery === '' ||
-        report.filename.toLowerCase().includes(searchLower) ||
-        (report.candidate_profile.primary_skill || '').toLowerCase().includes(searchLower) ||
-        (report.candidate_profile.candidate_name || '').toLowerCase().includes(searchLower) ||
-        (report.candidate_profile.candidate_email || '').toLowerCase().includes(searchLower)
+        String(report?.filename || "").toLowerCase().includes(searchLower) ||
+        String(report?.candidate_profile?.primary_skill || "").toLowerCase().includes(searchLower) ||
+        String(report?.candidate_profile?.candidate_name || "").toLowerCase().includes(searchLower) ||
+        String(report?.candidate_profile?.candidate_email || "").toLowerCase().includes(searchLower)
 
       return matchesStatus && matchesScore && matchesExp && matchesSearch && matchesDate && matchesSkillFilter
-    })
+    });
+    
+    // Developer Pipeline Visibility
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[REPORTS] Render Logic: Processed(${reports.length}) -> Filtered(${filtered.length})`);
+    }
+
+    return filtered;
   }, [reports, statusFilter, skillFilter, scoreRange, experienceFilter, dateFilter, searchQuery])
 
   // Metrics
   const metrics = useMemo(() => {
     const total = filteredReports.length
-    const selectedCount = filteredReports.filter(r => getRecommendationLabel(r.overall_score) === 'Select').length
-    const holdCount = filteredReports.filter(r => getRecommendationLabel(r.overall_score) === 'Consider').length
-    const rejectedCount = filteredReports.filter(r => getRecommendationLabel(r.overall_score) === 'Reject').length
-    const avgScore = total > 0 ? (filteredReports.reduce((acc, r) => acc + r.overall_score, 0) / total).toFixed(2) : '0.00'
-    const avgQuestions = total > 0 ? (filteredReports.reduce((acc, r) => acc + r.total_questions_answered, 0) / total).toFixed(1) : '0.0'
+    const selectedCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Select').length
+    const holdCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Consider').length
+    const rejectedCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Reject').length
+    const avgScore = total > 0 ? (filteredReports.reduce((acc, r) => acc + Number(r?.overall_score || 0), 0) / total).toFixed(2) : '0.00'
+    const avgQuestions = total > 0 ? (filteredReports.reduce((acc, r) => acc + (r?.total_questions_answered || 0), 0) / total).toFixed(1) : '0.0'
 
     return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
   }, [filteredReports])
@@ -630,12 +657,13 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {/* Status Filter */}
-              <div className="flex flex-col gap-4">
-                <div className="space-y-2 flex-1">
-                  <Label>Status</Label>
+              {/* Grouped Status/Exp/Skill Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Status Filter */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -647,15 +675,13 @@ export default function ReportsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              {/* Experience Filter */}
-              <div className="flex flex-col gap-4">
-                <div className="space-y-2 flex-1">
-                  <Label>Experience</Label>
+                {/* Experience Filter */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Experience</Label>
                   <Select value={experienceFilter} onValueChange={setExperienceFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Experience Level" />
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Exp." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Levels</SelectItem>
@@ -665,15 +691,13 @@ export default function ReportsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              {/* Skill Filter */}
-              <div className="flex flex-col gap-4">
-                <div className="space-y-2 flex-1">
-                  <Label>Primary Skill</Label>
+                {/* Skill Filter */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Skillset</Label>
                   <Select value={skillFilter} onValueChange={setSkillFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Skill Category" />
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Skills" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Skills</SelectItem>
@@ -684,6 +708,8 @@ export default function ReportsPage() {
                   </Select>
                 </div>
               </div>
+
+              
 
               {/* Score Range */}
               <div className="space-y-2">

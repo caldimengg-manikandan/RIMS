@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useApplicationsMutate } from "./hooks/use-applications-mutate";
 
 interface Application {
   id: number;
@@ -35,6 +36,7 @@ interface Application {
   candidate_name: string;
   candidate_email: string;
   candidate_photo_path: string | null;
+  photo_url: string | null;
   composite_score: number | null;
   job: {
     id: number;
@@ -71,6 +73,7 @@ const APPLICATIONS_PAGE_SIZE = 49;
 
 export default function HRApplicationsPage() {
   const router = useRouter();
+  const { invalidateApplications } = useApplicationsMutate();
   const [applicationsPage, setApplicationsPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   /** Server-side search; debounced to avoid refetching on every keystroke. */
@@ -109,8 +112,12 @@ export default function HRApplicationsPage() {
         id: c.id,
         candidate_name: c.candidate_name,
         status: c.current_status,
-        applied_at: new Date().toISOString(), // Fallback
-        job: { title: c.job_title, id: 0, job_id: "" },
+        applied_at: c.applied_at || new Date().toISOString(),
+        job: { title: c.job_title, id: 0, job_id: c.job_id || "" },
+        candidate_photo_path: c.candidate_photo_path,
+        photo_url: c.photo_url,
+        file_status: c.file_status || 'active',
+        composite_score: c.composite_score,
         resume_extraction: { 
             resume_score: c.resume_score, 
             summary: c.match_insight,
@@ -160,13 +167,19 @@ export default function HRApplicationsPage() {
     { keepPreviousData: true },
   );
 
-  const swrApplications = paginatedData?.items || [];
-  const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
-  const isLoading = isSwrLoading || isMagicLoading;
+  const swrApplications = paginatedData?.items ?? [];
   
+  // Explicit diagnostic trace for debugging (Phase 3)
+  if (typeof window !== 'undefined') {
+      console.log("Applications API Trace:", paginatedData);
+  }
+  const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const totalCount = isMagicSearch ? magicSearchTotal : (paginatedData?.total || 0);
+  const isLoading = isSwrLoading || isMagicLoading;
+
   const totalPages = isMagicSearch ? Math.ceil(magicSearchTotal / APPLICATIONS_PAGE_SIZE) : (paginatedData?.pages || 0);
   const hasMoreApplications = applicationsPage < totalPages;
+
 
   const handleDecision = useCallback(async (
     applicationId: number,
@@ -209,7 +222,7 @@ export default function HRApplicationsPage() {
             };
           },
           successMessage: `Candidate ${decision} successfully`,
-          invalidateKeys: ["/api/analytics/dashboard"]
+          invalidateKeys: ["/api/analytics/dashboard", "/api/search/candidates"]
         }
       );
     } finally {
@@ -258,8 +271,8 @@ export default function HRApplicationsPage() {
               )
             };
           },
-          successMessage: `Candidate moved to ${nextStatus}`,
-          invalidateKeys: ["/api/analytics/dashboard"]
+          successMessage: `Status updated to ${nextStatus}`,
+          invalidateKeys: ["/api/analytics/dashboard", "/api/search/candidates"]
         }
       );
     } finally {
@@ -306,7 +319,7 @@ export default function HRApplicationsPage() {
             };
           },
           successMessage: "Candidate hired successfully",
-          invalidateKeys: ["/api/analytics/dashboard"]
+          invalidateKeys: ["/api/analytics/dashboard", "/api/search/candidates"]
         }
       );
     } finally {
@@ -472,8 +485,14 @@ export default function HRApplicationsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <div className="text-center py-20 flex flex-col items-center justify-center gap-4 animate-in fade-in duration-500">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary/20 border-t-primary shadow-lg"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full bg-primary/10 animate-pulse"></div>
+            </div>
+          </div>
+          <p className="text-sm font-bold text-muted-foreground animate-pulse tracking-widest uppercase">Fetching Records...</p>
         </div>
       ) : applications.length === 0 ? (
         <div className="text-center py-16 bg-card rounded-xl border border-border">
@@ -496,17 +515,37 @@ export default function HRApplicationsPage() {
                 <div className="flex items-center gap-4 flex-1">
                   <div className="relative shrink-0">
                     <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-border/50 bg-muted flex items-center justify-center shadow-sm">
+                      {app.photo_url ? (
+                        <img
+                          src={app.photo_url}
+                          alt={app.candidate_name || 'Candidate'}
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as any).style.display = 'none';
+                            (e.target as any).nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
                       {app.candidate_photo_path ? (
                         <img
-                          src={`${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`}
-                          alt={app.candidate_name}
+                          src={app.candidate_photo_path.startsWith('http') 
+                            ? app.candidate_photo_path 
+                            : `${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`}
+                          alt={app.candidate_name || 'Candidate'}
                           className="h-full w-full object-cover"
+                          style={{ display: app.photo_url ? 'none' : 'block' }}
+                          onError={(e) => {
+                             (e.target as any).style.display = 'none';
+                             (e.target as any).nextSibling.style.display = 'flex';
+                          }}
                         />
-                      ) : (
-                        <span className="text-lg font-bold text-muted-foreground">
-                          {app.candidate_name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      ) : null}
+                      <span 
+                        className="text-lg font-bold text-muted-foreground items-center justify-center"
+                        style={{ display: (app.photo_url || app.candidate_photo_path) ? 'none' : 'flex' }}
+                      >
+                        {(app.candidate_name || 'U').charAt(0).toUpperCase()}
+                      </span>
                     </div>
                   </div>
 
@@ -569,7 +608,7 @@ export default function HRApplicationsPage() {
                         <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
                           Score:{" "}
                           {(app.composite_score! > 0 
-                            ? Number(app.composite_score) 
+                            ? Number(app.composite_score) / 10
                             : Number(app.resume_extraction?.resume_score || 0)
                           ).toFixed(1)}
                           /10
@@ -632,8 +671,8 @@ export default function HRApplicationsPage() {
                         </Button>
                       )}
 
-                      {/* CALL FOR INTERVIEW: from ai_interview_completed or review_later */}
-                      {['ai_interview_completed', 'review_later'].includes(app.status) && (
+                      {/* CALL FOR INTERVIEW: from interview_completed or review_later */}
+                      {['interview_completed', 'review_later'].includes(app.status) && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -651,8 +690,8 @@ export default function HRApplicationsPage() {
                         </Button>
                       )}
 
-                      {/* REVIEW LATER: from ai_interview_completed */}
-                      {app.status === 'ai_interview_completed' && (
+                      {/* REVIEW LATER: from interview_completed */}
+                      {app.status === 'interview_completed' && (
                         <Button
                           size="sm"
                           variant="outline"

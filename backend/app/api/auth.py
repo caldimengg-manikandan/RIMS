@@ -187,7 +187,16 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
     credentials.email = credentials.email.lower()
     user = db.query(User).filter(User.email == credentials.email).first()
 
-    if not user or not verify_password(credentials.password, user.password_hash):
+    if not user:
+        logger.warning(f"Login failed: User {credentials.email} not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    logger.info(f"Login attempt: User={credentials.email}, Password Length={len(credentials.password)}")
+    if not verify_password(credentials.password, user.password_hash):
+        logger.warning(f"Login failed: Password mismatch for user {credentials.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"

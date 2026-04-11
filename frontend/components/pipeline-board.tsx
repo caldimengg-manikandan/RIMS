@@ -64,8 +64,12 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
     const apiPath = jobId
         ? `/api/applications?job_id=${jobId}&limit=49`
         : '/api/applications?limit=49'
-    const { data: swrData, error, isLoading, mutate } = useSWR<any>(apiPath, (url: string) => fetcher<any>(url))
-    const rawApplications = swrData?.items || (Array.isArray(swrData) ? swrData : [])
+    const { data: paginatedData, error, isLoading, mutate } = useSWR<any>(
+        apiPath, 
+        (url: string) => fetcher<any>(url)
+    )
+
+    const rawApplications = paginatedData?.items || (Array.isArray(paginatedData) ? paginatedData : [])
 
     const applications: Application[] = rawApplications.map((app: any) => ({
         id: app.id,
@@ -115,9 +119,10 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
             {
                 lockKey: `pipeline-bulk-delete-${jobId ?? 'all'}`,
                 optimisticData: (current: any) => {
-                    const items = Array.isArray(current) ? current : (current?.items || []);
-                    const newItems = items.filter((app: any) => !itemsToDelete.includes(app.id));
-                    return Array.isArray(current) ? newItems : { ...current, items: newItems };
+                    if (!current) return current;
+                    const items = current.items || (Array.isArray(current) ? current : []);
+                    const filtered = items.filter((app: any) => !itemsToDelete.includes(app.id));
+                    return Array.isArray(current) ? filtered : { ...current, items: filtered };
                 },
                 successMessage: `Successfully deleted ${itemsToDelete.length} candidate(s)`,
                 invalidateKeys: ['/api/analytics/dashboard']
@@ -140,13 +145,14 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
             {
                 lockKey: `application-${applicationId}`,
                 optimisticData: (current: any) => {
-                    const items = Array.isArray(current) ? current : (current?.items || []);
-                    const newItems = items.map((app: any) =>
+                    if (!current) return current;
+                    const items = current.items || (Array.isArray(current) ? current : []);
+                    const mapped = items.map((app: any) =>
                         app.id === applicationId 
                             ? { ...app, status: action === 'reject' ? 'rejected' : app.status } 
                             : app
                     );
-                    return Array.isArray(current) ? newItems : { ...current, items: newItems };
+                    return Array.isArray(current) ? mapped : { ...current, items: mapped };
                 },
                 invalidateKeys: ['/api/analytics/dashboard']
             }
@@ -157,7 +163,7 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
         await handleTransition(applicationId, 'reject', `Reason: ${reason}${notes ? `\nNotes: ${notes}` : ''}`)
     }
 
-    if (isLoading && rawApplications.length === 0) {
+    if (isLoading && !paginatedData) {
         return <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>

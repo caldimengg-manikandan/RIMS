@@ -7,6 +7,8 @@ import logging
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
+from app.domain.constants import CandidateState
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +63,8 @@ _REQUIRED_COLUMNS = [
     ("applications", "offer_email_status", "VARCHAR(20) DEFAULT 'pending'"),
     ("applications", "offer_email_retry_count", "INTEGER DEFAULT 0"),
     ("applications", "reminder_sent_at", "TIMESTAMP"),
+    ("applications", "email_sent_at", "TIMESTAMP"),
+    ("applications", "email_status", "VARCHAR(20) DEFAULT 'pending'"),
     # Missing ResumeExtraction columns
     ("resume_extractions", "candidate_name", "VARCHAR(255)"),
     ("resume_extractions", "email", "VARCHAR(255)"),
@@ -115,13 +119,23 @@ def run_startup_migrations(engine: Engine):
     with engine.connect() as conn:
         for table, column, col_type in _REQUIRED_COLUMNS:
             if table not in inspector.get_table_names():
+                logger.info(f"Skipping column {column} — table {table} does not exist yet.")
                 continue
+            
             try:
-                # PostgreSQL-native 'IF NOT EXISTS' for columns requires PG 9.6+, which we assume.
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
-                conn.commit()
+                # Check existence to provide better logging
+                if not column_exists(conn, table, column):
+                    logger.info(f"Applying migration: Adding column {table}.{column} ({col_type})...")
+                    # PostgreSQL-native 'IF NOT EXISTS' for columns requires PG 9.6+, which we assume.
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"))
+                    conn.commit()
+                    logger.info(f"Migration SUCCESS: Column {table}.{column} added.")
+                else:
+                    logger.debug(f"Column {table}.{column} already exists.")
             except Exception as e:
-                logger.warning(f"Failed to add column {table}.{column}: {e}")
+                logger.error(f"Migration FAILED for {table}.{column}: {e}")
+                # For critical updates, we might want to raise, but for baseline, we log and continue
+                # unless it's a manual migration script.
 
         # Ensure approval_status exists on users (crucial for HR flow)
         try:
@@ -253,6 +267,11 @@ def run_startup_migrations(engine: Engine):
             "uq_answer_per_question",
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_answer_per_question ON interview_answers(question_id)",
         ),
+        (
+            "interviews",
+            "uq_interview_application_id",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_interview_application_id ON interviews(application_id)",
+        ),
     ]
 
     with engine.connect() as conn:
@@ -265,3 +284,75 @@ def run_startup_migrations(engine: Engine):
                 logger.info(f"Migration completed: ensured index {constraint_name}")
             except Exception as exc:
                 logger.warning(f"Migration skipped index {constraint_name}: {exc}")
+
+
+def validate_enum_parity(engine: Engine):
+    """
+    Verify that the CandidateState enum in code matches the DB constraint.
+    """
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    
+    # We only check this on PostgreSQL
+    if "postgresql" not in str(engine.url):
+        return
+
+    expected_states = {s.value for s in CandidateState}
+    
+    with engine.connect() as conn:
+        try:
+            # Query the constraint from PG catalog
+            result = conn.execute(text("""
+                SELECT conkey, pg_get_constraintdef(oid) 
+                FROM pg_constraint 
+                WHERE conname = 'check_applications_status'
+            """)).fetchone()
+            
+            if result:
+                def_str = result[1]
+                # Extract values from "CHECK (status IN ('state1', 'state2'))"
+                import re
+                found_states = set(re.findall(f"'(.*?)'", def_str))
+                
+                missing = expected_states - found_states
+                if missing:
+                    error_msg = f"CRITICAL ENUM MISMATCH: Database constraint 'check_applications_status' is missing states: {missing}"
+                    logger.critical(error_msg)
+                    raise RuntimeError(error_msg)
+            else:
+                logger.warning("Constraint 'check_applications_status' not found for verification.")
+        except Exception as e:
+            if isinstance(e, RuntimeError): raise
+            logger.warning(f"Enum parity check skipped/failed: {e}")
+
+def validate_required_columns(engine: Engine):
+    """
+    Validation-only check that stops app startup if critical columns are missing.
+    Does NOT attempt to migrate.
+    """
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    
+    # Critical columns that MUST exist for the app to function safely
+    CRITICAL = [
+        ("applications", "email_sent_at"),
+        ("applications", "email_status"),
+        ("applications", "resume_status"),
+        ("interviews", "test_id"),
+    ]
+    
+    missing = []
+    with engine.connect() as conn:
+        for table, col in CRITICAL:
+            if not column_exists(conn, table, col):
+                missing.append(f"{table}.{col}")
+    
+    if missing:
+        error_msg = f"CRITICAL DATABASE ERROR: The following columns are missing from the database: {', '.join(missing)}. Please run 'python scripts/migrate.py' to fix the schema."
+        logger.critical(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Run enum parity check
+    validate_enum_parity(engine)
+    
+    logger.info("Database schema and Enum validation passed.")

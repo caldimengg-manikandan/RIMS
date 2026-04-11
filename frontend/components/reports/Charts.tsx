@@ -34,8 +34,8 @@ export const DetailedMetricsChart = React.memo(({ report, showNoData }: { report
     let sums = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
     let count = 0;
 
-    report.question_evaluations?.forEach(q => {
-        if (q.evaluation) {
+    report?.question_evaluations?.forEach(q => {
+        if (q?.evaluation) {
             sums.technical += q.evaluation.technical_accuracy || 0;
             sums.clarity += q.evaluation.clarity || 0;
             sums.completeness += q.evaluation.completeness || 0;
@@ -88,12 +88,12 @@ export const SkillProficiencyChart = React.memo(({ report }: { report: Report })
     let skillsData: { name: string, score: number }[] = [];
 
     try {
-        if (report.evaluated_skills) {
+        if (report?.evaluated_skills) {
             const parsedSkills = JSON.parse(report.evaluated_skills);
             if (Array.isArray(parsedSkills)) {
                 skillsData = parsedSkills.map((s: any) => ({
-                    name: s.skillName || 'Skill',
-                    score: s.score || 0
+                    name: s?.skillName || 'Skill',
+                    score: s?.score || 0
                 }));
             }
         }
@@ -128,9 +128,9 @@ export const AllReportsMetricsChart = React.memo(({ reports }: { reports: any[] 
     let sums = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
     let count = 0;
 
-    reports.forEach(report => {
-        report.question_evaluations?.forEach((q: any) => {
-            if (q.evaluation) {
+    reports?.forEach(report => {
+        report?.question_evaluations?.forEach((q: any) => {
+            if (q?.evaluation) {
                 sums.technical += q.evaluation.technical_accuracy || 0;
                 sums.clarity += q.evaluation.clarity || 0;
                 sums.completeness += q.evaluation.completeness || 0;

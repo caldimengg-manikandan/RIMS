@@ -9,10 +9,10 @@ import { SWRProvider } from '@/app/dashboard/lib/swr-provider';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'),
-  title: 'CAL-RIMS – AI-Powered Recruitment Intelligence System',
+  title: 'CAL-RIMS - AI-Powered Recruitment Intelligence System',
   description: 'CAL-RIMS is an AI-powered automated recruitment platform for seamless hiring, empowering teams to find, evaluate, and hire top-tier talent efficiently.',
   openGraph: {
-    title: 'CALRIMS – AI-Powered Recruitment Intelligence System',
+    title: 'CALRIMS - AI-Powered Recruitment Intelligence System',
     description: 'CALRIMS is an AI-powered automated recruitment platform for seamless hiring, empowering teams to find, evaluate, and hire top-tier talent efficiently.',
     images: ['/og-image.jpg'],
     type: 'website',

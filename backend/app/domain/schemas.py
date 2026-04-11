@@ -3,6 +3,7 @@ from datetime import datetime
 import re
 import json
 from typing import Optional, List, Any
+from app.domain.constants import CandidateState
 
 # ============================================================================
 # Auth Schemas
@@ -122,14 +123,13 @@ class JobCreate(BaseModel):
         if not any(c.isalpha() for c in title_trimmed):
             raise ValueError("Job Title must contain letters and no special characters")
             
-        # Rule: Allow only letters, numbers, and spaces. Disallow ALL special characters (@, #, !, %, etc.)
-        if not re.match(r'^[a-zA-Z0-9\s]+$', title_trimmed):
-            raise ValueError("Job Title must contain letters and no special characters")
+        # Rule: Allow letters, numbers, spaces, and common technical symbols (+, #, ., -)
+        if not re.match(r'^[a-zA-Z0-9\s+#.\-]+$', title_trimmed):
+            raise ValueError("Job Title must contain letters, numbers, spaces, and common symbols like +, #, ., -")
             
-        # Edge case: prevent titles that are mostly symbols/numbers with just one letter like "123Dev@@"
-        # Since we already disallow special characters above, we just check if it's meaningful
-        if len(re.sub(r'[^a-zA-Z]', '', title_trimmed)) < 2:
-             raise ValueError("Job Title must contain meaningful letters")
+        # Edge case: prevent titles that are ONLY symbols
+        if len(re.sub(r'[^a-zA-Z0-9]', '', title_trimmed)) < 1:
+             raise ValueError("Job Title must contain meaningful content")
              
         return title_trimmed
 
@@ -187,10 +187,10 @@ class JobUpdate(BaseModel):
                 raise ValueError("Job Title must be at least 3 characters long")
             if not any(c.isalpha() for c in title_trimmed):
                 raise ValueError("Job Title must contain letters and no special characters")
-            if not re.match(r'^[a-zA-Z0-9\s]+$', title_trimmed):
-                raise ValueError("Job Title must contain letters and no special characters")
-            if len(re.sub(r'[^a-zA-Z]', '', title_trimmed)) < 2:
-                raise ValueError("Job Title must contain meaningful letters")
+            if not re.match(r'^[a-zA-Z0-9\s+#.\-]+$', title_trimmed):
+                raise ValueError("Job Title must contain letters, numbers, spaces, and common symbols like +, #, ., -")
+            if len(re.sub(r'[^a-zA-Z0-9]', '', title_trimmed)) < 1:
+                raise ValueError("Job Title must contain meaningful content")
             return title_trimmed
         return v
 
@@ -278,6 +278,7 @@ class TransitionResponse(BaseModel):
 
 class JobSummary(BaseModel):
     id: int
+    job_id: Optional[str] = None
     title: str
 
     class Config:
@@ -315,6 +316,9 @@ class ApplicationResponse(BaseModel):
     
     applied_at: datetime
     updated_at: datetime
+    is_owner: bool = False
+    assigned_hr_id: Optional[int] = None
+    assigned_hr_name: Optional[str] = None
 
     # Onboarding response fields (Enhanced V2)
     offer_sent: bool = False
@@ -330,8 +334,87 @@ class ApplicationResponse(BaseModel):
     offer_email_retry_count: int = 0
     reminder_sent_at: Optional[datetime] = None
 
+    @field_validator('status')
+    @classmethod
+    def validate_status_enum(cls, v):
+        if v not in [s.value for s in CandidateState]:
+            return v
+        return v
+
+    @field_validator('resume_score', 'aptitude_score', 'interview_score', 'composite_score', mode='before')
+    @classmethod
+    def clamp_scores(cls, v):
+        if v is None:
+            return 0.0
+        try:
+            val = float(v)
+            if val < 0 or val > 100:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"DATA_INTEGRITY: Score out of range (value={val}). Clamped to 0-100.",
+                    extra={"invalid_value": val}
+                )
+            return max(0.0, min(100.0, val))
+        except (ValueError, TypeError):
+            return 0.0
+
     class Config:
         from_attributes = True
+
+class ResumeExtractionSummary(BaseModel):
+    id: int
+    resume_score: float = 0.0
+    skill_match_percentage: float = 0.0
+    experience_level: Optional[str] = None
+    summary: Optional[str] = None
+    extracted_skills: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class InterviewSummary(BaseModel):
+    id: int
+    status: str
+    overall_score: Optional[float] = 0.0
+
+    class Config:
+        from_attributes = True
+
+class ApplicationSummaryResponse(BaseModel):
+    id: int
+    job_id: int
+    job: Optional[JobSummary] = None
+    candidate_name: str
+    candidate_email: str
+    status: str
+    file_status: Optional[str] = 'active'
+    
+    # Pruned for performance (List view doesn't need these)
+    resume_url: Optional[str] = None
+    photo_url: Optional[str] = None
+    
+    resume_score: Optional[float] = 0.0
+    composite_score: Optional[float] = 0.0
+    
+    applied_at: datetime
+    
+    # Correctly typed nested data
+    resume_extraction: Optional[ResumeExtractionSummary] = None
+    interview: Optional[InterviewSummary] = None
+    is_owner: bool = False
+    assigned_hr_id: Optional[int] = None
+    assigned_hr_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ApplicationListResponse(BaseModel):
+    items: List[ApplicationSummaryResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
 
 class ApplicationStageResponse(BaseModel):
     id: int
@@ -354,13 +437,6 @@ class ApplicationDetailResponse(ApplicationResponse):
     pipeline_stages: List[ApplicationStageResponse] = Field(default_factory=list)
     # Read-only: heuristic + optional hr_notes marker; not persisted as its own column.
     extraction_degraded: bool = False
-
-class ApplicationListResponse(BaseModel):
-    items: List[ApplicationDetailResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
 
 
 class HasAppliedResponse(BaseModel):
@@ -388,16 +464,37 @@ class ResumeExtractionResponse(BaseModel):
     id: int
     application_id: int
     extracted_text: Optional[str]  # Full text
+    candidate_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
     summary: Optional[str]  # AI summary
     extracted_skills: Optional[str]
     years_of_experience: Optional[float]
     education: Optional[str]
     previous_roles: Optional[str]
     experience_level: Optional[str]
-    resume_score: float
-    skill_match_percentage: float
     reasoning: Optional[dict] = None
+    resume_score: float = 0.0
+    skill_match_percentage: float = 0.0
     created_at: datetime
+    
+    @field_validator('resume_score', 'skill_match_percentage', mode='before')
+    @classmethod
+    def clamp_resume_scores(cls, v):
+        if v is None:
+            return 0.0
+        try:
+            val = float(v)
+            if val < 0 or val > 100:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"DATA_INTEGRITY: Resume score out of range (value={val}). Clamped to 0-100.",
+                    extra={"invalid_value": val}
+                )
+            return max(0.0, min(100.0, val))
+        except (ValueError, TypeError):
+            return 0.0
     
     @field_validator('reasoning', mode='before')
     @classmethod
@@ -434,6 +531,19 @@ class InterviewReportResponse(BaseModel):
     aptitude_score: Optional[float] = None
     behavioral_score: Optional[float] = None
     combined_score: Optional[float] = None
+
+    @field_validator('overall_score', 'technical_skills_score', 'communication_score', 
+                     'problem_solving_score', 'aptitude_score', 'behavioral_score', 
+                     'combined_score', mode='before')
+    @classmethod
+    def clamp_report_scores(cls, v):
+        if v is None:
+            return 0.0
+        try:
+            val = float(v)
+            return max(0.0, min(100.0, val))
+        except (ValueError, TypeError):
+            return 0.0
     evaluated_skills: Optional[str] = None
     ai_used: Optional[bool] = False
     fallback_used: Optional[bool] = False
@@ -561,6 +671,9 @@ class HiringDecisionResponse(BaseModel):
     joining_date: Optional[datetime] = None
     offer_letter_path: Optional[str] = None
     decided_at: datetime
+    is_owner: bool = False
+    assigned_hr_id: Optional[int] = None
+    assigned_hr_name: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -620,6 +733,9 @@ class InterviewIssueResponse(BaseModel):
     is_reissue_granted: bool
     created_at: datetime
     resolved_at: Optional[datetime]
+    is_owner: bool = False
+    assigned_hr_id: Optional[int] = None
+    assigned_hr_name: Optional[str] = None
 
     class Config:
         from_attributes = True

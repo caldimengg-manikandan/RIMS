@@ -18,14 +18,24 @@ def is_ai_unavailable_response(content: str | None) -> bool:
     return c == "" or c == "AI_DISABLED"
 
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+# Bleach is not installed - using native regex for sanitization (see sanitize_content)
+
+def sanitize_content(text: str) -> str:
+    """Removes potential scripts or malicious HTML from AI responses."""
+    if not text:
+        return ""
+    # Remove script tags and common event handlers
+    clean = re.sub(r'<script.*?>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    clean = re.sub(r'on\w+=".*?"', '', clean, flags=re.IGNORECASE)
+    return clean
+
 class AIClient:
     def __init__(self):
-        # Safe repair — unified Groq key: primary get_settings().groq_keys[0] (matches interviews transcribe guard);
-        # fallback os.getenv("GROQ_API_KEY") for process-env-only deployments. No prompt/scoring changes.
+        # Safe repair — unified Groq key
         self.api_key = ""
         try:
             from app.core.config import get_settings
-
             keys = get_settings().groq_keys
             if keys:
                 self.api_key = keys[0]
@@ -42,73 +52,53 @@ class AIClient:
             self.disabled = True
         else:
             try:
-                timeout_s = float(os.getenv("AI_TIMEOUT_SECONDS", "15") or "15")
+                timeout_s = float(os.getenv("AI_TIMEOUT_SECONDS", "45") or "45")
                 self.client = AsyncGroq(api_key=self.api_key, timeout=timeout_s)
             except Exception as e:
                 logger.warning(f"Failed to initialize Groq client: {e}. AI features disabled.")
                 self.disabled = True
 
+    @retry(
+        retry=retry_if_exception_type((Exception)), # We filter inside or keep generic for LLM volatility
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        before_sleep=before_sleep_log(logger, logging.INFO),
+        reraise=True
+    )
+    async def _generate_with_retry(self, prompt: str, system_instr: str, model: str) -> str:
+        """Internal method for tenacity to wrap."""
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_instr},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content
+
     async def generate(self, prompt: str, system_instr: str = "You are a helpful assistant", model: str = "llama-3.3-70b-versatile") -> str:
-        """Centralized generator that will never crash the calling thread if config is missing."""
+        """Centralized generator with resilience and safety."""
         if self.disabled:
             logger.warning("AI Disabled - Returning graceful fallback response.")
             return "AI_DISABLED"
             
         t0 = time.perf_counter()
         try:
-            logger.debug(
-                "AI generate start",
-                extra={
-                    "model": model,
-                    "prompt_len": len(prompt or ""),
-                    "system_len": len(system_instr or ""),
-                },
-            )
-        except Exception:
-            pass
-
-        try:
-            response = await self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_instr},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2000,
-            )
-            raw = response.choices[0].message.content
+            raw = await self._generate_with_retry(prompt, system_instr, model)
             if raw is None or not str(raw).strip():
-                logger.warning("Groq returned empty message content (treating as AI_DISABLED).")
+                logger.warning("Groq returned empty message content.")
                 return "AI_DISABLED"
-            content = str(raw).strip()
-            try:
-                elapsed_ms = (time.perf_counter() - t0) * 1000.0
-                logger.debug(
-                    "AI generate ok",
-                    extra={
-                        "model": model,
-                        "elapsed_ms": elapsed_ms,
-                        "content_len": len(content or ""),
-                    },
-                )
-            except Exception:
-                pass
+            
+            content = sanitize_content(str(raw).strip())
+            
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            logger.debug("AI generate ok", extra={"elapsed_ms": elapsed_ms, "len": len(content)})
             return content
         except Exception as e:
-            try:
-                elapsed_ms = (time.perf_counter() - t0) * 1000.0
-                logger.error(
-                    "Groq API Error (returning AI_DISABLED)",
-                    extra={
-                        "model": model,
-                        "elapsed_ms": elapsed_ms,
-                        "error_type": type(e).__name__,
-                        "error": str(e)[:200],
-                    },
-                )
-            except Exception:
-                logger.error(f"Groq API Error: {e}")
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            logger.error(f"AI Final Failure after retries: {e}", extra={"elapsed_ms": elapsed_ms})
             return "AI_DISABLED"
 
 # Singleton instance to be imported globally

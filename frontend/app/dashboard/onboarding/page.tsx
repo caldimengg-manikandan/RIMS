@@ -46,7 +46,9 @@ export default function OnboardingPage() {
     const { user } = useAuth()
     const router = useRouter()
     const { toast } = useToast()
-    const { data: candidates, isLoading, mutate } = useSWR<any[]>('/api/onboarding/candidates', fetcher)
+    const { data: resp, isLoading, mutate } = useSWR<any>('/api/onboarding/candidates', fetcher)
+    const candidates = resp?.items || []
+    const totalCount = resp?.total || 0
     const [search, setSearch] = useState('')
 
     if (user && user.role !== 'hr' && user.role !== 'super_admin') {
@@ -137,7 +139,7 @@ export default function OnboardingPage() {
                     <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
                         Onboarding Pipeline
                         <Badge variant="outline" className="h-6 bg-primary/5 text-primary border-primary/20">
-                            {candidates?.length || 0} Candidates
+                            {totalCount} Candidates
                         </Badge>
                     </h1>
                     <p className="text-muted-foreground mt-1">Track and manage newly hired candidates</p>

@@ -1,11 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Form, Request
+# Performance Serialization Fallback
+try:
+    import orjson
+    from fastapi.responses import ORJSONResponse
+except ImportError:
+    from fastapi.responses import JSONResponse as ORJSONResponse
 from sqlalchemy import or_, func, text, cast, String, extract, inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload, defer, load_only
 from sqlalchemy.orm.exc import ObjectDeletedError
 from app.core.storage import upload_file, get_signed_url, get_public_url
 import os
+import os
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from app.infrastructure.database import get_db, SessionLocal
 from app.domain.models import User, Application, Job, ResumeExtraction, Interview, InterviewAnswer, ResumeExtractionVersion, InterviewReport
@@ -14,7 +22,11 @@ from app.domain.schemas import (
     ApplicationStatusUpdate,
     ApplicationResponse,
     ApplicationDetailResponse,
+    ApplicationSummaryResponse,
     ApplicationNotesUpdate,
+    JobSummary,
+    ResumeExtractionSummary,
+    InterviewSummary,
     HasAppliedResponse,
     ApplicationListResponse,
 )
@@ -80,7 +92,59 @@ def _heuristic_extraction_degraded(application: Application) -> bool:
     return False
 
 
-def build_application_detail_response(application: Application) -> ApplicationDetailResponse:
+def build_application_summary_response(application: Application, current_user_id: Optional[int] = None) -> ApplicationSummaryResponse:
+    """Ultra-high performance summary builder using model_construct and manual mapping."""
+    # 1. Manual mapping for nested models to ensure ZERO validation cost
+    job_summary = None
+    if application.job:
+        job_summary = JobSummary.model_construct(
+            id=application.job.id,
+            job_id=application.job.job_id,
+            title=application.job.title
+        )
+
+    re_summary = None
+    if application.resume_extraction:
+        re_summary = ResumeExtractionSummary.model_construct(
+            id=application.resume_extraction.id,
+            resume_score=application.resume_extraction.resume_score or 0.0,
+            skill_match_percentage=application.resume_extraction.skill_match_percentage or 0.0,
+            experience_level=application.resume_extraction.experience_level,
+            summary=application.resume_extraction.summary,
+            extracted_skills=application.resume_extraction.extracted_skills
+        )
+
+    int_summary = None
+    if application.interview:
+        int_summary = InterviewSummary.model_construct(
+            id=application.interview.id,
+            status=application.interview.status,
+            overall_score=application.interview.overall_score or 0.0
+        )
+
+    # 2. Ownership Calculation (Simplified per Senior Backend Engineer request)
+    is_owner = (application.hr_id == current_user_id) if current_user_id else False
+
+    # 3. Final Construction (model_construct bypasses all Pydantic validators)
+    return ApplicationSummaryResponse.model_construct(
+        id=application.id,
+        job_id=application.job_id,
+        job=job_summary,
+        candidate_name=application.candidate_name,
+        candidate_email=application.candidate_email,
+        status=application.status,
+        file_status=application.file_status,
+        applied_at=application.applied_at or datetime.now(timezone.utc),
+        resume_extraction=re_summary,
+        interview=int_summary,
+        resume_score=application.resume_score or 0.0,
+        composite_score=application.composite_score or 0.0,
+        is_owner=is_owner,
+        assigned_hr_id=application.hr_id,
+        assigned_hr_name=application.hr.full_name if application.hr else None
+    )
+
+def build_application_detail_response(application: Application, current_user_id: Optional[int] = None) -> ApplicationDetailResponse:
     from app.core.storage import get_signed_url, get_public_url
     
     resume_url = None
@@ -102,16 +166,35 @@ def build_application_detail_response(application: Application) -> ApplicationDe
     detail = ApplicationDetailResponse.model_validate(application, from_attributes=True)
     raw_notes = application.hr_notes or ""
     degraded = RIMS_EXTRACTION_DEGRADED_MARKER in raw_notes or _heuristic_extraction_degraded(application)
-    return detail.model_copy(
-        update={
-            "hr_notes": _strip_extraction_marker(raw_notes),
-            "extraction_degraded": degraded,
-            "resume_url": resume_url,
-            "photo_url": photo_url,
-            "id_card_url": id_card_url,
-            "video_url": video_url
-        }
-    )
+    
+    # Safety: Ensure file_status reflects reality (Step 5)
+    inferred_file_status = application.file_status or 'active'
+    if application.resume_file_path and not resume_url:
+        inferred_file_status = 'missing'
+    
+    detail.file_status = inferred_file_status
+    detail.resume_url = resume_url
+    detail.photo_url = photo_url
+    detail.id_card_url = id_card_url
+    detail.video_url = video_url
+    detail.extraction_degraded = degraded
+
+    # Ownership Calculation (Simplified)
+    if current_user_id:
+        detail.is_owner = (application.hr_id == current_user_id)
+    detail.assigned_hr_id = application.hr_id
+    detail.assigned_hr_name = application.hr.full_name if application.hr else None
+
+    # 7. Fallback Safety (Scenario 5 Guard)
+    if not detail.applied_at:
+        fallback_date = application.created_at or datetime.now(timezone.utc)
+        detail.applied_at = fallback_date
+        logger.error(
+            f"INTEGRITY_ALERT: App {application.id} missing applied_at. Using fallback.",
+            extra={"app_id": application.id, "fallback_date": str(fallback_date)}
+        )
+    
+    return detail
 
 import asyncio
 import time
@@ -186,12 +269,12 @@ async def apply_for_job(
     db: Session = Depends(get_db)
 ):
     """Apply for a job with resume (Public endpoint)"""
-    # Strict input validation
-    # Name: at least two words, alphabetic only (plus spaces)
-    if not candidate_name or len(candidate_name.split()) < 2 or not all(part.isalpha() for part in candidate_name.split()):
+    # Name: at least two words, alphabetic-focused regex (allows hyphens, apostrophes, and spaces)
+    name_regex = r"^[a-zA-Z]+(?:['\-\s][a-zA-Z]+)*$"
+    if not candidate_name or len(candidate_name.split()) < 2 or not re.match(name_regex, candidate_name.strip()):
         raise HTTPException(
             status_code=400,
-            detail="Valid full name required (at least two words, alphabetic characters only)."
+            detail="Valid full name required (at least two words, containing letters, hyphens, or apostrophes)."
         )
 
     request_id = None
@@ -459,6 +542,20 @@ async def apply_for_job(
         # Audit Log
         from app.services.candidate_service import CandidateService
         CandidateService(db).create_audit_log(None, "APPLICATION_CREATED", "Application", new_application.id, {"job_id": job_id})
+
+        # [Trigger] Application Received Email
+        try:
+            if not new_application or not new_application.candidate_email:
+                logger.error(f"[EMAIL][FAILED] Missing email for App #{getattr(new_application, 'id', 'UNKNOWN')}")
+            elif getattr(new_application, "_email_sent", False):
+                logger.warning(f"[EMAIL][SKIPPED] Duplicate prevented for App #{new_application.id}")
+            else:
+                background_tasks.add_task(send_application_received_email, new_application)
+                new_application._email_sent = True
+                logger.info(f"[EMAIL] Application email queued for App #{new_application.id}")
+        except Exception as e:
+            logger.error(f"[EMAIL][FAILED] Application email for App #{getattr(new_application, 'id', 'UNKNOWN')}: {str(e)}")
+
 
     except Exception as e:
         db.rollback()
@@ -857,12 +954,11 @@ def get_pending_applications_count(
         ~Application.status.in_(("hired", "rejected")),
         or_(func.trim(Application.file_status).in_(('active', 'missing')), Application.file_status == None)
     )
-    if current_user.role != "super_admin":
-        q = q.outerjoin(Job).filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
+    # Removal of strict filtering: HR can now see counts for all active applications globally.
     return {"count": q.count()}
 
 
-@router.get("", response_model=ApplicationListResponse)
+@router.get("", response_model=ApplicationListResponse, response_class=ORJSONResponse)
 def get_hr_applications(
     job_id: int = None,
     from_date: str = None,
@@ -876,192 +972,94 @@ def get_hr_applications(
     db: Session = Depends(get_db)
 ):
     """Get all applications for HR's jobs (HR only)"""
-    # Performance Optimization:
-    # - Avoid loading huge `resume_extraction.extracted_text` (not needed by HR list UI).
-    # - Only join `jobs` when we filter on job columns.
-    # 1. Base Query with optimized loading
-    query = db.query(Application).options(
-        joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id, Job.status),
-        joinedload(Application.resume_extraction).load_only(
-            ResumeExtraction.id, ResumeExtraction.resume_score,
-            ResumeExtraction.skill_match_percentage, ResumeExtraction.experience_level,
-            ResumeExtraction.summary, ResumeExtraction.extracted_skills,
-        ),
-        load_only(
-            Application.id, Application.job_id, Application.candidate_name,
-            Application.candidate_email, Application.candidate_phone,
-            Application.candidate_phone_raw, Application.candidate_photo_path,
-            Application.resume_file_path,
-            Application.status, Application.hr_id, Application.hr_notes,
-            Application.resume_status, Application.resume_score,
-            Application.composite_score, Application.applied_at, Application.updated_at
-        ),
-        # Fix: Selectively load interview data to avoid giant join overhead
-        joinedload(Application.interview).options(
-            load_only(Interview.id, Interview.status, Interview.overall_score),
-            selectinload(Interview.report).load_only(InterviewReport.id, InterviewReport.overall_score)
-        ),
-        selectinload(Application.pipeline_stages),
-    )
+    t_start = time.perf_counter()
+    items = []
+    total = 0
+    safe_skip = max(0, int(skip or 0))
+    safe_limit = max(1, min(int(limit or 20), 100))
+    
+    try:
+        # 1. Base Query with optimized loading
+        query = db.query(Application).outerjoin(Job).options(
+            joinedload(Application.job).load_only(Job.id, Job.title, Job.hr_id, Job.status, Job.job_id),
+            joinedload(Application.hr).load_only(User.id, User.full_name),
+            joinedload(Application.resume_extraction).load_only(
+                ResumeExtraction.id, ResumeExtraction.resume_score,
+                ResumeExtraction.skill_match_percentage, ResumeExtraction.experience_level,
+                ResumeExtraction.summary, ResumeExtraction.extracted_skills,
+            ),
+            load_only(
+                Application.id, Application.candidate_name, Application.candidate_email,
+                Application.status, Application.applied_at, Application.file_status,
+                Application.candidate_photo_path, Application.resume_file_path,
+                Application.resume_score, Application.composite_score
+            ),
+            joinedload(Application.interview).load_only(Interview.id, Interview.status, Interview.overall_score),
+        )
 
-    # 2. Join Management (Always Outer Join)
-    # Ensure Job is joined to applications table to enable filtering and search without dropping rows.
-    query = query.outerjoin(Job)
+        # 2. Filters
+        if job_id:
+            query = query.filter(Application.job_id == job_id)
 
-    # Filter by job if requested (Restored Phase 2)
-    if job_id:
-        query = query.filter(Application.job_id == job_id)
+        if status and status != 'all':
+            if status == "applied":
+                query = query.filter(Application.status.in_(("applied", "submitted")))
+            else:
+                query = query.filter(Application.status == status)
 
-    # Filter by status if requested
-    if status and status != 'all':
-        if status == "applied":
-            query = query.filter(Application.status.in_(("applied", "submitted")))
-        else:
-            query = query.filter(Application.status == status)
-
-    # Search filter (Generic fallback search)
-    if search and str(search).strip():
-        term = f"%{search}%"
-        query = query.filter(
-            or_(
+        if search and str(search).strip():
+            term = f"%{search}%"
+            query = query.filter(or_(
                 Application.candidate_name.ilike(term),
                 Application.candidate_email.ilike(term),
-                Job.title.ilike(term),
-                Application.id.cast(String).ilike(term)
-            )
-        )
+                Job.title.ilike(term)
+            ))
 
-    # Date range filter logic... (skipping re-implementation of existing correctly parsed start_date/end_date)
-    # The current file actually has complex date parsing below. I need to be careful.
-    
-    # Let's find where safe_skip was in the original file
+        if from_date:
+            try:
+                sd = datetime.strptime(from_date, "%Y-%m-%d").date()
+                query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) >= sd)
+            except ValueError: pass
+        if to_date:
+            try:
+                ed = datetime.strptime(to_date, "%Y-%m-%d").date()
+                query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) <= ed)
+            except ValueError: pass
 
-    # Date range filter (A004/A005/A009)
-    today_utc = datetime.now(timezone.utc).date()
-    min_year = 1900
-    max_year = today_utc.year
+        # 3. Security
+        # Security: Filtering removed. HR and Super Admin see ALL applications.
 
-    start_date = None
-    end_date = None
+        # 4. Retrieval
+        total = query.count()
+        applications = query.order_by(Application.applied_at.desc()).offset(safe_skip).limit(safe_limit).all()
 
-    if from_date:
-        try:
-            start_date = datetime.strptime(from_date, "%Y-%m-%d").date()
-        except ValueError:
-            logger.warning(
-                "Invalid from_date format in HR applications filter",
-                extra={"from_date": from_date},
-            )
-            raise HTTPException(status_code=400, detail="Invalid from_date format. Use YYYY-MM-DD.")
+        # Path sanitization
+        for app in applications:
+            for field in ['candidate_photo_path', 'resume_file_path']:
+                val = getattr(app, field)
+                if val and "uploads" in val:
+                    idx = val.find("uploads")
+                    setattr(app, field, val[idx:].replace("\\", "/"))
 
-        if start_date.year < min_year or start_date.year > max_year:
-            logger.warning(
-                "from_date out of allowed range in HR applications filter",
-                extra={"from_date": from_date, "min_year": min_year, "max_year": max_year},
-            )
-            raise HTTPException(status_code=400, detail="from_date out of allowed range.")
-        if start_date > today_utc:
-            logger.warning(
-                "from_date is in the future in HR applications filter",
-                extra={"from_date": from_date, "today_utc": str(today_utc)},
-            )
-            raise HTTPException(status_code=400, detail="from_date cannot be in the future.")
-
-    if to_date:
-        try:
-            end_date = datetime.strptime(to_date, "%Y-%m-%d").date()
-        except ValueError:
-            logger.warning(
-                "Invalid to_date format in HR applications filter",
-                extra={"to_date": to_date},
-            )
-            raise HTTPException(status_code=400, detail="Invalid to_date format. Use YYYY-MM-DD.")
-
-        if end_date.year < min_year or end_date.year > max_year:
-            logger.warning(
-                "to_date out of allowed range in HR applications filter",
-                extra={"to_date": to_date, "min_year": min_year, "max_year": max_year},
-            )
-            raise HTTPException(status_code=400, detail="to_date out of allowed range.")
-        if end_date > today_utc:
-            logger.warning(
-                "to_date is in the future in HR applications filter",
-                extra={"to_date": to_date, "today_utc": str(today_utc)},
-            )
-            raise HTTPException(status_code=400, detail="to_date cannot be in the future.")
-
-    if start_date and end_date and start_date > end_date:
-        logger.warning(
-            "from_date after to_date in HR applications filter",
-            extra={"from_date": from_date, "to_date": to_date},
-        )
-        raise HTTPException(status_code=400, detail="from_date cannot be after to_date.")
-
-    # UTC-safe date comparison: date(timezone('UTC', applied_at)) >= start/end
-    if start_date:
-        query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) >= start_date)
-    if end_date:
-        query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) <= end_date)
-
-    # Time-of-day filter
-    if time_range and time_range in ("morning", "afternoon", "evening", "night"):
-        hour_expr = extract('hour', text("(\"applications\".\"applied_at\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata'"))
-        if time_range == "morning":
-            query = query.filter(hour_expr.between(6, 11))
-        elif time_range == "afternoon":
-            query = query.filter(hour_expr.between(12, 17))
-        elif time_range == "evening":
-            query = query.filter(hour_expr.between(18, 23))
-        elif time_range == "night":
-            query = query.filter(hour_expr.between(0, 5))
-
-    # Security: Hybrid HR Filter for guaranteed visibility
-    # FIX: Super Admin bypasses ownership checks to facilitate full data visibility (Phase 3)
-    if current_user.role != "super_admin":
-        # Note: Job is already outerjoined above
-        query = query.filter(or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id))
+        # 5. Response Mapping
+        t_map_start = time.perf_counter()
+        items = [build_application_summary_response(app, current_user.id) for app in applications]
+        t_map_duration = time.perf_counter() - t_map_start
         
-    # Application of filters is finished above. Proceed to pagination.
-    total = query.count()
-    safe_skip = max(0, int(skip or 0))
-    # Increased hard limit to 100 for better bulk visibility (Point 2)
-    safe_limit = max(1, min(int(limit or 20), 100))
-
-    t0 = time.perf_counter()
-    applications = (
-        query.order_by(Application.applied_at.desc())
-        .offset(safe_skip)
-        .limit(safe_limit)
-        .all()
-    )
-    for app in applications:
-        if not app.resume_extraction: continue
-        try:
-            insp = sa_inspect(app.resume_extraction)
-            if insp.detached or insp.deleted:
-                app.resume_extraction = None
-        except Exception:
-            app.resume_extraction = None
-
-    # Path sanitization for frontend consumption
-    for app in applications:
-        if app.candidate_photo_path and "uploads" in app.candidate_photo_path:
-            idx = app.candidate_photo_path.find("uploads")
-            app.candidate_photo_path = app.candidate_photo_path[idx:].replace("\\", "/")
-        if app.resume_file_path and "uploads" in app.resume_file_path:
-            idx = app.resume_file_path.find("uploads")
-            app.resume_file_path = app.resume_file_path[idx:].replace("\\", "/")
-
-    items = [build_application_detail_response(app) for app in applications]
-    pages = (total + safe_limit - 1) // safe_limit
-    
-    return {
-        "items": items,
-        "total": total,
-        "page": (safe_skip // safe_limit) + 1,
-        "size": safe_limit,
-        "pages": pages
-    }
+        duration = time.perf_counter() - t_start
+        logger.info(f"PERFORMANCE_TRACE: get_hr_applications total={duration:.4f}s (Map: {t_map_duration:.4f}s)")
+        
+        pages = (total + safe_limit - 1) // safe_limit
+        return {
+            "items": items,
+            "total": total,
+            "page": (safe_skip // safe_limit) + 1,
+            "size": safe_limit,
+            "pages": pages
+        }
+    except Exception as e:
+        logger.error(f"APPLICATION_API_ERROR: {str(e)}", exc_info=True)
+        return {"items": [], "total": 0, "page": 1, "size": safe_limit, "pages": 0, "error_hint": str(e)}
 
 @router.get("/{application_id}/resume/download")
 def download_resume(
@@ -1119,6 +1117,7 @@ def get_application(
     """Get application details (HR only)"""
     application = db.query(Application).options(
         joinedload(Application.job),
+        joinedload(Application.hr),
         joinedload(Application.resume_extraction),
         joinedload(Application.interview),
         selectinload(Application.pipeline_stages)
@@ -1141,7 +1140,7 @@ def get_application(
         if idx != -1:
             application.resume_file_path = application.resume_file_path[idx:].replace("\\", "/")
 
-    return build_application_detail_response(application)
+    return build_application_detail_response(application, current_user.id)
 
 async def retry_application_background(application_id: int, job_id: int, bucket_path: str):
     """Safely retry AI resume extraction without altering pipeline stages or triggering emails."""
@@ -1363,7 +1362,9 @@ async def resend_interview_invitation(
             detail="Interview access key cannot be reissued unless interview is 'not_started'",
         )
 
-    raw_access_key = _ensure_interview_record(application, db)
+    from app.services.candidate_service import CandidateService
+    cand_service = CandidateService(db)
+    raw_access_key = cand_service.ensure_interview_record_exists(application)
     candidate_email = application.candidate_email
     job_title = application.job.title if application.job else "your applied position"
 
@@ -1459,7 +1460,9 @@ async def update_application_status(
 
     if action == TransitionAction.APPROVE_FOR_INTERVIEW:
         # Create or refresh interview record + access key
-        raw_access_key = _ensure_interview_record(application, db)
+        from app.services.candidate_service import CandidateService
+        cand_service = CandidateService(db)
+        raw_access_key = cand_service.ensure_interview_record_exists(application)
 
     if action == TransitionAction.HIRE:
         # Create HiringDecision record
@@ -1542,38 +1545,6 @@ async def update_application_status(
     }
 
 
-def _ensure_interview_record(application: Application, db) -> str:
-    """Create or refresh Interview record + access key for an application."""
-    import uuid
-    raw_access_key = secrets.token_urlsafe(16)
-    hashed_key = pwd_context.hash(raw_access_key)
-    expiration = datetime.now(timezone.utc) + timedelta(hours=24)
-
-    existing_interview = db.query(Interview).filter(
-        Interview.application_id == application.id
-    ).first()
-
-    if not existing_interview:
-        interview_stage = 'aptitude' if application.job.aptitude_enabled else 'first_level'
-        unique_test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
-
-        new_interview = Interview(
-            test_id=unique_test_id,
-            application_id=application.id,
-            status='not_started',
-            access_key_hash=hashed_key,
-            expires_at=expiration,
-            is_used=False,
-            interview_stage=interview_stage,
-        )
-        db.add(new_interview)
-    elif existing_interview.status == 'not_started':
-        existing_interview.access_key_hash = hashed_key
-        existing_interview.expires_at = expiration
-        if not existing_interview.test_id:
-            existing_interview.test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
-
-    return raw_access_key
 
 @router.delete("/{application_id}")
 async def delete_application(

@@ -6,7 +6,8 @@ import AnswerInput from './AnswerInput';
 import ScoreIndicator from './ScoreIndicator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
+import { APIClient } from '@/app/dashboard/lib/api-client';
 
 interface InterviewSessionProps {
   sessionId: string;
@@ -25,11 +26,23 @@ function newRequestId(): string {
 export default function InterviewSession({ sessionId, token }: InterviewSessionProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  const [isTerminated, setIsTerminated] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<{ question: string; difficulty: string } | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [latestFeedback, setLatestFeedback] = useState<{ score: number; text: string } | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evalHistory, setEvalHistory] = useState<any[]>([]);
+
+  // Voice Recording States
+  const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const transcriptionCallbackRef = useRef<((text: string) => void) | null>(null);
+
+  // Voice Recording Refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const transcribeInFlightRef = useRef(false);
+  const transcribeSeqRef = useRef(0);
 
   const ws = useRef<WebSocket | null>(null);
   /** True while any answer is queued or we are waiting for evaluation/error for the last sent item. */
@@ -127,6 +140,10 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
           break;
         case 'error':
           awaitingEvaluationRef.current = false;
+          // If the error message indicates a proctoring violation or termination
+          if (data.message.toLowerCase().includes('terminated') || data.message.toLowerCase().includes('violation')) {
+            setIsTerminated(true);
+          }
           setMessages((prev) => [...prev, { text: data.message, type: 'error' }]);
           flushAnswerQueue();
           break;
@@ -154,6 +171,123 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
     syncInFlightUi();
     flushAnswerQueue();
   };
+
+  // --- Voice Integration ---
+
+  const startRecording = async (onTranscribed?: (text: string) => void) => {
+    if (onTranscribed) transcriptionCallbackRef.current = onTranscribed;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Robust format detection
+      const options = { mimeType: 'audio/webm' };
+      let mediaRecorder: MediaRecorder;
+
+      if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mediaRecorder = new MediaRecorder(stream, options);
+      } else {
+        mediaRecorder = new MediaRecorder(stream);
+      }
+
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size > 0) {
+          await handleTranscribe(audioBlob);
+        }
+        // Stop all tracks to release the microphone
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error('Microphone access denied', err);
+      // In a real app we'd use toast, but InterviewSession doesn't have it directly. 
+      // AnswerInput will handle errors if we pass them back or just alert.
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isListening) {
+      mediaRecorderRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  const handleTranscribe = async (audioBlob: Blob) => {
+    if (transcribeInFlightRef.current) return;
+    transcribeInFlightRef.current = true;
+    setIsTranscribing(true);
+
+    try {
+      const formData = new FormData();
+      const ext = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+      formData.append('file', audioBlob, `recording.${ext}`);
+
+      transcribeSeqRef.current += 1;
+      const rid = `live-${sessionId}-transcribe-${transcribeSeqRef.current}`;
+
+      const res = await APIClient.postMultipart<{ text: string }>(
+        `/api/interviews/${sessionId}/transcribe`,
+        formData,
+        rid,
+      );
+
+      if (res.text && res.text.trim()) {
+        const result = res.text.trim();
+        if (transcriptionCallbackRef.current) {
+          transcriptionCallbackRef.current(result);
+        }
+      }
+    } catch (err) {
+      console.error('Transcription failed', err);
+    } finally {
+      setIsTranscribing(false);
+      transcribeInFlightRef.current = false;
+    }
+  };
+
+  if (isTerminated) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md overflow-hidden p-4">
+        <Card className="max-w-md w-full border-destructive shadow-2xl animate-in fade-in zoom-in duration-300 pointer-events-auto">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+              <ShieldAlert className="w-8 h-8 text-destructive" />
+            </div>
+            <CardTitle className="text-2xl font-bold text-destructive">Session Terminated</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-center">
+            <p className="text-muted-foreground">
+              This interview session has been automatically deactivated due to proctoring policy violations or focus detection strikes.
+            </p>
+            <div className="bg-destructive/5 p-3 rounded-lg border border-destructive/20 text-xs text-destructive font-medium uppercase tracking-wider">
+              Security Protocol: V-3-STRIKES-ENGAGED
+            </div>
+            <Button 
+                variant="outline" 
+                className="w-full mt-4"
+                onClick={() => window.location.href = '/dashboard/candidate'}
+            >
+              Return to Candidate Portal
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isConnected && !isFinished) {
     return (
@@ -202,6 +336,12 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         <AnswerInput
           onSubmit={handleSubmitAnswer}
           disabled={!currentQuestion || isEvaluating || latestFeedback !== null}
+          isEvaluating={isEvaluating}
+          interviewId={sessionId}
+          isListening={isListening}
+          isTranscribing={isTranscribing}
+          onStartRecording={startRecording}
+          onStopRecording={stopRecording}
         />
 
         <div className="mt-8 p-4 border-t border-dashed bg-slate-50 border-slate-200 rounded-lg shadow-inner">

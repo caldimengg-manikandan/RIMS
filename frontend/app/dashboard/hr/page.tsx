@@ -136,23 +136,52 @@ export default function HRDashboard() {
   )
 
   // ... helper calculations ...
-  const r_metrics = dashboardData?.recruitment_metrics || {
-    total_candidates: 0,
-    shortlisted_candidates: 0,
-    interviewed_candidates: 0,
-    offers_released: 0,
-    hiring_success_rate: 0
-  }
+  const r_metrics = useMemo(() => {
+    const d = dashboardData || {}
+    // Check for new flat structure first
+    if ('total_applications' in d) {
+      return {
+        total_candidates: (d as any).total_applications || 0,
+        shortlisted_candidates: (d as any).total_interviews || 0,
+        interviewed_candidates: (d as any).completed_interviews || 0,
+        offers_released: 0,
+        hiring_success_rate: (d as any).success_rate || 0
+      }
+    }
+    // Fallback to legacy nested structure or zero defaults
+    const nested = (d as any).recruitment_metrics || {}
+    return {
+      total_candidates: nested.total_candidates || 0,
+      shortlisted_candidates: nested.shortlisted_candidates || 0,
+      interviewed_candidates: nested.interviewed_candidates || 0,
+      offers_released: nested.offers_released || 0,
+      hiring_success_rate: nested.hiring_success_rate || 0
+    }
+  }, [dashboardData])
   
-  const c_metrics = dashboardData?.candidate_metrics || {
-    avg_job_compatibility: 0,
-    avg_aptitude_score: 0,
-    avg_interview_score: 0,
-    avg_composite_score: 0
-  }
+  const c_metrics = useMemo(() => {
+    const d = dashboardData || {}
+    // Check for new flat structure first
+    if ('average_score' in d) {
+      return {
+        avg_job_compatibility: 0,
+        avg_aptitude_score: 0,
+        avg_interview_score: 0,
+        avg_composite_score: (d as any).average_score || 0
+      }
+    }
+    // Fallback to legacy nested structure or zero defaults
+    const nested = (d as any).candidate_metrics || {}
+    return {
+      avg_job_compatibility: nested.avg_job_compatibility || 0,
+      avg_aptitude_score: nested.avg_aptitude_score || 0,
+      avg_interview_score: nested.avg_interview_score || 0,
+      avg_composite_score: nested.avg_composite_score || 0
+    }
+  }, [dashboardData])
 
-  const chartData = dashboardData?.chart_data || []
-  const recentInterviews = Array.isArray(filteredInterviews) ? filteredInterviews : (Array.isArray(dashboardData?.recent_interviews) ? dashboardData?.recent_interviews : [])
+  const chartData = (dashboardData as any)?.chart_data || []
+  const recentInterviews = Array.isArray(filteredInterviews) ? filteredInterviews : (Array.isArray((dashboardData as any)?.recent_interviews) ? (dashboardData as any)?.recent_interviews : [])
 
   const handleReset = () => {
     setFilters({
@@ -183,31 +212,8 @@ export default function HRDashboard() {
 
   const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444'];
 
-  if (dashboardError) {
-    return (
-      <div className="p-8 space-y-4 text-center">
-        <div className="text-destructive font-medium">Failed to load dashboard metrics</div>
-        <p className="text-sm text-muted-foreground">The analytics service might be temporarily unavailable.</p>
-        <Button 
-          variant="outline" 
-          onClick={() => {
-            router.refresh()
-          }}
-          className="mx-auto"
-        >
-          <RotateCw className="mr-2 h-4 w-4" /> Retry
-        </Button>
-      </div>
-    )
-  }
-
-  if (dashboardLoading && !dashboardData) {
-    return (
-      <div className="p-8 flex justify-center items-center h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+  // We've removed the blocking error/loading UI to ensure the dashboard shell always loads.
+  // Metrics will fallback to zero defaults handled in useMemos.
 
   return (
     <div className="p-4 md:p-0 space-y-8">

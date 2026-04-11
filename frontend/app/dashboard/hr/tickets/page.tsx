@@ -61,9 +61,10 @@ export default function HRTicketsPage() {
     const [filter, setFilter] = useState<'pending' | 'all'>('pending')
     const [sendEmail, setSendEmail] = useState(true)
 
-    const { data: tickets = [], isLoading, mutate } = useSWR<Ticket[]>(
+    const { data: resp, isLoading, mutate } = useSWR<any>(
         `/api/tickets?status=${filter}`
     )
+    const tickets = (resp?.items || []) as Ticket[]
 
 
     const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed' | 'reply') => {
@@ -84,20 +85,30 @@ export default function HRTicketsPage() {
 
         setIsResolving(true)
         try {
-            await performMutation<Ticket[]>(
+            await performMutation<any>(
                 `/api/tickets?status=${filter}`,
                 mutate,
                 actionFn,
                 {
                     lockKey: `ticket-${ticketId}`,
-                    optimisticData: (current) => 
-                        filter === 'pending' 
-                            ? (current || []).filter(t => t.id !== ticketId)
-                            : (current || []).map(t => t.id === ticketId ? {
-                                ...t,
-                                status: (action === 'dismissed' ? 'dismissed' : action === 'reply' ? 'pending' : 'resolved') as const,
-                                hr_response: hrResponse || t.hr_response,
-                            } : t),
+                    optimisticData: (current) => {
+                        const defaultResp = { items: [], total: 0 };
+                        const data = current || defaultResp;
+                        
+                        if (filter === 'pending') {
+                            const newItems = data.items.filter((t: Ticket) => t.id !== ticketId);
+                            return { ...data, items: newItems, total: data.total - (data.items.length - newItems.length) };
+                        } else {
+                            return {
+                                ...data,
+                                items: data.items.map((t: Ticket) => t.id === ticketId ? {
+                                    ...t,
+                                    status: (action === 'dismissed' ? 'dismissed' : action === 'reply' ? 'pending' : 'resolved') as const,
+                                    hr_response: hrResponse || t.hr_response,
+                                } : t)
+                            };
+                        }
+                    },
                     successMessage: successMsg,
                     invalidateKeys: ['/api/analytics/dashboard']
                 }

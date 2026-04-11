@@ -141,6 +141,7 @@ export default function HRApplicationDetailPage() {
     }, [resumeStatus, mutateApp])
 
     const handleTransition = async (action: string, notes?: string) => {
+        setActionLoading(action);
         let nextStatus = currentStatus;
         if (action === "mark_screened") nextStatus = "screened";
         else if (action === "approve_for_interview") nextStatus = "interview_scheduled";
@@ -149,20 +150,24 @@ export default function HRApplicationDetailPage() {
         else if (action === "review_later") nextStatus = "review_later";
         else if (action === "hire") nextStatus = "hired";
 
-        await performMutation<any>(
-            `/api/applications/${applicationId}`,
-            mutateApp,
-            () => APIClient.put(`/api/applications/${applicationId}/status`, {
-                action,
-                hr_notes: notes || `HR action: ${action}`,
-            }),
-            {
-                lockKey: `application-${applicationId}`,
-                optimisticData: (current) => ({ ...current, status: nextStatus }),
-                successMessage: `Action ${action} completed`,
-                invalidateKeys: ['/api/analytics/dashboard', '/api/applications']
-            }
-        )
+        try {
+            await performMutation<any>(
+                `/api/applications/${applicationId}`,
+                mutateApp,
+                () => APIClient.put(`/api/applications/${applicationId}/status`, {
+                    action,
+                    hr_notes: notes || `HR action: ${action}`,
+                }),
+                {
+                    lockKey: `application-${applicationId}`,
+                    optimisticData: (current) => ({ ...current, status: nextStatus }),
+                    successMessage: `Action ${action} completed`,
+                    invalidateKeys: ['/api/analytics/dashboard', '/api/applications']
+                }
+            )
+        } finally {
+            setActionLoading(null);
+        }
     }
 
     const handleReject = async (reason: string, notes: string) => {

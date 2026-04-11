@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from datetime import datetime
@@ -134,12 +135,11 @@ def get_ticket_count(
         .outerjoin(Job, Application.job_id == Job.id)
         .filter(InterviewIssue.status == "pending")
     )
-    if current_user.role != "super_admin":
-        q = q.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
+    # Removal of strict filtering: HR can now see counts for all pending tickets globally.
     count = q.count()
     return {"count": count}
 
-@router.get("", response_model=List[InterviewIssueResponse])
+@router.get("", response_model=None)
 def get_tickets(
     status: str = 'pending',
     skip: int = 0,
@@ -151,19 +151,24 @@ def get_tickets(
         joinedload(InterviewIssue.interview)
         .joinedload(Interview.application)
         .joinedload(Application.job),
+        joinedload(InterviewIssue.interview)
+        .joinedload(Interview.application)
+        .joinedload(Application.hr),
         joinedload(InterviewIssue.application)
-        .joinedload(Application.job)
+        .joinedload(Application.job),
+        joinedload(InterviewIssue.application)
+        .joinedload(Application.hr)
     )
     query = (
         query.outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
         .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
         .outerjoin(Job, Application.job_id == Job.id)
     )
-    if current_user.role != "super_admin":
-        query = query.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
+    # Security: Filtering removed. HR and Super Admin see ALL tickets.
     if status != 'all':
         query = query.filter(InterviewIssue.status == status)
 
+    total = query.count()
     tickets = query.order_by(InterviewIssue.created_at.desc()).offset(skip).limit(limit).all()
     
     # Hybrid population
@@ -186,7 +191,17 @@ def get_tickets(
         else:
             t.test_id = None
         
-    return tickets
+        # Ownership Awareness (Architecture Rule 3)
+        if app:
+            t.assigned_hr_id = app.hr_id
+            t.assigned_hr_name = app.hr.full_name if app.hr else "Unknown"
+            t.is_owner = (app.hr_id == current_user.id)
+        else:
+            t.assigned_hr_id = None
+            t.assigned_hr_name = None
+            t.is_owner = False
+            
+    return {"items": tickets, "total": total}
 
 @router.put("/{ticket_id}/resolve", response_model=InterviewIssueResponse)
 async def resolve_ticket(
@@ -203,6 +218,7 @@ async def resolve_ticket(
             .joinedload(Application.job)
         )
         .filter(InterviewIssue.id == ticket_id)
+        .with_for_update()
         .first()
     )
     if not ticket:
@@ -211,10 +227,7 @@ async def resolve_ticket(
     app = ticket.application or (ticket.interview.application if ticket.interview else None)
     job = app.job if app else None
 
-    if current_user.role != "super_admin":
-        if not job:
-            raise HTTPException(status_code=403, detail="Unauthorized to resolve this ticket.")
-        validate_hr_ownership(job, current_user, resource_name="ticket")
+    # Removal of strict filtering: HR can now resolve any ticket.
 
     # Status update logic
     if resolution.action == 'reissue_key':

@@ -4,24 +4,41 @@ logger = logging.getLogger(__name__)
 
 def adjust_difficulty(current_difficulty: str, latest_score: float) -> str:
     """
-    Adaptive Interview Logic
-    Adjusts the difficulty of the next question based on the candidate's recent performance.
+    Adaptive Interview Logic with stability guardrails.
+    Ensures difficulty transitions are smooth and prevents aggressive jumping.
     """
-    if latest_score >= 8.0:
-        if current_difficulty == "easy":
+    # 1. Input Sanitization
+    try:
+        score = float(latest_score)
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid score for adjustment: {latest_score}. Keeping {current_difficulty}")
+        return current_difficulty
+
+    valid_difficulties = ["easy", "medium", "hard"]
+    curr = str(current_difficulty).lower()
+    
+    if curr not in valid_difficulties:
+        logger.warning(f"Invalid current difficulty: {current_difficulty}. Defaulting to medium")
+        curr = "medium"
+
+    # 2. Transition Logic (Step-based)
+    if score >= 8.0:
+        if curr == "easy":
+            logger.info("Adaptive: Score high. Moving Easy -> Medium")
             return "medium"
-        elif current_difficulty == "medium":
+        elif curr == "medium":
+            logger.info("Adaptive: Score high. Moving Medium -> Hard")
             return "hard"
-        else:
-            return "hard" # Cap
+        return "hard"
             
-    elif latest_score <= 4.0:
-        if current_difficulty == "hard":
+    elif score <= 4.0:
+        if curr == "hard":
+            logger.info("Adaptive: Score low. Moving Hard -> Medium")
             return "medium"
-        elif current_difficulty == "medium":
+        elif curr == "medium":
+            logger.info("Adaptive: Score low. Moving Medium -> Easy")
             return "easy"
-        else:
-            return "easy" # Cap
+        return "easy"
             
-    # Keep current difficulty if score is average
-    return current_difficulty
+    # 3. Stability (Keep current if score is 4.0 - 8.0)
+    return curr

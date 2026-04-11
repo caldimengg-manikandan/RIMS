@@ -15,7 +15,85 @@ function Stop-Backend {
     }
 }
 
+function Check-Environment {
+    Write-Host "Checking environment health..."
+    
+    if (!(Test-Path ".\venv")) {
+        Write-Host "Warning: No virtual environment found! Please run '.\start.ps1 repair' to set it up." -ForegroundColor Yellow
+        return $false
+    }
+
+    # Get python version suffix (e.g., 313)
+    try {
+        $pyVersion = & ".\venv\Scripts\python.exe" -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"
+    } catch {
+        Write-Host "Error: Failed to run python from venv." -ForegroundColor Red
+        return $false
+    }
+    
+    $expectedSuffix = "cp$pyVersion"
+
+    # Scan site-packages for .pyd files (compiled extensions)
+    # We check a few key packages to avoid a massive recursive scan if possible, 
+    # but a general check on site-packages is most robust.
+    $pydFiles = Get-ChildItem -Path ".\venv\Lib\site-packages" -Filter "*.pyd" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 20
+    
+    $mismatched = $pydFiles | Where-Object { $_.Name -match "cp\d+" -and $_.Name -notmatch $expectedSuffix }
+    
+    if ($mismatched) {
+        $foundVersion = ($mismatched[0].Name -replace ".*cp(\d+).*", '$1')
+        Write-Host "CRITICAL: Detected Python version mismatch in venv components!" -ForegroundColor Red
+        Write-Host "Environment packages are for CP$foundVersion but you are running CP$pyVersion." -ForegroundColor Red
+        Write-Host "ACTION REQUIRED: Run '.\start.ps1 repair' to fix your environment." -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Host "Environment health check passed." -ForegroundColor Green
+    return $true
+}
+
+function Repair-Environment {
+    Write-Host "Starting environment repair... This may take several minutes." -ForegroundColor Cyan
+    Stop-Backend
+
+    if (!(Test-Path ".\requirements_core.txt")) {
+        Write-Host "Generating core requirements file..."
+        if (Test-Path ".\requirements.txt") {
+            Get-Content requirements.txt | Where-Object { $_ -notmatch 'chromadb' } | Set-Content requirements_core.txt
+        } else {
+            Write-Host "Error: requirements.txt not found. Cannot proceed." -ForegroundColor Red
+            return
+        }
+    }
+
+    Write-Host "Cleaning up corrupted and mismatched packages..."
+    Remove-Item -Path ".\venv\Lib\site-packages\~*" -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # NEW: Delete all .pyd files that don't match the current Python version
+    $pyVersion = & ".\venv\Scripts\python.exe" -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')"
+    $expectedSuffix = "cp$pyVersion"
+    $mismatchedPyds = Get-ChildItem -Path ".\venv\Lib\site-packages" -Filter "*.pyd" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "cp\d+" -and $_.Name -notmatch $expectedSuffix }
+    
+    if ($mismatchedPyds) {
+        Write-Host "Removing $($mismatchedPyds.Count) mismatched compiled extensions..." -ForegroundColor Yellow
+        $mismatchedPyds | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    
+    Write-Host "Force-reinstalling dependencies for the current Python version..."
+    & ".\venv\Scripts\python.exe" -m pip install --force-reinstall -r requirements_core.txt
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Repair complete! Your environment is now healthy." -ForegroundColor Green
+    } else {
+        Write-Host "Repair failed. Please check the logs above." -ForegroundColor Red
+    }
+}
+
 function Start-Backend {
+    if (!(Check-Environment)) {
+        exit 1
+    }
+    
     Write-Host "Clearing port $PORT..."
     Write-Host "Starting backend..."
 
@@ -51,5 +129,7 @@ switch ($action) {
     "start"   { Start-Backend }
     "stop"    { Stop-Backend }
     "restart" { Restart-Backend }
-    default   { Write-Host "Usage: .\start.ps1 [start|stop|restart]" }
+    "repair"  { Repair-Environment }
+    "check"   { Check-Environment }
+    default   { Write-Host "Usage: .\start.ps1 [start|stop|restart|repair|check]" }
 }

@@ -16,65 +16,25 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Optional, Dict, List, Tuple
 
+from sqlalchemy import or_, and_, func, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.domain.models import Application, Job, AuditLog
+from app.domain.constants import CandidateState, TransitionAction
+from app.services.email_service import send_interview_invitation_email
 
 logger = logging.getLogger(__name__)
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. State & Action Enums
+# 2. Terminal States & Core Definitions
 # ─────────────────────────────────────────────────────────────────────────────
-
-class CandidateState(str, Enum):
-    # Core Production Workflow
-    APPLIED = "applied"
-    SCREENED = "screened"  # After resume parsing/screening
-    APTITUDE_ROUND = "aptitude_round"
-    AI_INTERVIEW = "ai_interview"
-    INTERVIEW_SCHEDULED = "interview_scheduled"
-    INTERVIEW_COMPLETED = "interview_completed"
-    HIRED = "hired"
-    PENDING_APPROVAL = "pending_approval"
-    OFFER_SENT = "offer_sent"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    ONBOARDED = "onboarded"
-    PHYSICAL_INTERVIEW = "physical_interview"
-    REVIEW_LATER = "review_later"
-    PERMANENT_FAILURE = "permanent_failure"
-
-
-class TransitionAction(str, Enum):
-    """Actions that trigger state transitions."""
-    MARK_SCREENED = "mark_screened"
-    SCHEDULE_INTERVIEW = "schedule_interview"
-    COMPLETE_INTERVIEW = "complete_interview"
-    
-    # Generic actions
-    APPROVE_FOR_INTERVIEW = "approve_for_interview" # Multi-purpose
-    REJECT = "reject"
-    CALL_FOR_INTERVIEW = "call_for_interview"
-    REVIEW_LATER = "review_later"
-    HIRE = "hire"
-    
-    # Onboarding
-    SEND_FOR_APPROVAL = "send_for_approval"
-    SEND_OFFER = "send_offer"
-    ACCEPT_OFFER = "accept_offer"
-    SYSTEM_ONBOARD = "system_onboard"
-    MARK_PERMANENT_FAILURE = "mark_permanent_failure"
-    
-    # System-initiated (automatic)
-    SYSTEM_PARSING_COMPLETE = "system_parsing_complete"
-    SYSTEM_APTITUDE_COMPLETE = "system_aptitude_complete"
-    SYSTEM_INTERVIEW_COMPLETE = "system_interview_complete"
-
 
 # Terminal states — no transitions out of these
 TERMINAL_STATES = frozenset({
@@ -137,6 +97,7 @@ _TRANSITION_TABLE: Dict[Tuple[CandidateState, TransitionAction], CandidateState]
 EMAIL_TRIGGERS: Dict[Tuple[TransitionAction, CandidateState], str] = {
     (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.APTITUDE_ROUND): "approved_for_interview",
     (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.AI_INTERVIEW): "approved_for_interview",
+    (TransitionAction.APPROVE_FOR_INTERVIEW, CandidateState.INTERVIEW_SCHEDULED): "approved_for_interview",
     (TransitionAction.REJECT, CandidateState.REJECTED): "rejected",
     (TransitionAction.CALL_FOR_INTERVIEW, CandidateState.PHYSICAL_INTERVIEW): "call_for_interview",
     (TransitionAction.HIRE, CandidateState.HIRED): "hired",
@@ -226,7 +187,7 @@ class CandidateStateMachine:
             )
 
         # Handle dynamic APPROVE transition
-        if action == TransitionAction.APPROVE_FOR_INTERVIEW and current == CandidateState.APPLIED:
+        if action == TransitionAction.APPROVE_FOR_INTERVIEW and current in (CandidateState.APPLIED, CandidateState.SCREENED):
             return self._resolve_approve_target(application)
 
         # Standard table lookup
@@ -254,7 +215,47 @@ class CandidateStateMachine:
         """
         Execute an atomic state transition.
         """
-        # 1. Validate
+        # 0. Idempotency Guard (Double-Click / Retry Protection)
+        # Check if an identical transition occurred within the last 5 seconds.
+        # We look for the action name inside the EncryptedText details.
+        if user_id:
+            # FETCH recent logs for this user and app (last 5 seconds)
+            # We cannot use .contains() on EncryptedText columns in SQL
+            recent_logs = self.db.query(AuditLog).filter(
+                AuditLog.user_id == user_id,
+                AuditLog.resource_id == application.id,
+                AuditLog.action == "STATE_TRANSITION",
+                AuditLog.created_at >= datetime.now(timezone.utc) - timedelta(seconds=5)
+            ).all()
+
+            for log in recent_logs:
+                try:
+                    log_details = json.loads(log.details)
+                    if log_details.get("action") == action.value:
+                        logger.warning(f"[IDEMPOTENCY] Skipping duplicate transition for App {application.id} (Action: {action.value})")
+                        return TransitionResult(
+                            application_id=application.id,
+                            from_state=application.status,
+                            to_state=application.status,
+                            action=action.value,
+                            email_type=None
+                        )
+                except Exception:
+                    continue
+
+        # 1. Acquire Row Lock with Timeout (Concurrency Hardening)
+        try:
+            # Set a 2-second timeout for this specific lock attempt
+            self.db.execute(text("SET LOCAL statement_timeout = '2s'"))
+            locked_app = self.db.query(Application).with_for_update().filter(Application.id == application.id).first()
+            if not locked_app:
+                raise RuntimeError(f"Application {application.id} no longer exists")
+            application = locked_app
+        except OperationalError:
+            self.db.rollback()
+            raise RuntimeError(f"Application {application.id} is currently locked by another process (Transaction Timeout). Please retry.")
+
+        # 2. Validate
         target_state = self.validate_transition(application, action)
         
         # 2. Preconditions (including notes if required)
@@ -276,6 +277,24 @@ class CandidateStateMachine:
             notes=notes,
             is_critical=is_critical,
         )
+
+        # ─── Fix: Interview Invitation Email Trigger ──────────────────
+        if target_state.value == "interview_scheduled":
+            try:
+                if not application or not application.candidate_email:
+                    logger.error(f"[EMAIL][FAILED] Missing email for App #{getattr(application, 'id', 'UNKNOWN')}")
+                elif getattr(application, "_email_sent", False):
+                    logger.warning(f"[EMAIL][SKIPPED] Duplicate prevented for App #{application.id}")
+                elif background_tasks:
+                   background_tasks.add_task(send_interview_invitation_email, application)
+                   application._email_sent = True
+                   logger.info(f"[EMAIL] Interview invitation queued for App #{application.id}")
+                else:
+                   logger.warning(f"[EMAIL][SKIPPED] background_tasks not available for App #{application.id}")
+            except Exception as e:
+                logger.error(f"[EMAIL][FAILED] Interview email for App #{getattr(application, 'id', 'UNKNOWN')}: {str(e)}")
+        # ──────────────────────────────────────────────────────────────
+
 
         # 5. Handle Automated Side Effects (Point 3)
         if target_state == CandidateState.INTERVIEW_COMPLETED and background_tasks:

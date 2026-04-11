@@ -74,24 +74,15 @@ from app.services.state_machine import CandidateStateMachine, TransitionAction, 
 
 def check_hr_permission(user: User, application: Application, db: Session):
     """
-    Restrict HR access to only their own candidates/jobs.
-    Super Admins can access everything.
+    Standardize HR permission guard. 
+    Global access for HR and Super Admin.
     """
-    if user.role == "super_admin":
-        return True
-    
-    # Check if HR is the owner of the application or the job
-    job = application.job
-    if not job:
-        from app.domain.models import Job
-        job = db.query(Job).filter(Job.id == application.job_id).first()
-    
-    if application.hr_id == user.id or (job and job.hr_id == user.id):
+    if user.role in ("super_admin", "hr"):
         return True
         
     raise HTTPException(
         status_code=403, 
-        detail="Access denied: You can only manage candidates for your own jobs."
+        detail="Access denied: Insufficient permissions."
     )
 
 async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: str) -> str:
@@ -160,7 +151,7 @@ async def get_hr_offer_preview(
     template = Template(template_str)
     return {"html": template.render(**data)}
 
-@router.get("/candidates", response_model=List[ApplicationResponse])
+@router.get("/candidates", response_model=None)
 def get_onboarding_candidates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_hr)
@@ -173,18 +164,19 @@ def get_onboarding_candidates(
         Application.status.in_(["hired", "pending_approval", "offer_sent", "accepted", "onboarded"])
     )
     
-    # ── Phase 6: Enforce ownership at API level ──
-    if current_user.role != "super_admin":
-        query = query.outerjoin(Job).filter(
-            or_(Application.hr_id == current_user.id, Job.hr_id == current_user.id)
-        )
-    else:
-        # For admin consistency, ensure we outerjoin Job for relationship loading
-        query = query.outerjoin(Job)
+    total = query.count()
+    candidates = query.options(
+        joinedload(Application.job),
+        joinedload(Application.hr)
+    ).all()
+    
+    # Populate Ownership Context (Architecture Rule 3)
+    for c in candidates:
+        c.assigned_hr_id = c.hr_id
+        c.assigned_hr_name = c.hr.full_name if c.hr else "Unknown"
+        c.is_owner = (c.hr_id == current_user.id)
         
-    # Eager load relationships for UI consistency (Phase 8)
-    candidates = query.options(joinedload(Application.job)).all()
-    return candidates
+    return {"items": candidates, "total": total}
 
 @router.post("/applications/{application_id}/send-offer")
 async def request_offer_approval(

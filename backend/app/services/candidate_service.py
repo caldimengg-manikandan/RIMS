@@ -31,7 +31,7 @@ class CandidateService:
             "Resume Screening": "applied",
             "Aptitude Round": "aptitude_round",
             "Automated AI Interview": "ai_interview",
-            "AI Interview Completed": "ai_interview_completed",
+            "AI Interview Completed": "interview_completed",
             "Review Later": "review_later",
             "Physical Interview": "physical_interview",
             "Hired": "hired",
@@ -120,3 +120,63 @@ class CandidateService:
         return self.db.query(Application).filter(
             Application.job_id == job_id
         ).order_by(Application.composite_score.desc()).all()
+
+    def ensure_interview_record_exists(self, application: Application) -> str:
+        """
+        Guarantee interview record exists for an application. 
+        Returns the raw access key for the candidate.
+        """
+        from app.domain.models import Interview
+        from app.core.auth import pwd_context
+        from datetime import datetime, timedelta, timezone
+        import secrets
+        import uuid
+
+        raw_access_key = secrets.token_urlsafe(16)
+        hashed_key = pwd_context.hash(raw_access_key)
+        expiration = datetime.now(timezone.utc) + timedelta(hours=24)
+
+        existing_interview = self.db.query(Interview).filter(
+            Interview.application_id == application.id
+        ).with_for_update().first()
+
+        if not existing_interview:
+            interview_stage = 'aptitude' if application.job.aptitude_enabled else 'first_level'
+            unique_test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
+
+            new_interview = Interview(
+                test_id=unique_test_id,
+                application_id=application.id,
+                status='not_started',
+                access_key_hash=hashed_key,
+                expires_at=expiration,
+                is_used=False,
+                interview_stage=interview_stage,
+            )
+            self.db.add(new_interview)
+            self.db.flush()
+            self.create_audit_log(
+                None, "INTERVIEW_CREATED", "Interview", new_interview.id, 
+                {"application_id": application.id, "stage": interview_stage}
+            )
+        else:
+            # Lifecycle logic: Overwrite old key to ensure single-key integrity
+            old_status = existing_interview.status
+            existing_interview.access_key_hash = hashed_key
+            existing_interview.expires_at = expiration
+            
+            # Safe reset for non-active sessions
+            if existing_interview.status in ['not_started', 'cancelled', 'expired']:
+                existing_interview.is_used = False
+                existing_interview.status = 'not_started' 
+                
+            if not existing_interview.test_id:
+                existing_interview.test_id = f"TEST-{uuid.uuid4().hex[:8].upper()}"
+            
+            self.db.flush()
+            self.create_audit_log(
+                None, "INTERVIEW_KEY_REGENERATED", "Interview", existing_interview.id,
+                {"application_id": application.id, "previous_status": old_status}
+            )
+
+        return raw_access_key

@@ -26,7 +26,7 @@ async def process_interview_message(session_id: str, data: dict):
     try:
         # 1. Fetch persistent session state
         interview_id = int(session_id) if str(session_id).isdigit() else 0
-        interview = db.query(Interview).filter(Interview.id == interview_id).first()
+        interview = db.query(Interview).filter(Interview.id == interview_id).with_for_update().first()
         
         if not interview:
             await session_manager.send_personal_message({"type": "error", "message": "Invalid session."}, session_id)
@@ -90,48 +90,74 @@ async def process_interview_message(session_id: str, data: dict):
                     await session_manager.send_personal_message(cached_eval, session_id)
                     return
 
-            # Immediate acknowledgment
-            await session_manager.send_personal_message({"type": "system", "message": "Evaluating your answer..."}, session_id)
+            # Immediate acknowledgment & status heartbeat
+            await session_manager.send_personal_message({"type": "system", "message": "Analyzing your response..."}, session_id)
 
-            # Evaluate answer (using existing orchestrator)
+            # Evaluate answer using the rubric from the question (if available)
+            rubric = current_q.expected_points if isinstance(current_q.expected_points, list) else []
             eval_result = await evaluate_answer(
                 current_q.question_text,
                 answer_text,
-                "technical" 
+                rubric or ["Technical concept", "Practical application"]
             )
 
-            # Persist the answer
-            ans = InterviewAnswer(
-                interview_id=interview_id,
-                question_id=current_q.id,
-                answer_text=answer_text,
-                answer_score=eval_result.get("technical_accuracy", 5.0),
-                answer_evaluation=json.dumps(eval_result)
-            )
-            db.add(ans)
+            # --- START ATOMIC UPDATE BLOCK ---
+            try:
+                # 1. Persist the answer
+                ans = InterviewAnswer(
+                    interview_id=interview_id,
+                    question_id=current_q.id,
+                    answer_text=answer_text,
+                    answer_score=eval_result.get("technical_accuracy", 5.0),
+                    technical_score=eval_result.get("technical_accuracy", 5.0),
+                    completeness_score=eval_result.get("completeness", 5.0),
+                    clarity_score=eval_result.get("clarity", 5.0),
+                    depth_score=eval_result.get("depth", 5.0),
+                    practicality_score=eval_result.get("practicality", 5.0),
+                    answer_evaluation=json.dumps(eval_result)
+                )
+                db.add(ans)
 
-            # Update difficulty and ask count
-            new_difficulty = adjust_difficulty(interview.current_difficulty or "medium", eval_result.get("technical_accuracy", 5.0))
-            interview.current_difficulty = new_difficulty
-            interview.questions_asked += 1
-            db.commit()
+                # 2. Update difficulty and ask count
+                new_difficulty = adjust_difficulty(interview.current_difficulty or "medium", eval_result.get("technical_accuracy", 5.0))
+                interview.current_difficulty = new_difficulty
+                interview.questions_asked += 1
+                
+                # Flush to ensure ID's are available but don't commit until we're done or next question is ready
+                db.flush()
 
-            eval_msg = {
-                "type": "evaluation",
-                "score": eval_result.get("technical_accuracy"),
-                "feedback": eval_result.get("feedback_text"),
-            }
-            if request_id: cache_set(replay_key, eval_msg)
-            await session_manager.send_personal_message(eval_msg, session_id)
-            
-            # Ending condition: 10 questions for full adaptive session
-            if interview.questions_asked >= (interview.total_questions or 10):
-                interview.status = "completed"
-                interview.ended_at = datetime.now(timezone.utc)
-                db.commit()
-                await session_manager.send_personal_message({"type": "end", "message": "Interview Complete. Grading..."}, session_id)
-            else:
-                await _generate_and_send_next_question(db, interview, session_id)
+                eval_msg = {
+                    "type": "evaluation",
+                    "score": eval_result.get("technical_accuracy"),
+                    "feedback": eval_result.get("feedback_text"),
+                }
+                if request_id: cache_set(replay_key, eval_msg)
+                await session_manager.send_personal_message(eval_msg, session_id)
+                
+                # 3. Ending condition or generate next
+                if interview.questions_asked >= (interview.total_questions or 10):
+                    interview.status = "completed"
+                    interview.ended_at = datetime.now(timezone.utc)
+                    db.commit()
+                    
+                    await session_manager.send_personal_message({"type": "system", "message": "Evaluation complete. Finalizing results..."}, session_id)
+                    # Critical: Trigger final report generation for WebSocket interviews
+                    try:
+                        from app.api.interviews import _finalize_interview_and_report_internal
+                        await _finalize_interview_and_report_internal(db, interview_id)
+                    except Exception as final_err:
+                        logger.error(f"Failed to auto-generate report on finish: {final_err}")
+                    
+                    await session_manager.send_personal_message({"type": "end", "message": "Interview Complete. Grading..."}, session_id)
+                else:
+                    # Send informative heartbeat before question generation
+                    await session_manager.send_personal_message({"type": "system", "message": "Adapting next question..."}, session_id)
+                    await _generate_and_send_next_question(db, interview, session_id)
+                    db.commit() # FINAL COMMIT for both evaluation and next question
+            except Exception as atomic_err:
+                db.rollback()
+                logger.error(f"Atomic update failed: {atomic_err}", exc_info=True)
+                raise atomic_err
 
     except Exception as e:
         logger.error(f"WS Controller Error: {e}", exc_info=True)
@@ -159,20 +185,24 @@ async def _generate_and_send_next_question(db, interview, session_id: str):
         interview.current_difficulty or "medium"
     )
     
-    question_text = ""
-    if isinstance(question_data_list, list) and len(question_data_list) > 0:
+    # Extract question and rubric
+    question_text = "Describe your experience with production systems."
+    expected_points = ["Technical depth", "Problem solving"]
+    
+    if isinstance(question_data_list, dict):
+        question_text = question_data_list.get("question", question_text)
+        expected_points = question_data_list.get("expected_points", expected_points)
+    elif isinstance(question_data_list, list) and len(question_data_list) > 0:
+        # Fallback for older list-based legacy response
         question_text = question_data_list[0]
-    elif isinstance(question_data_list, dict):
-        question_text = question_data_list.get("question", "Describe your experience with production systems.")
-    else:
-        question_text = str(question_data_list)
 
-    # Persist the question
+    # Persist the question with its rubric
     new_q = InterviewQuestion(
         interview_id=interview.id,
         question_number=interview.questions_asked + 1,
         question_text=question_text,
-        question_type="adaptive"
+        question_type="adaptive",
+        expected_points=expected_points
     )
     db.add(new_q)
     db.commit()

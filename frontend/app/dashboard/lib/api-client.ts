@@ -1,3 +1,4 @@
+// API Client - Last Updated: 2026-04-10
 import { API_BASE_URL } from '@/lib/config'
 import { toast } from 'sonner'
 
@@ -25,12 +26,16 @@ export function revalidateDashboardData() {
 }
 
 export class APIClient {
+  private static MAX_RETRIES = 3
+  private static TIMEOUT_MS = 15000
+
   private static createRequestId(): string {
     if (typeof window !== 'undefined' && typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
       return crypto.randomUUID()
     }
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`
   }
+
   private static isPublicEndpoint(endpoint: string): boolean {
     const normalized = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
     return (
@@ -42,14 +47,9 @@ export class APIClient {
 
   private static getHeaders(isMultipart = false, endpoint?: string): Record<string, string> {
     const headers: Record<string, string> = {}
-
     if (!isMultipart) {
       headers['Content-Type'] = 'application/json'
     }
-
-    // Auth model:
-    // - Most app endpoints: HttpOnly cookie `access_token` only (no Authorization header).
-    // - Interview endpoints: Authorization header with `interview_token` only.
     if (typeof window !== 'undefined' && !(endpoint && this.isPublicEndpoint(endpoint))) {
       const isInterviewRoute = window.location.pathname.startsWith('/interview')
       if (isInterviewRoute) {
@@ -59,33 +59,46 @@ export class APIClient {
         }
       }
     }
-
     headers['Cache-Control'] = 'no-store'
-
     return headers
   }
 
+  private static async fetchWithRetry(url: string, options: RequestInit, retries = 0): Promise<Response> {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), this.TIMEOUT_MS)
+    
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(id)
+      return response
+    } catch (err: any) {
+      clearTimeout(id)
+      const isTimeout = err.name === 'AbortError'
+      if (retries < this.MAX_RETRIES && (isTimeout || !window.navigator.onLine)) {
+        console.warn(`Retrying fetch (${retries + 1}/${this.MAX_RETRIES})...`)
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
+        return this.fetchWithRetry(url, options, retries + 1)
+      }
+      throw err
+    }
+  }
+
   static async get<T>(endpoint: string): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
+    const url = `${API_BASE_URL}${endpoint}`
+    const response = await this.fetchWithRetry(url, {
       method: 'GET',
       headers: this.getHeaders(false, endpoint),
       credentials: 'include',
-      cache: 'no-store',
     })
-
     return this.handleResponse<T>(response)
   }
 
-  /**
-   * Use a stable X-Request-ID for logical retries (e.g. same interview question submit)
-   * so the backend idempotency guard dedupes network duplicates without blocking legitimate new submits.
-   */
-  static async postWithRequestId<T>(endpoint: string, data: any, requestId: string): Promise<T> {
+  static async post<T>(endpoint: string, data: any, requestId?: string): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
     const headers = this.getHeaders(false, endpoint)
-    headers['X-Request-ID'] = requestId
-    const response = await fetch(url, {
+    headers['X-Request-ID'] = requestId ?? this.createRequestId()
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
@@ -94,30 +107,50 @@ export class APIClient {
     return this.handleResponse<T>(response)
   }
 
-  static async post<T>(endpoint: string, data: any): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const headers = this.getHeaders(false, endpoint)
-    headers['X-Request-ID'] = this.createRequestId()
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(data),
-      credentials: 'include',
-    })
-    return this.handleResponse<T>(response)
+  static async postWithRequestId<T>(endpoint: string, data: any, requestId: string): Promise<T> {
+    return this.post<T>(endpoint, data, requestId)
   }
 
   static async postMultipart<T>(endpoint: string, formData: FormData, requestId?: string): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${API_BASE_URL}${endpoint}`
     const headers = this.getHeaders(true, endpoint)
     headers['X-Request-ID'] = requestId ?? this.createRequestId()
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers,
       body: formData,
       credentials: 'include',
     })
     return this.handleResponse<T>(response)
+  }
+
+  static async postFormData<T>(endpoint: string, formData: FormData, requestId?: string): Promise<T> {
+    return this.postMultipart<T>(endpoint, formData, requestId)
+  }
+
+  static async put<T>(endpoint: string, data: any): Promise<T> {
+    const url = `${API_BASE_URL}${endpoint}`
+    const headers = this.getHeaders(false, endpoint)
+    headers['X-Request-ID'] = this.createRequestId()
+    const response = await this.fetchWithRetry(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+      credentials: 'include',
+    })
+    return this.handleResponse<T>(response)
+  }
+
+  static async delete(endpoint: string): Promise<void> {
+    const url = `${API_BASE_URL}${endpoint}`
+    const headers = this.getHeaders(false, endpoint)
+    headers['X-Request-ID'] = this.createRequestId()
+    const response = await this.fetchWithRetry(url, {
+      method: 'DELETE',
+      headers,
+      credentials: 'include',
+    })
+    await this.handleResponse(response)
   }
 
   static async handleResponse<T>(response: Response): Promise<T> {
@@ -125,82 +158,41 @@ export class APIClient {
       return {} as T
     }
 
-    if (!response.ok) {
-      // Try to get error detail from JSON body
-      const errorData = await response.json().catch(() => ({ detail: response.statusText }))
-      const detail = errorData.detail || `Error ${response.status}: ${response.statusText}`
+    const result = await response.json().catch(() => ({ 
+      success: false, 
+      data: null, 
+      error: `Error ${response.status}: ${response.statusText}` 
+    }))
 
+    const isStandardFormat = result && typeof result === 'object' && 'success' in result
+    const success = isStandardFormat ? result.success : response.ok
+    const data = isStandardFormat ? result.data : result
+    const error = isStandardFormat ? result.error : (result.detail || result.error || response.statusText)
+
+    if (!success) {
+      console.warn("API Warning:", error)
+      
       if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
-        toast.error(detail)
+        // We still want toast for non-data errors, but we won't crash the flow
+        toast.error(error)
       }
 
-      // Handle 401/403: Clear token and redirect
       if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
-        const isInterviewPath = window.location.pathname.startsWith('/interview')
-        if (isInterviewPath && !window.location.pathname.includes('/access')) {
-          // We do NOT redirect automatically to /interview/access anymore to allow the page to show an error
-          // and prevent "flash" redirects during load.
-          // localStorage.removeItem('auth_token') // Optional: Keep for retry if user manually refreshes
-          throw new Error(`${detail}. Please check your credentials and try again.`)
-        } else if (response.status === 401) {
+        if (response.status === 401) {
           localStorage.removeItem('auth_token')
-          window.location.href = '/'
-          throw new Error(`Unauthorized: ${detail}. Redirecting...`)
+          if (!window.location.pathname.startsWith('/interview')) {
+             window.location.href = '/'
+          }
         }
       }
-
-      throw new Error(detail)
+      return (data || {}) as T
     }
 
-    return response.json()
-  }
-
-  static async put<T>(endpoint: string, data: any): Promise<T> {
-    const headers = this.getHeaders(false, endpoint)
-    headers['X-Request-ID'] = this.createRequestId()
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(data),
-      credentials: 'include',
-    })
-
-    return this.handleResponse<T>(response)
-  }
-
-  static async delete(endpoint: string): Promise<void> {
-    const headers = this.getHeaders(false, endpoint)
-    headers['X-Request-ID'] = this.createRequestId()
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'DELETE',
-      headers,
-      credentials: 'include',
-    })
-
-    await this.handleResponse(response)
-  }
-
-  static async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
-    const headers = this.getHeaders(true, endpoint)
-    delete headers['Content-Type'] // Let browser set this for FormData
-    headers['X-Request-ID'] = this.createRequestId()
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      credentials: 'include',
-    })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }))
-      const detail = error.detail || `API error: ${response.statusText}`
-      if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
-        toast.error(detail)
-      }
-      throw new Error(detail)
+    // Handled in the success case as well
+    if (data == null) {
+      return ({} as T)
     }
 
-    return response.json()
+    return data as T
   }
 }

@@ -14,9 +14,9 @@ def validate_hr_ownership_for_interview(interview, current_user, *, resource_nam
 def validate_hr_ownership(resource, current_user, *, resource_name: str = "resource") -> None:
     """
     Centralized HR ownership guard.
-    Super admins can access everything.
+    Super admins and HR users can access everything.
     """
-    if current_user.role == "super_admin":
+    if current_user.role in ("super_admin", "hr"):
         return
 
     owner_id = getattr(resource, "hr_id", None)

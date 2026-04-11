@@ -2,12 +2,13 @@ import datetime
 from datetime import timezone
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, Float,
-    ForeignKey, UniqueConstraint, CheckConstraint, Index, JSON
+    ForeignKey, UniqueConstraint, CheckConstraint, Index, JSON, Enum
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.infrastructure.database import Base
 from app.core.encryption import EncryptedText
+from app.domain.constants import CandidateState
 
 
 class User(Base):
@@ -85,7 +86,7 @@ class Application(Base):
     __tablename__ = "applications"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_scheduled', 'interview_completed', 'hired', 'pending_approval', 'offer_sent', 'accepted', 'rejected', 'onboarded', 'physical_interview', 'review_later', 'permanent_failure')",
+            f"status IN ({', '.join([f'{s.value!r}' for s in CandidateState])})",
             name='check_applications_status'
         ),
         UniqueConstraint('job_id', 'candidate_email', name='uq_application_job_email'),
@@ -140,6 +141,7 @@ class Application(Base):
 
     # Relationships
     job = relationship("Job", back_populates="applications")
+    hr = relationship("User", foreign_keys=[hr_id])
     resume_extraction = relationship(
         "ResumeExtraction", 
         back_populates="application", 
@@ -159,6 +161,10 @@ class Application(Base):
     offer_sent_date = Column(DateTime)
     joining_date = Column(DateTime)
     onboarding_approval_status = Column(String(20), default='pending') # Legacy — Repurposing to offer_approval_status
+    
+    # Persistent Email Tracking
+    email_sent_at = Column(DateTime, nullable=True)
+    email_status = Column(String(20), default='pending') # 'pending', 'sent', 'failed'
     
     # Enhanced Onboarding V2
     offer_approval_status = Column(String(20), default='pending') # 'pending', 'approved', 'rejected'
@@ -303,7 +309,8 @@ class InterviewQuestion(Base):
     interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, index=True)
     question_number = Column(Integer, nullable=False)
     question_text = Column(Text, nullable=False)
-    question_type = Column(String(50))  # 'aptitude', 'behavioral', 'technical', 'follow_up'
+    question_type = Column(String(100))  # 'aptitude', 'behavioral', 'technical', 'follow_up'
+    expected_points = Column(JSON, nullable=True) # AI-generated rubric for this question
     options = Column(Text, nullable=True)  # JSON array for multiple choice options
     correct_answer = Column(Text, nullable=True)
     ai_generated_at = Column(DateTime, default=datetime.datetime.now(timezone.utc))
