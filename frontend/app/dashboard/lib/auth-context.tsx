@@ -257,10 +257,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Failed to parse login response from the server.");
       }
 
+      // Backend wraps JSON in FastAPI StandardizedAPIRoute: { success, data, error }
+      const payload = data && typeof data === 'object' && 'data' in data && data.success !== undefined
+        ? (data as { data?: { user?: unknown; message?: string } }).data
+        : data
+      const userFromPayload = payload && typeof payload === 'object' && 'user' in payload
+        ? (payload as { user?: unknown }).user
+        : undefined
+
       setToken("cookie_managed")
       if (typeof window !== 'undefined') localStorage.setItem(SESSION_PRESENT_KEY, '1')
-      if (data.user) {
-        setUser(data.user)
+      if (userFromPayload) {
+        setUser(userFromPayload as User)
       } else {
         // Fallback for older backend versions (though we just updated it)
         await fetchCurrentUser()

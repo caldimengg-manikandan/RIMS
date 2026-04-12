@@ -976,6 +976,77 @@ async def generate_test_token(
     return {"interview_id": interview_id, "access_key": new_key}
 
 
+@router.post("/{interview_id}/start")
+async def start_interview_session(
+    interview_id: int,
+    interview_session: Interview = Depends(get_current_interview_any_status),
+    db: Session = Depends(get_db),
+):
+    """
+    Explicitly mark the interview as started (idempotent). Used by the
+    /interview/[id] UI after fullscreen before questions are shown.
+
+    The access flow may already set `in_progress` and `started_at`; this
+    endpoint is safe to call again when the session is already active.
+    """
+    if interview_session.id != interview_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    interview = db.query(Interview).options(
+        joinedload(Interview.application).joinedload(Application.job)
+    ).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+
+    if interview.status in ("completed", "terminated", "cancelled", "expired"):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This interview has already ended or cannot be started.",
+        )
+
+    now = datetime.now(timezone.utc)
+
+    if interview.status == "not_started":
+        application = interview.application
+        job = application.job if application else None
+        interview.is_used = True
+        interview.used_at = now
+        _set_interview_status(interview, "in_progress")
+        if job:
+            interview.interview_stage = _determine_initial_stage(job)
+            exp = (job.experience_level or "").lower()
+            if exp != "junior" and interview.interview_stage == STAGE_APTITUDE:
+                interview.interview_stage = STAGE_FIRST_LEVEL
+            interview.started_at = now
+            interview.duration_minutes = job.duration_minutes or 60
+        else:
+            interview.interview_stage = STAGE_FIRST_LEVEL
+            interview.started_at = now
+            interview.duration_minutes = 60
+        db.commit()
+        db.refresh(interview)
+    elif interview.status == "in_progress":
+        if not interview.started_at:
+            interview.started_at = now
+            if not interview.duration_minutes:
+                job = interview.application.job if interview.application else None
+                interview.duration_minutes = (job.duration_minutes or 60) if job else 60
+            db.commit()
+            db.refresh(interview)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Interview cannot be started in current state: {interview.status}",
+        )
+
+    return {
+        "ok": True,
+        "status": interview.status,
+        "started_at": interview.started_at.isoformat() if interview.started_at else None,
+        "duration_minutes": interview.duration_minutes or 60,
+    }
+
+
 @router.get("/{interview_id}/stage")
 async def get_interview_stage(
     interview_id: int,
@@ -2057,12 +2128,14 @@ async def end_interview(
             InterviewQuestion.interview_id == interview_id,
             InterviewQuestion.question_type != "aptitude"
         ).all()
-        answered = db.query(InterviewAnswer).filter(
-            InterviewAnswer.interview_id == interview_id
-        ).all()
-        
-        if len(answered) < len(questions) and len(questions) > 0:
-            raise HTTPException(status_code=400, detail=f"Please answer all questions before ending. Missing: {len(questions) - len(answered)}")
+        question_ids = [q.id for q in questions]
+        # Count answers by joining through question_id to avoid NULL interview_id issues
+        answered_count = db.query(InterviewAnswer).filter(
+            InterviewAnswer.question_id.in_(question_ids)
+        ).count() if question_ids else 0
+
+        if answered_count < len(questions) and len(questions) > 0:
+            raise HTTPException(status_code=400, detail=f"Please answer all questions before ending. Missing: {len(questions) - answered_count}")
 
     # 1.5 Handle termination reason if provided
     if data and data.get("termination_reason"):
@@ -2083,9 +2156,11 @@ async def end_interview(
 
     # 2. Finalize and Generate Report
     report = await _finalize_interview_and_report_internal(db, interview_id)
-    
+
+    # Report may be None if AI generation failed — the /report GET endpoint regenerates on-demand
+    # Don't block the candidate's completion flow; log and continue.
     if not report:
-        raise HTTPException(status_code=500, detail="Failed to generate final report.")
+        logger.warning(f"Report generation failed for interview {interview_id} during end — will be generated on-demand.")
 
     return {
         "success": True,

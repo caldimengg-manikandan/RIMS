@@ -1,4 +1,4 @@
-import React from "react"
+import React, { Suspense } from "react"
 import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/app/dashboard/lib/auth-context'
@@ -49,7 +49,9 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <div className="app-shell-content flex flex-col min-h-screen flex-1" suppressHydrationWarning>
-                  <NavigationProgress />
+                  <Suspense fallback={null}>
+                    <NavigationProgress />
+                  </Suspense>
                   <header className="shrink-0 flex flex-col">
                     <GlobalNavbar />
                   </header>

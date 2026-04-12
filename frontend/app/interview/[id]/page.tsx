@@ -918,9 +918,8 @@ export default function InterviewPage() {
         const qsToUse = manualQuestions || questions
         const unansweredCount = qsToUse.filter(q => !q.is_answered).length
 
-        // If not forced and there are unanswered questions, block with alert
+        // If not forced and there are unanswered questions, navigate to first unanswered
         if (unansweredCount > 0 && !isForced) {
-            alert(`Please answer all questions before finishing. You have ${unansweredCount} unanswered question(s).`)
             const firstUnanswered = qsToUse.findIndex(q => !q.is_answered)
             if (firstUnanswered !== -1) {
                 setCurrentIndex(firstUnanswered)
@@ -929,10 +928,10 @@ export default function InterviewPage() {
         }
 
         // Final confirmation for the user
-        const confirmMsg = unansweredCount > 0 
-            ? `You have ${unansweredCount} unanswered questions. Are you sure you want to end the interview? This will submit your current progress.`
-            : `Are you sure you want to end and submit your interview?`;
-            
+        const confirmMsg = unansweredCount > 0
+            ? `You have ${unansweredCount} unanswered question(s). Are you sure you want to end the interview now? Your answered questions will be submitted.`
+            : `Are you sure you want to end and submit your interview?`
+
         if (!confirm(confirmMsg)) return
 
         finishingInterviewRef.current = true
@@ -940,13 +939,13 @@ export default function InterviewPage() {
         try {
             setIsSubmitting(true)
             await stopOverallRecording()
-            
-            // Allow forced completion even if some questions are missed (if confirmation was given or due to violation)
-            const isForced = interviewStatusRef.current === 'finishing' || (manualQuestions === undefined);
+
+            // Pass force=true when explicitly forced (violations, timer, or user confirmed with unanswered questions)
+            const forceFlag = isForced || unansweredCount > 0
 
             await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/end`,
-                { force: isForced },
+                { force: forceFlag },
                 `rims-${interviewId}-end`,
             )
             setInterviewStatus('completed')
@@ -1578,9 +1577,9 @@ export default function InterviewPage() {
                                         variant="outline"
                                         className="h-16 px-8 rounded-[1.25rem] border-2 border-red-100 text-red-600 font-bold hover:bg-red-50 hover:border-red-200 transition-all"
                                         onClick={() => finishInterview(undefined, true)}
-                                        disabled={isSubmitting || questions.some(q => !q.is_answered)}
+                                        disabled={isSubmitting}
                                     >
-                                        End Interview
+                                        {questions.some(q => !q.is_answered) ? 'End Early' : 'End Interview'}
                                     </Button>
                                     <Button
                                         disabled={!answer.trim() || isSubmitting || currentQuestion?.is_answered}
