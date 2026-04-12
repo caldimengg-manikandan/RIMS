@@ -43,6 +43,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Callable, Any
+import json
 import logging
 
 from app.core.auth import hash_password
@@ -114,6 +115,29 @@ def bootstrap_super_admin():
 
 bootstrap_super_admin()
 
+
+def _decode_json_response_body(response: JSONResponse):
+    """Starlette JSONResponse exposes serialized JSON as `body` (bytes), not `content`."""
+    body = getattr(response, "body", None)
+    if not body:
+        return None
+    try:
+        return json.loads(body.decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _headers_without_content_length(response: JSONResponse):
+    """Avoid reusing Content-Length/Content-Type from a wrapped response (would mismatch new body)."""
+    out = {}
+    for k, v in response.headers.items():
+        lk = k.lower()
+        if lk in ("content-length", "content-type"):
+            continue
+        out[k] = v
+    return out
+
+
 class StandardizedAPIRoute(APIRoute):
     def get_route_handler(self) -> Callable:
         original_handler = super().get_route_handler()
@@ -121,16 +145,17 @@ class StandardizedAPIRoute(APIRoute):
             try:
                 response = await original_handler(request)
                 if isinstance(response, JSONResponse):
-                    if isinstance(response.content, dict) and "success" in response.content:
+                    payload = _decode_json_response_body(response)
+                    if isinstance(payload, dict) and "success" in payload:
                         return response
                     return JSONResponse(
                         status_code=response.status_code,
                         content={
                             "success": response.status_code < 400,
-                            "data": response.content,
+                            "data": payload,
                             "error": None if response.status_code < 400 else "Error"
                         },
-                        headers=dict(response.headers)
+                        headers=_headers_without_content_length(response),
                     )
                 if hasattr(response, "status_code"):
                     return response
