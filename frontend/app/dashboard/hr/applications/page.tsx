@@ -161,9 +161,9 @@ export default function HRApplicationsPage() {
     error,
     isLoading: isSwrLoading,
     mutate,
-  } = useSWR<{ items: Application[]; total: number; pages: number }>(
+  } = useSWR<PaginatedResponse<Application>>(
     applicationsListUrl,
-    (url: string) => fetcher<{ items: Application[]; total: number; pages: number }>(url),
+    (url: string) => fetcher<PaginatedResponse<Application>>(url),
     { keepPreviousData: true },
   );
 

@@ -205,7 +205,7 @@ export default function ReportsPage() {
 
       // Aptitude Calculation
       const aptQty = report?.aptitude_question_evaluations?.length || 0;
-      const aptCorrect = report?.aptitude_question_evaluations?.filter(q => q.correct).length || 0;
+      const aptCorrect = report?.aptitude_question_evaluations?.filter((q: QuestionEvaluation) => q.correct).length || 0;
       const aptScore = aptQty > 0 ? (aptCorrect / aptQty) * 10 : report?.aptitude_score;
 
       return {
@@ -310,7 +310,7 @@ export default function ReportsPage() {
       const skillFilterLower = skillFilter.toLowerCase()
       const matchesSkillFilter = skillFilter === 'All' ||
         (report?.candidate_profile?.primary_skill?.toLowerCase() || '').includes(skillFilterLower) ||
-        (report?.candidate_profile?.skills?.some(s => s.toLowerCase().includes(skillFilterLower)) || false)
+        (report?.candidate_profile?.skills?.some((s: string) => s.toLowerCase().includes(skillFilterLower)) || false)
 
       const reportDateStr = report?.timestamp ? new Date(report.timestamp).toLocaleDateString('en-CA') : "";
       const filterDateStr = dateFilter?.toLocaleDateString('en-CA');
@@ -325,23 +325,16 @@ export default function ReportsPage() {
 
       return matchesStatus && matchesScore && matchesExp && matchesSearch && matchesDate && matchesSkillFilter
     });
-    
-    // Developer Pipeline Visibility
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[REPORTS] Render Logic: Processed(${reports.length}) -> Filtered(${filtered.length})`);
-    }
-
-    return filtered;
   }, [reports, statusFilter, skillFilter, scoreRange, experienceFilter, dateFilter, searchQuery])
 
   // Metrics
   const metrics = useMemo(() => {
     const total = filteredReports.length
-    const selectedCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Select').length
-    const holdCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Consider').length
-    const rejectedCount = filteredReports.filter(r => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Reject').length
-    const avgScore = total > 0 ? (filteredReports.reduce((acc, r) => acc + Number(r?.overall_score || 0), 0) / total).toFixed(2) : '0.00'
-    const avgQuestions = total > 0 ? (filteredReports.reduce((acc, r) => acc + (r?.total_questions_answered || 0), 0) / total).toFixed(1) : '0.0'
+    const selectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Select').length
+    const holdCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Consider').length
+    const rejectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Reject').length
+    const avgScore = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + Number(r?.overall_score || 0), 0) / total).toFixed(2) : '0.00'
+    const avgQuestions = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + (r?.total_questions_answered || 0), 0) / total).toFixed(1) : '0.0'
 
     return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
   }, [filteredReports])
@@ -424,7 +417,7 @@ export default function ReportsPage() {
 
   const downloadCSV = () => {
     const headers = ['Candidate,Date,Primary Skill,Experience,Score,Status']
-    const rows = filteredReports.map(r => [
+    const rows = filteredReports.map((r: Report) => [
       `"${r.filename.replace('.json', '')}"`,
       `"${r.display_date_short}"`,
       `"${r.candidate_profile.primary_skill || 'N/A'}"`,
@@ -843,7 +836,7 @@ export default function ReportsPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredReports.map((report, idx) => (
+                  {filteredReports.map((report: Report, idx: number) => (
                     <ReportCard
                       key={idx}
                       report={report}
@@ -875,7 +868,7 @@ export default function ReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredReports.map((report, idx) => (
+                      {filteredReports.map((report: Report, idx: number) => (
                         <TableRow key={idx}>
                           <TableCell className="font-medium">{report.filename.replace('.json', '')}</TableCell>
                           <TableCell>{report.display_date_short}</TableCell>
