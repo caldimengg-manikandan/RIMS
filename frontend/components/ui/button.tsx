@@ -65,7 +65,7 @@ function Button({
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!onClick) return
     
-    const result = onClick(e)
+    const result: unknown = onClick(e)
     
     // Immediately set loading if it's a promise to prevent double-clicks
     if (result instanceof Promise) {

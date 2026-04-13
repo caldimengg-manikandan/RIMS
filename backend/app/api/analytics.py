@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/config/skills")
-async def get_skills_config():
+def get_skills_config():
     """Expose the canonical skill categories from the interview engine (Point 1)"""
     try:
         from interview_process.config import SKILL_CATEGORIES
@@ -27,7 +27,7 @@ async def get_skills_config():
         return ["backend", "frontend", "fullstack", "devops", "hr"]
 
 @router.get("/dashboard")
-async def get_dashboard_analytics(
+def get_dashboard_analytics(
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
@@ -65,7 +65,7 @@ async def get_dashboard_analytics(
 
 
 @router.get("/reports")
-async def get_interview_reports(
+def get_interview_reports(
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
@@ -319,7 +319,7 @@ async def get_interview_reports(
         }
 
 @router.get("/interviews")
-async def get_filtered_interviews(
+def get_filtered_interviews(
     candidate_name: Optional[str] = None,
     candidate_email: Optional[str] = None,
     test_id: Optional[str] = None,

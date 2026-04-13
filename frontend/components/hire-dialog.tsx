@@ -12,44 +12,31 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, Calendar, FileText } from 'lucide-react'
+import { CheckCircle, Calendar } from 'lucide-react'
 
 interface HireDialogProps {
     candidateName: string;
-    onConfirm: (joiningDate: string, offerLetter: File, notes: string) => Promise<void>;
+    onConfirm: (joiningDate: string, notes: string) => Promise<void>;
     trigger: React.ReactNode;
 }
 
 export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProps) {
     const [open, setOpen] = useState(false);
     const [joiningDate, setJoiningDate] = useState("");
-    const [offerLetter, setOfferLetter] = useState<File | null>(null);
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setOfferLetter(e.target.files[0]);
-        }
-    };
 
     const handleConfirm = async () => {
         if (!joiningDate) {
             alert("Please select a joining date.");
             return;
         }
-        if (!offerLetter) {
-            alert("Please upload an offer letter (PDF).");
-            return;
-        }
 
         setIsSubmitting(true);
         try {
-            await onConfirm(joiningDate, offerLetter, notes);
+            await onConfirm(joiningDate, notes);
             setOpen(false);
-            // Reset state
             setJoiningDate("");
-            setOfferLetter(null);
             setNotes("");
         } catch (error) {
             console.error("Failed to hire candidate:", error);
@@ -64,7 +51,6 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
         setOpen(newOpen);
         if (!newOpen) {
             setJoiningDate("");
-            setOfferLetter(null);
             setNotes("");
         }
     };
@@ -82,7 +68,7 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
                     </DialogTitle>
                     <DialogDescription className="text-[0.95rem] pt-2 text-foreground leading-relaxed">
                         Complete the formal hiring process for <strong className="font-bold text-primary">{candidateName}</strong>. 
-                        The details will be overlaid onto the offer letter and emailed to the candidate.
+                        The system will automatically generate a personalised offer letter from your configured template and email it to the candidate.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -99,23 +85,6 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
                             value={joiningDate}
                             onChange={(e) => setJoiningDate(e.target.value)}
                         />
-                    </div>
-
-                    <div className="grid gap-2">
-                        <Label htmlFor="offerLetter" className="font-semibold flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-emerald-600" />
-                            Offer Letter Template (PDF) <span className="text-destructive">*</span>
-                        </Label>
-                        <Input 
-                            id="offerLetter" 
-                            type="file" 
-                            accept=".pdf"
-                            className="w-full cursor-pointer"
-                            onChange={handleFileChange}
-                        />
-                        <p className="text-xs text-muted-foreground italic">
-                            System will overlay Candidate Name, Role, and Date on the first page.
-                        </p>
                     </div>
 
                     <div className="grid gap-2">
@@ -144,7 +113,7 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
                     <Button
                         type="button"
                         onClick={handleConfirm}
-                        disabled={isSubmitting || !joiningDate || !offerLetter}
+                        disabled={isSubmitting || !joiningDate}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[140px]"
                     >
                         {isSubmitting ? "Processing..." : "Confirm & Send"}

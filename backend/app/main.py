@@ -229,7 +229,7 @@ app.add_middleware(
 )
 
 @app.get("/health", tags=["System"])
-async def health_check():
+def health_check():
     uptime_seconds = round(time.time() - app.state.start_time, 2)
     db_status = "ok"
     try:

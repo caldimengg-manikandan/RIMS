@@ -1,17 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Form, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 import os
-import shutil
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from typing import Optional
+from pydantic import BaseModel
 from app.infrastructure.database import get_db
-from app.domain.models import User, Application, HiringDecision, Notification, Job, Interview
+from app.domain.models import User, Application, HiringDecision, Notification, Job, Interview, GlobalSettings
 from app.domain.schemas import HiringDecisionMake, HiringDecisionResponse
 from app.core.auth import get_current_user, get_current_hr
 from app.core.ownership import validate_hr_ownership
 from app.services.email_service import send_hired_email, send_rejected_email
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/decisions", tags=["hiring decisions"])
+
+
+class HireRequest(BaseModel):
+    joining_date: str
+    notes: Optional[str] = None
 
 @router.put("/applications/{application_id}/decide", response_model=HiringDecisionResponse)
 def make_hiring_decision(
@@ -92,20 +100,24 @@ def make_hiring_decision(
 @router.post("/applications/{application_id}/hire")
 async def hire_candidate(
     application_id: int,
-    joining_date: str = Form(...),
-    notes: str = Form(None),
-    offer_letter: UploadFile = File(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    hire_data: HireRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
-    """Final Hire Action with Offer Letter Generation & Email (Multipart/Form-Data)"""
+    """
+    Final Hire Action — generates an offer letter PDF from the global HTML
+    template (Flow 2), uploads it to Supabase, and emails the candidate.
+    No PDF upload required from HR.
+    """
     from app.services.state_machine import (
         CandidateStateMachine, TransitionAction,
         InvalidTransitionError, DuplicateTransitionError,
     )
-    from app.services.pdf_service import overlay_offer_letter_details
+    from app.services.offer_letter_service import get_offer_letter_data, generate_offer_letter_pdf_bytes
+    from app.core.storage import upload_file
     from app.core.config import get_settings
+    from jinja2 import Template
     settings = get_settings()
 
     application = db.query(Application).filter(Application.id == application_id).with_for_update().first()
@@ -113,78 +125,96 @@ async def hire_candidate(
         raise HTTPException(status_code=404, detail="Application not found")
     validate_hr_ownership(application, current_user, resource_name="application")
 
-    # 1. State machine transition
+    # 1. Parse and store the joining date
+    try:
+        jdate = datetime.fromisoformat(hire_data.joining_date.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid joining_date format. Use ISO 8601 (e.g. 2026-05-01).")
+
+    # 2. Load global settings (company branding, offer template)
+    gs = {s.key: s.value for s in db.query(GlobalSettings).all()}
+    template_str = gs.get("offer_letter_template", "")
+    if not template_str:
+        raise HTTPException(
+            status_code=400,
+            detail="No offer letter template found. Please configure one in Settings before hiring."
+        )
+
+    # 3. FSM transition: physical_interview → hired
     fsm = CandidateStateMachine(db)
-    
     try:
         result = fsm.transition(
             application=application,
             action=TransitionAction.HIRE,
             user_id=current_user.id,
-            notes=notes or "Hired via formal process",
+            notes=hire_data.notes or "Hired via formal process",
         )
-
-        # 2. Upload the base offer letter to Supabase
-        timestamp = int(datetime.now(timezone.utc).timestamp())
-        base_filename = f"offer_base_{application_id}_{timestamp}.pdf"
-        base_storage_path = f"offer_letters/{base_filename}"
-        
-        content = await offer_letter.read()
-        from app.core.storage import upload_file
-        upload_file(settings.supabase_bucket_resumes, base_storage_path, content, content_type=offer_letter.content_type)
-
-        # 3. Process the PDF (Overlay details in-memory)
-        try:
-            jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
-        except:
-            jdate = datetime.now(timezone.utc)
-        
-        final_pdf_content = overlay_offer_letter_details(
-            content, 
-            application.candidate_name, 
-            application.job.title, 
-            jdate
-        )
-        
-        final_filename = f"offer_final_{application_id}_{timestamp}.pdf"
-        final_storage_path = f"offer_letters/{final_filename}"
-        upload_file(settings.supabase_bucket_resumes, final_storage_path, final_pdf_content, content_type="application/pdf")
-
-        # 4. Create decision record
-        hiring_decision = HiringDecision(
-            application_id=application_id,
-            hr_id=current_user.id,
-            decision="hired",
-            decision_comments=notes,
-            joining_date=jdate,
-            offer_letter_path=final_storage_path,
-            decided_at=datetime.now(timezone.utc)
-        )
-        db.add(hiring_decision)
-        db.commit()
     except (InvalidTransitionError, DuplicateTransitionError) as e:
-        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+    # 4. Snapshot the template on the Application for historical record
+    application.joining_date = jdate
+    application.offer_template_snapshot = template_str
+
+    # 5. Render the HTML template with candidate data
+    data = get_offer_letter_data(
+        candidate_name=application.candidate_name,
+        job_role=application.job.title if application.job else "N/A",
+        department=(application.job.domain if application.job else "Engineering") or "Engineering",
+        joining_date=jdate,
+        company_name=gs.get("company_name", "Our Company"),
+        logo_url=gs.get("company_logo_url", ""),
+        hr_email=gs.get("hr_email", ""),
+        hr_name=gs.get("hr_name", ""),
+        hr_phone=gs.get("hr_phone", ""),
+        company_address=gs.get("company_address", "")
+    )
+
+    # 6. Generate PDF bytes in-memory (xhtml2pdf)
+    try:
+        pdf_bytes = generate_offer_letter_pdf_bytes(template_str, data)
+    except RuntimeError as e:
+        logger.error(f"Offer letter PDF generation failed for application {application_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate offer letter PDF: {e}")
+
+    # 7. Upload generated PDF to Supabase
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    storage_path = f"offer_letters/offer_{application_id}_{timestamp}.pdf"
+    try:
+        upload_file(settings.supabase_bucket_offers, storage_path, pdf_bytes, content_type="application/pdf")
+    except Exception as e:
+        logger.error(f"Offer letter upload failed for application {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload offer letter to storage.")
+
+    # 8. Persist HiringDecision and update Application atomically
+    hiring_decision = HiringDecision(
+        application_id=application_id,
+        hr_id=current_user.id,
+        decision="hired",
+        decision_comments=hire_data.notes,
+        joining_date=jdate,
+        offer_letter_path=storage_path,
+        decided_at=datetime.now(timezone.utc)
+    )
+    db.add(hiring_decision)
+    try:
+        db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Hiring process failed for application {application_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to finalize hiring process and save decision.")
+        logger.error(f"Hiring decision commit failed for application {application_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to finalise hiring decision.")
 
-
-    # 5. Email with attachment (ONLY after successful commit)
-    candidate_email = application.candidate_email
-    job_title = application.job.title
-
+    # 9. Email with offer letter attachment (background, after commit)
     if result.email_type == "hired":
         background_tasks.add_task(
-            send_hired_email, 
-            candidate_email, 
-            job_title, 
+            send_hired_email,
+            application.candidate_email,
+            application.job.title if application.job else "N/A",
             application.interview,
-            offer_letter_path=final_storage_path
+            offer_letter_path=storage_path
         )
 
-    return {"status": "success", "message": "Candidate hired and offer letter sent"}
+    return {"status": "success", "message": "Candidate hired and offer letter generated and sent."}
 
 @router.get("/applications/{application_id}/decision")
 def get_application_decision(

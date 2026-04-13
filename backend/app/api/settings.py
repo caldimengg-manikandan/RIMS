@@ -50,4 +50,4 @@ def update_settings(
     db.commit()
     
     # Return updated settings
-    return get_settings(db)
+    return get_settings(current_user=current_user, db=db)
