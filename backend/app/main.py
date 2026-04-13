@@ -178,10 +178,7 @@ app = FastAPI(
 )
 app.router.route_class = StandardizedAPIRoute
 
-# mock_storage is redirected to persistent LOCAL_STORAGE_DIR
-mock_storage_dir = os.path.join(os.getcwd(), "local_storage", "mock_storage")
-os.makedirs(mock_storage_dir, exist_ok=True)
-app.mount("/mock_storage", StaticFiles(directory=mock_storage_dir), name="mock_storage")
+
 
 import time
 app.state.start_time = time.time()
@@ -274,9 +271,7 @@ app.include_router(onboarding.router)
 app.include_router(search.router)
 app.include_router(websocket_router)
 
-LOCAL_STORAGE_DIR = Path("local_storage")
-LOCAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/local_storage", StaticFiles(directory=str(LOCAL_STORAGE_DIR)), name="local_storage")
+
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: FastAPIRequest, exc: RequestValidationError):
