@@ -78,6 +78,7 @@ if os.environ.get("WORKER_ID", "0") == "0":
     if os.environ.get("RIMS_STARTUP_MIGRATIONS_DONE", "0") != "1":
         os.environ["RIMS_STARTUP_MIGRATIONS_DONE"] = "1"
         try:
+            run_startup_migrations(engine)
             validate_required_columns(engine)
         except RuntimeError as e:
             sys.exit(1)

@@ -83,6 +83,14 @@ _REQUIRED_COLUMNS = [
 ]
 
 
+def _safe_rollback(conn) -> None:
+    """Clear aborted transactions so later migrations can continue."""
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+
+
 def column_exists(conn, table_name: str, column_name: str) -> bool:
     """Check if a column exists in a table (PostgreSQL/SQLite compatible)."""
     # Use inspector for broad compatibility
@@ -133,6 +141,7 @@ def run_startup_migrations(engine: Engine):
                 else:
                     logger.debug(f"Column {table}.{column} already exists.")
             except Exception as e:
+                _safe_rollback(conn)
                 logger.error(f"Migration FAILED for {table}.{column}: {e}")
                 # For critical updates, we might want to raise, but for baseline, we log and continue
                 # unless it's a manual migration script.
@@ -143,6 +152,7 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Ensured users.approval_status exists")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to add users.approval_status: {e}")
 
         # Backfill resume_status from existing resume_extractions (metadata sync)
@@ -164,6 +174,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Backfilled applications.resume_status from resume_extractions")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to backfill applications.resume_status: {e}")
 
         # 1c. Ensure status constraint is updated for 'offer_sent' and 'onboarded'
@@ -177,6 +188,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Updated check_applications_status constraint")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to update application status constraint: {e}")
 
         # 1d. Create global_settings table if not exists
@@ -193,6 +205,7 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Ensured global_settings table exists")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to create global_settings table: {e}")
 
     # 2. Update Role Constraints
@@ -206,6 +219,7 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Updated check_users_role constraint")
         except Exception as exc:
+            _safe_rollback(conn)
             logger.warning(f"Error updating role constraint: {exc}")
 
     # 3. Data normalization and Super Admin promotion
@@ -240,6 +254,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Migration completed: normalized roles and promoted super admin")
             except Exception as exc:
+                _safe_rollback(conn)
                 logger.warning(f"Migration failed to normalize roles: {exc}")
         
         # Populate Application.hr_id
@@ -253,6 +268,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Migration completed: populated Application.hr_id")
         except Exception as exc:
+            _safe_rollback(conn)
             logger.warning(f"Migration failed to populate hr_id: {exc}")
 
     # 4. Constraints/Indexes
@@ -283,6 +299,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info(f"Migration completed: ensured index {constraint_name}")
             except Exception as exc:
+                _safe_rollback(conn)
                 logger.warning(f"Migration skipped index {constraint_name}: {exc}")
 
 

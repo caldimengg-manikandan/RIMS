@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.infrastructure.database import get_db
 from app.domain.models import User, GlobalSettings
 from app.domain.schemas import GlobalSettingsUpdate, GlobalSettingsResponse
 from app.core.auth import get_current_user, get_current_hr
-import json
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+
+def ensure_global_settings_table(db: Session) -> None:
+    """Create the settings table on demand for legacy databases."""
+    GlobalSettings.__table__.create(bind=db.get_bind(), checkfirst=True)
+
 
 @router.get("/", response_model=GlobalSettingsResponse)
 def get_settings(
@@ -14,6 +19,7 @@ def get_settings(
     db: Session = Depends(get_db)
 ):
     """Fetch global settings."""
+    ensure_global_settings_table(db)
     settings_records = db.query(GlobalSettings).all()
     settings_dict = {s.key: s.value for s in settings_records}
     
@@ -34,6 +40,7 @@ def update_settings(
     db: Session = Depends(get_db)
 ):
     """Update global settings (HR only)."""
+    ensure_global_settings_table(db)
     data = settings_data.model_dump(exclude_unset=True)
     
     for key, value in data.items():
