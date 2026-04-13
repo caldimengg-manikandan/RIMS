@@ -64,7 +64,8 @@ from app.core.observability import log_json
 settings = get_settings()
 
 if os.environ.get("RIMS_LOGGING_DONE", "0") != "1":
-    setup_logging(settings.logs_dir, settings.debug)
+    # Pass None as logs_dir to use console-only logging by default
+    setup_logging(None, settings.debug)
     os.environ["RIMS_LOGGING_DONE"] = "1"
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,6 @@ def cors_aware_rate_limit_handler(request: FastAPIRequest, exc: RateLimitExceede
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cors_aware_rate_limit_handler)
 
-settings.logs_dir.mkdir(parents=True, exist_ok=True)
 
 from app.core.middleware import PerformanceLoggingMiddleware
 app.add_middleware(PerformanceLoggingMiddleware)

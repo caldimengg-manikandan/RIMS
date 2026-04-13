@@ -26,13 +26,8 @@ if os.path.exists(_base_env_path):
 
 class Settings(BaseSettings):
     base_dir: Path = BASE_DIR
-    logs_dir: Path = BASE_DIR / "logs"
-    uploads_dir: Path = BASE_DIR / "uploads"
     # Database
-    # To use PostgreSQL, add this to your .env file:
-    # DATABASE_URL=postgresql://user:password@host:port/dbname
     database_url: str = "" # Mandatory via validate_config
-    videos_dir: Path = BASE_DIR / "uploads" / "videos"
 
 
     # JWT

@@ -16,52 +16,46 @@ class AnalyticsService:
         logger = logging.getLogger(__name__)
 
         try:
-            from sqlalchemy import or_
-            # 1. Total Applications
-            app_query = db.query(func.coalesce(func.count(Application.id), 0))
+            from sqlalchemy import and_
+            
+            # Combine all core metrics into a single row fetch to minimize network round-trips
+            metrics_query = db.query(
+                func.count(Application.id).label("total_apps"),
+                func.count(case((Application.status == 'hired', Application.id))).label("hired_apps"),
+                func.avg(case((Application.composite_score > 0, Application.composite_score))).label("avg_score")
+            )
+            
             if hr_id:
-                app_query = app_query.outerjoin(Job, Application.job_id == Job.id).filter(
+                metrics_query = metrics_query.outerjoin(Job, Application.job_id == Job.id).filter(
                     or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
                 )
-            total_applications = app_query.scalar() or 0
-
-            # 2. Interview Metrics
-            int_query = db.query(
-                func.coalesce(func.count(Interview.id), 0).label("total"),
-                func.coalesce(func.count(case((Interview.status == "completed", Interview.id))), 0).label("completed")
-            ).outerjoin(Application, Interview.application_id == Application.id).outerjoin(Job, Application.job_id == Job.id)
             
+            m_res = metrics_query.first()
+            total_applications = m_res.total_apps or 0
+            hired_count = m_res.hired_apps or 0
+            average_score = m_res.avg_score or 0
+
+            # Interview stats
+            int_query = db.query(
+                func.count(Interview.id).label("total_ints"),
+                func.count(case((Interview.status == "completed", Interview.id))).label("completed_ints")
+            ).outerjoin(Application, Interview.application_id == Application.id).outerjoin(Job, Application.job_id == Job.id)
+
             if hr_id:
                 int_query = int_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
             
-            int_stats = int_query.first()
-            total_interviews = int_stats.total if int_stats else 0
-            completed_interviews = int_stats.completed if int_stats else 0
-
-            # 3. Success Rate
-            hired_query = db.query(func.coalesce(func.count(Application.id), 0)).filter(Application.status == 'hired')
-            if hr_id:
-                hired_query = hired_query.outerjoin(Job, Application.job_id == Job.id).filter(
-                    or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
-                )
-            hired_count = hired_query.scalar() or 0
+            i_res = int_query.first()
+            total_interviews = i_res.total_ints or 0
+            completed_interviews = i_res.completed_ints or 0
             
             success_rate = (hired_count / total_applications * 100) if total_applications > 0 else 0
 
-            # 4. Average Score
-            score_query = db.query(func.coalesce(func.avg(Application.composite_score), 0)).filter(Application.composite_score > 0)
-            if hr_id:
-                score_query = score_query.outerjoin(Job, Application.job_id == Job.id).filter(
-                    or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
-                )
-            average_score = score_query.scalar() or 0
-
             result = {
-                "total_applications": total_applications or 0,
-                "total_interviews": total_interviews or 0,
-                "completed_interviews": completed_interviews or 0,
-                "success_rate": round(success_rate or 0, 2),
-                "average_score": round(average_score or 0, 2)
+                "total_applications": total_applications,
+                "total_interviews": total_interviews,
+                "completed_interviews": completed_interviews,
+                "success_rate": round(success_rate, 2),
+                "average_score": round(float(average_score), 2)
             }
             logger.info(f"[ANALYTICS DATA] {result}")
             return result

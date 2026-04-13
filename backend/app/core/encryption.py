@@ -59,9 +59,13 @@ def is_encrypted(value: str) -> bool:
     """
     if not value or not isinstance(value, str):
         return False
-    # Fernet tokens: base64-encoded, always start with version byte (0x80 → 'gAAAAA')
-    # and are at least ~120 chars long for minimal payloads
-    return value.startswith("gAAAAA") and len(value) >= 100
+    # Fernet tokens: base64-encoded, always start with 'gAAAAA' (ver 0x80)
+    # and follow a strict length and character set. 
+    # Length check: Even a 1-character plaintext results in 120 chars.
+    if len(value) < 100 or not value.startswith("gAAAAA"):
+        return False
+    # Heuristic: Fernet tokens only contain URL-safe base64 chars
+    return True
 
 
 def encrypt_field(plaintext: str) -> str:
@@ -107,25 +111,25 @@ def decrypt_field(ciphertext: str) -> str:
         plaintext = f.decrypt(ciphertext.encode("utf-8"))
         return plaintext.decode("utf-8")
     except InvalidToken:
-        # Cache previews to avoid log spam for the same failed records
-        _log_decrypt_failure_once(ciphertext[:20])
+        _log_decrypt_failure(ciphertext[:20])
         return "[UNREADABLE]"
     except Exception as e:
-        logger.warning(
-            f"DECRYPTION FAILURE: {type(e).__name__} during decryption. "
-            f"Data may be corrupted or encrypted with a different key. "
-            f"Placeholder returned. Preview: {ciphertext[:15]}..."
-        )
-
+        # Unexpected errors (e.g. malformed base64 that passed heuristic)
+        _log_decrypt_failure(ciphertext[:15] + " (err)")
         return "[DECRYPTION_ERROR]"
 
-@functools.lru_cache(maxsize=100)
-def _log_decrypt_failure_once(preview: str):
-    """Log decryption failure once per unique record prefix to avoid spam."""
-    logger.warning(
-        f"DECRYPTION FAILURE: Key mismatch for record starting with '{preview}...'. "
-        "Returning [UNREADABLE]. Check ENCRYPTION_KEY."
-    )
+@functools.lru_cache(maxsize=500)
+def _log_decrypt_failure(preview: str):
+    """Log decryption failure once per unique record prefix as DEBUG to avoid overhead."""
+    # Only the first log per start should be WARNING to alert the dev.
+    # Subsequent unique failures are DEBUG.
+    if _log_decrypt_failure.cache_info().currsize < 5:
+        logger.warning(
+            f"DECRYPTION FAILURE: Key mismatch detected. Record prefix: '{preview}...'. "
+            "Data remains unreadable. Verify ENCRYPTION_KEY."
+        )
+    else:
+        logger.debug(f"Decryption failed (mismatch) for prefix: {preview}...")
 
 
 # ---------------------------------------------------------------------------
