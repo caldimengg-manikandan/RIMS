@@ -1,4 +1,5 @@
 import os
+import io
 from jinja2 import Template
 from xhtml2pdf import pisa
 from datetime import datetime
@@ -11,16 +12,14 @@ settings = get_settings()
 def generate_offer_letter_pdf(template_html: str, data: dict, output_path: str):
     """
     Generates a PDF from an HTML template string and data dictionary.
+    Writes result to output_path on disk.
     """
     try:
-        # Render template with Jinja2
         template = Template(template_html)
         rendered_html = template.render(**data)
         
-        # Create output directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # Convert HTML to PDF
         with open(output_path, "wb") as result_file:
             pisa_status = pisa.CreatePDF(rendered_html, dest=result_file)
             
@@ -32,6 +31,26 @@ def generate_offer_letter_pdf(template_html: str, data: dict, output_path: str):
     except Exception as e:
         logger.error(f"Failed to generate offer letter PDF: {e}")
         return False
+
+
+def generate_offer_letter_pdf_bytes(template_html: str, data: dict) -> bytes:
+    """
+    Renders the Jinja2 HTML template with the given data and converts it to a
+    PDF entirely in-memory using xhtml2pdf/pisa.
+
+    Returns the raw PDF bytes on success.
+    Raises RuntimeError if the PDF engine reports errors.
+    """
+    template = Template(template_html)
+    rendered_html = template.render(**data)
+
+    buffer = io.BytesIO()
+    pisa_status = pisa.CreatePDF(rendered_html, dest=buffer)
+
+    if pisa_status.err:
+        raise RuntimeError(f"xhtml2pdf reported errors while generating offer letter PDF: {pisa_status.err}")
+
+    return buffer.getvalue()
 
 def get_offer_letter_data(candidate_name, job_role, department, joining_date, company_name, logo_url, hr_email, hr_name="", hr_phone="", company_address=""):
     """ Helper to structure offer letter data """

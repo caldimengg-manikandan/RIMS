@@ -287,17 +287,13 @@ export default function HRApplicationsPage() {
   const handleHire = useCallback(async (
     applicationId: number,
     joiningDate: string,
-    offerLetter: File,
     notes: string,
   ) => {
     setProcessingIds(prev => new Set(prev).add(applicationId));
-    const actionFn = () => {
-      const formData = new FormData();
-      formData.append("joining_date", joiningDate);
-      formData.append("notes", notes || `Action: hire`);
-      formData.append("offer_letter", offerLetter);
-      return APIClient.postFormData(`/api/decisions/applications/${applicationId}/hire`, formData);
-    };
+    const actionFn = () => APIClient.post(
+      `/api/decisions/applications/${applicationId}/hire`,
+      { joining_date: joiningDate, notes }
+    );
 
     try {
       await performMutation<PaginatedResponse<Application>>(
@@ -713,7 +709,7 @@ export default function HRApplicationsPage() {
                       {app.status === 'physical_interview' && (
                         <HireDialog 
                           candidateName={app.candidate_name}
-                          onConfirm={(date, file, notes) => handleHire(app.id, date, file, notes)}
+                          onConfirm={(date, notes) => handleHire(app.id, date, notes)}
                           trigger={
                             <Button
                               size="sm"
