@@ -300,8 +300,8 @@ async def get_interview_reports(
         logger.info(f"[REPORTS] Found {len(reports)} records for HR {current_user.id} (failed: {failed_count})")
         
         return {
-            "items": reports,
-            "total": len(reports),
+            "reports": reports,
+            "count": len(reports),
             "failed": failed_count
         }
 

@@ -448,24 +448,20 @@ def create_job(
         return new_job
     except IntegrityError:
         db.rollback()
-        # Phase 5: File Consistency Tracking (Partial - deleting if tx fails)
+        # Clean up cloud files if they were uploaded
+        from app.core.storage import delete_file
         for f_path in [new_job.uploaded_question_file, new_job.aptitude_questions_file]:
             if f_path:
-                try:
-                    full_p = settings.base_dir / f_path
-                    if full_p.exists(): full_p.unlink()
-                except: pass
+                delete_file(settings.supabase_bucket_resumes, f_path)
         raise HTTPException(status_code=409, detail="Failed to create job due to ID collision. Please try submitting again.")
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating job: {e}")
-        # Phase 5 cleanup
+        # Clean up cloud files if they were uploaded
+        from app.core.storage import delete_file
         for f_path in [new_job.uploaded_question_file, new_job.aptitude_questions_file]:
             if f_path:
-                try:
-                    full_p = settings.base_dir / f_path
-                    if full_p.exists(): full_p.unlink()
-                except: pass
+                delete_file(settings.supabase_bucket_resumes, f_path)
         raise HTTPException(status_code=500, detail="Failed to create job safely")
 
 def _clamp_pagination(*, skip: int, limit: Optional[int], default_limit: int = 100, max_limit: int = 200) -> tuple[int, int]:
@@ -733,15 +729,11 @@ def delete_job(
             # Finally delete the application
             db.delete(app)
             
-        # Clean up uploaded files from disk
+        # Clean up uploaded files from cloud
+        from app.core.storage import delete_file
         for file_field in [job.aptitude_questions_file, job.uploaded_question_file]:
             if file_field:
-                try:
-                    file_path = settings.base_dir / file_field
-                    if file_path.exists():
-                        file_path.unlink()
-                except Exception as cleanup_err:
-                    logger.warning(f"Warning: Failed to clean up file {file_field}: {cleanup_err}")
+                delete_file(settings.supabase_bucket_resumes, file_field)
 
         # Delete the job
         db.delete(job)
