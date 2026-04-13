@@ -73,15 +73,16 @@ def _validate_job_content(title: str, description: str, db: Session = None, curr
 
     if not any(c.isalpha() for c in title_trimmed):
         log_json(logger, "validation_failed", level="warning", extra={"module": "jobs", "field": "title", "reason": "no_alphabet", "input_preview": title_trimmed[:32]})
-        raise HTTPException(status_code=400, detail="Job title must contain meaningful text with alphabets")
+        raise HTTPException(status_code=400, detail="Job title must contain at least some letters (alphabets).")
 
-    if not re.match(r'^[A-Za-z0-9\s\-\.,\(\)\/]+$', title_trimmed):
+    # Allow: letters, numbers, spaces, and common symbols: - , . ( ) / : & ! ? @ # _ + * = % [ ]
+    if not re.match(r'^[A-Za-z0-9\s\-\.,\(\)\/\:\&\!\?\@\#\_\+\*\=\%\[\]]+$', title_trimmed):
         log_json(logger, "validation_failed", level="warning", extra={"module": "jobs", "field": "title", "reason": "invalid_characters", "input_preview": title_trimmed[:32]})
-        raise HTTPException(status_code=400, detail="Job title must contain meaningful text with alphabets")
+        raise HTTPException(status_code=400, detail="Job title contains unsupported special characters. Please use standard letters, numbers, and symbols.")
 
-    if re.search(r'([\-.,\(\)\/])\1{3,}', title_trimmed):
+    if re.search(r'([\-.,\(\)\/\:\&\!\?\@\#\_\+\*\=\%\[\]])\1{3,}', title_trimmed):
         log_json(logger, "validation_failed", level="warning", extra={"module": "jobs", "field": "title", "reason": "repeated_special_chars", "input_preview": title_trimmed[:32]})
-        raise HTTPException(status_code=400, detail="Job title must contain meaningful text with alphabets")
+        raise HTTPException(status_code=400, detail="Job title contains too many repeated special characters.")
 
     # Description validation (JP004)
     if not description or not description.strip():
@@ -125,11 +126,11 @@ def _validate_interview_pipeline(job_data, experience_level: str):
     uploaded_question_file = getattr(job_data, 'uploaded_question_file', None)
     aptitude_config = getattr(job_data, 'aptitude_config', None)
 
-    # Rule 1: aptitude_enabled only allowed for junior
-    if aptitude_enabled and experience_level != "junior":
+    # Rule 1: aptitude_enabled only allowed for junior and intern
+    if aptitude_enabled and experience_level not in ["junior", "intern"]:
         raise HTTPException(
             status_code=400,
-            detail="Aptitude round is only available for Junior (0-2 years) experience level."
+            detail="Aptitude round is only available for Junior (0-2 years) or Intern experience levels."
         )
 
     # Rule 2: If first_level_enabled, interview_mode must be valid
@@ -444,6 +445,7 @@ def create_job(
         from app.services.candidate_service import CandidateService
         cand_service = CandidateService(db)
         cand_service.create_audit_log(current_user.id, "JOB_CREATED", "Job", new_job.id, {"title": new_job.title}, is_critical=True)
+        db.commit() # Ensure log is persisted
         
         return new_job
     except IntegrityError:
@@ -511,7 +513,10 @@ def list_jobs(
 ):
     """List jobs for the HR user (paginated; default limit 100, max 200)."""
     query = db.query(Job)
-    # Visibility is now global for both Super Admin and HR.
+    # Apply visibility isolation: Anyone not a super_admin is restricted to their own jobs
+    if current_user.role.lower() != "super_admin":
+        query = query.filter(Job.hr_id == current_user.id)
+    # Super Admin sees all.
 
     # Apply optional status filter
     if status and status not in ("all", ""):

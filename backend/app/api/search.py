@@ -20,6 +20,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
+@router.post("/candidates")
 async def search_candidates(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
@@ -42,7 +43,11 @@ async def search_candidates(
             load_only(Application.id, Application.candidate_name, Application.status, Application.applied_at, Application.composite_score, Application.resume_score, Application.file_status, Application.candidate_photo_path, Application.hr_id),
             defer(Application.candidate_phone), defer(Application.hr_notes)
         )
-        # Removal of strict filtering: HR and Super Admin can search ALL applications.
+        # Apply visibility isolation: Anyone not a super_admin is restricted to their own data
+        if current_hr.role.lower() != "super_admin":
+            query = query.join(Application.job)
+            query = query.filter(or_(Job.hr_id == current_hr.id, Application.hr_id == current_hr.id))
+        # Super Admin sees all.
         
         keyword_conditions = []
         for field in ["tech_skills", "soft_skills", "role_keywords"]:

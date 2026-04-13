@@ -236,6 +236,11 @@ def get_candidate_ranking(
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    # Apply visibility isolation
+    if current_user.role.lower() == "hr":
+        if job.hr_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this job.")
+    
     validate_hr_ownership(job, current_user, resource_name="job")
 
     from app.services.candidate_service import CandidateService
@@ -954,7 +959,12 @@ def get_pending_applications_count(
         ~Application.status.in_(("hired", "rejected")),
         or_(func.trim(Application.file_status).in_(('active', 'missing')), Application.file_status == None)
     )
-    # Removal of strict filtering: HR can now see counts for all active applications globally.
+    
+    # Apply visibility isolation: Anyone not a super_admin is restricted to their own applications
+    if current_user.role.lower() != "super_admin":
+        q = q.filter(Application.hr_id == current_user.id)
+    # Super Admin sees all.
+
     return {"count": q.count()}
 
 
@@ -1027,7 +1037,10 @@ def get_hr_applications(
             except ValueError: pass
 
         # 3. Security
-        # Security: Filtering removed. HR and Super Admin see ALL applications.
+        # Apply visibility isolation: Anyone not a super_admin is restricted to their own apps
+        if current_user.role.lower() != "super_admin":
+            query = query.filter(Application.hr_id == current_user.id)
+        # Super Admin sees all.
 
         # 4. Retrieval
         total = query.count()

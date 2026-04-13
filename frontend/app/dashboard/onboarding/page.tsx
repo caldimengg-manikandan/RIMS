@@ -90,8 +90,11 @@ export default function OnboardingPage() {
             await APIClient.post(`/api/onboarding/applications/${id}/onboard`, {})
             toast({ title: "Completed", description: "Candidate marked as onboarded" })
             mutate()
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to complete onboarding", variant: "destructive" })
+            // After successful join, automatically open the capture photo dialog
+            setActiveCaptureId(id)
+            setIsCaptureOpen(true)
+        } catch (error: any) {
+            toast({ title: "Error", description: error?.response?.data?.error || "Failed to complete onboarding. Candidate's joining date may not have arrived yet.", variant: "destructive" })
         }
     }
 
@@ -155,6 +158,57 @@ export default function OnboardingPage() {
                     </Button>
                 </div>
             </div>
+
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-border/50 bg-gradient-to-br from-blue-500/5 to-primary/5">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-500" />
+                            Pending Offers
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
+                        <p className="text-xs text-muted-foreground">Action required: send letters</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-border/50 bg-gradient-to-br from-amber-500/5 to-amber-600/5">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-amber-500" />
+                            Upcoming Joinings (7d)
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-black">
+                            {candidates?.filter(c => {
+                                if (!c.joining_date) return false
+                                const jDate = new Date(c.joining_date)
+                                const now = new Date()
+                                const diff = jDate.getTime() - now.getTime()
+                                return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000
+                            }).length || 0}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Reminders sent automatically</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            Onboarded This Month
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-black">
+                            {candidates?.filter(c => c.status === 'onboarded').length || 0}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Successfully closed hires</p>
+                    </CardContent>
+                </Card>
+            </div>
+
 
             <Card className="border-border/50 shadow-sm overflow-hidden">
                 <CardHeader className="bg-muted/30 border-b p-4">
@@ -290,7 +344,7 @@ export default function OnboardingPage() {
                                                 )}
                                                 {candidate.status === 'onboarded' && (
                                                     <div className="flex items-center gap-2">
-                                                        {!candidate.photo_url ? (
+                                                        {!candidate.candidate_photo_path ? (
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
@@ -328,55 +382,6 @@ export default function OnboardingPage() {
                     </Table>
                 </CardContent>
             </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-border/50 bg-gradient-to-br from-blue-500/5 to-primary/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            Pending Offers
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Action required: send letters</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-border/50 bg-gradient-to-br from-amber-500/5 to-amber-600/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-amber-500" />
-                            Upcoming Joinings (7d)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">
-                            {candidates?.filter(c => {
-                                if (!c.joining_date) return false
-                                const jDate = new Date(c.joining_date)
-                                const now = new Date()
-                                const diff = jDate.getTime() - now.getTime()
-                                return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000
-                            }).length || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Reminders sent automatically</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            Onboarded This Month
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">
-                            {candidates?.filter(c => c.status === 'onboarded').length || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Successfully closed hires</p>
-                    </CardContent>
-                </Card>
-            </div>
 
             {activeCaptureId && (
                 <CapturePhotoDialog 

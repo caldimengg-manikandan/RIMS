@@ -77,7 +77,9 @@ def check_hr_permission(user: User, application: Application, db: Session):
     Standardize HR permission guard. 
     Global access for HR and Super Admin.
     """
-    if user.role in ("super_admin", "hr"):
+    if user.role == "super_admin":
+        return True
+    if user.role == "hr" and application.hr_id == user.id:
         return True
         
     raise HTTPException(
@@ -163,6 +165,14 @@ def get_onboarding_candidates(
     query = db.query(Application).filter(
         Application.status.in_(["hired", "pending_approval", "offer_sent", "accepted", "onboarded"])
     )
+    
+    # Apply visibility isolation
+    if current_user.role.lower() in ["hr", "staff"]:
+        # Join Job to filter by ownership
+        query = query.join(Application.job)
+        query = query.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
+    # Super Admin sees all.
+    # Super Admin sees all.
     
     total = query.count()
     candidates = query.options(
