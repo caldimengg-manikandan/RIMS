@@ -116,10 +116,18 @@ class AnalyticsService:
 
         # Candidate aggregate metrics
         # Candidate aggregate metrics with COALESCE for null safety
-        avg_resume_score = self.db.query(func.coalesce(func.avg(Application.resume_score), 0)).filter(Application.resume_score > 0).scalar() or 0
-        avg_aptitude_score = self.db.query(func.coalesce(func.avg(Application.aptitude_score), 0)).filter(Application.aptitude_score > 0).scalar() or 0
-        avg_interview_score = self.db.query(func.coalesce(func.avg(Application.interview_score), 0)).filter(Application.interview_score > 0).scalar() or 0
-        avg_composite_score = self.db.query(func.coalesce(func.avg(Application.composite_score), 0)).filter(Application.composite_score > 0).scalar() or 0
+        # Candidate aggregate metrics with combined query for efficiency
+        stats_row = self.db.query(
+            func.avg(case((Application.resume_score > 0, Application.resume_score))),
+            func.avg(case((Application.aptitude_score > 0, Application.aptitude_score))),
+            func.avg(case((Application.interview_score > 0, Application.interview_score))),
+            func.avg(case((Application.composite_score > 0, Application.composite_score)))
+        ).first()
+
+        avg_resume_score = stats_row[0] or 0
+        avg_aptitude_score = stats_row[1] or 0
+        avg_interview_score = stats_row[2] or 0
+        avg_composite_score = stats_row[3] or 0
 
         return {
             "recruitment_metrics": {

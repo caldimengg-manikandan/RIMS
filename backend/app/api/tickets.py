@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import List
@@ -204,9 +204,10 @@ def get_tickets(
     return {"items": tickets, "total": total}
 
 @router.put("/{ticket_id}/resolve", response_model=InterviewIssueResponse)
-async def resolve_ticket(
+def resolve_ticket(
     ticket_id: int,
     resolution: InterviewIssueResolve,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
@@ -264,17 +265,19 @@ async def resolve_ticket(
         
         # Send reissue email if requested
         if resolution.send_email:
-            await send_key_reissued_email(
+            background_tasks.add_task(
+                send_key_reissued_email,
                 to_email=ticket.candidate_email,
-                job_title=application.job.title,
+                job_title=job_title,
                 new_key=new_key,
                 hr_response=resolution.hr_response
             )
-            logger.info(f"RE-ISSUED KEY for {ticket.candidate_email}: {new_key}")
+            logger.info(f"RE-ISSUED KEY queued for {ticket.candidate_email}")
     else:
         # Send resolution/dismissal email if requested
         if resolution.send_email:
-            await send_ticket_resolved_email(
+            background_tasks.add_task(
+                send_ticket_resolved_email,
                 to_email=ticket.candidate_email,
                 issue_type=ticket.issue_type,
                 hr_response=resolution.hr_response,

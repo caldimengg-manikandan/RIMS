@@ -20,6 +20,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
+@router.post("")
 async def search_candidates(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
@@ -31,6 +32,7 @@ async def search_candidates(
     if not query_text: raise HTTPException(status_code=400, detail="Search query is required")
     
     try:
+        from fastapi.concurrency import run_in_threadpool
         filters = await decompose_search_query(query_text)
         query = db.query(Application).options(
             joinedload(Application.resume_extraction).load_only(
@@ -50,8 +52,9 @@ async def search_candidates(
                 keyword_conditions.append(or_(ResumeExtraction.extracted_skills.ilike(f"%{val}%"), ResumeExtraction.extracted_text.ilike(f"%{val}%"), Job.title.ilike(f"%{val}%")))
         if keyword_conditions: query = query.filter(and_(*keyword_conditions))
         
-        total = query.count()
-        results = query.order_by(Application.composite_score.desc()).offset(skip).limit(limit).all()
+        # Run synchronous DB calls in threadpool to avoid blocking event loop
+        total = await run_in_threadpool(query.count)
+        results = await run_in_threadpool(query.order_by(Application.composite_score.desc()).offset(skip).limit(limit).all)
         
         search_results = []
         for app in results:
