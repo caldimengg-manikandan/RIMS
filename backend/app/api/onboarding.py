@@ -7,7 +7,7 @@ from app.domain.models import User, Application, GlobalSettings, Notification
 from app.domain.schemas import ApplicationResponse, OfferResponseRequest
 from app.core.auth import get_current_hr, get_current_admin
 from app.services.offer_letter_service import generate_offer_letter_pdf, get_offer_letter_data
-from app.services.email_service import send_offer_letter_email, send_simple_email
+from app.services.email_service import send_offer_letter_email, send_simple_email, send_onboarding_reminder_email, send_joining_confirmation_email
 from app.core.config import get_settings
 from typing import List, Optional
 import os
@@ -452,6 +452,7 @@ def generate_employee_id(db: Session):
 @router.post("/applications/{application_id}/capture-photo")
 async def capture_photo(
     application_id: int,
+    background_tasks: BackgroundTasks,
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_hr)
@@ -479,12 +480,89 @@ async def capture_photo(
         CandidateService(db).create_audit_log(current_user.id, "PHOTO_CAPTURED", "Application", application_id, {"storage_path": storage_path})
         
         db.commit()
+        
+        # Fire off joining confirmation email in the background
+        # Note: In production we'd generate a fresh signed URL right before sending or attach directly from storage
+        # Here we get a signed URL that's valid for enough time to download/attach the image
+        photo_signed_url = get_signed_url(settings.supabase_bucket_id_photos, storage_path)
+        
+        # We need HR and Super Admin emails
+        hr_email = application.hr.email if application.hr else None
+        super_admins = db.query(User).filter(User.role == "super_admin").all()
+        admin_emails = [admin.email for admin in super_admins if admin.email]
+        
+        emails_to_notify = []
+        if hr_email: emails_to_notify.append(hr_email)
+        emails_to_notify.extend(admin_emails)
+        
+        # Remove duplicates
+        emails_to_notify = list(set(emails_to_notify))
+        
+        for email_addr in emails_to_notify:
+            background_tasks.add_task(
+                send_joining_confirmation_email,
+                to_email=email_addr,
+                candidate_name=application.candidate_name,
+                job_title=application.job.title if application.job else "N/A",
+                candidate_photo_url=photo_signed_url
+            )
+            
     except Exception as e:
         db.rollback()
         logger.error(f"Cloud photo save failed: {e}")
         raise HTTPException(status_code=500, detail=f"Photo save failed: {str(e)}")
         
     return {"status": "success", "candidate_photo_path": application.candidate_photo_path}
+
+@router.post("/cron/check-reminders")
+def check_onboarding_reminders(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    (System/Admin) Check for candidates joining in exactly 7 days and send reminder.
+    Task 1 Requirement.
+    """
+    today = datetime.now(timezone.utc).date()
+    target_date = today + timedelta(days=7)
+    
+    start_of_target = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+    end_of_target = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+
+    # Find candidates who accepted offer and join in exactly 7 days
+    candidates = db.query(Application).filter(
+        Application.status.in_(["accepted"]),
+        Application.joining_date >= start_of_target,
+        Application.joining_date <= end_of_target,
+        Application.reminder_sent_at == None
+    ).all()
+    
+    reminders_sent = 0
+    super_admins = db.query(User).filter(User.role == "super_admin").all()
+    admin_emails = [admin.email for admin in super_admins if admin.email]
+
+    for app in candidates:
+        hr_email = app.hr.email if app.hr else None
+        
+        emails_to_notify = []
+        if hr_email: emails_to_notify.append(hr_email)
+        emails_to_notify.extend(admin_emails)
+        emails_to_notify = list(set(emails_to_notify))
+
+        joining_date_str = app.joining_date.strftime("%B %d, %Y")
+        job_title = app.job.title if app.job else "N/A"
+
+        for email_addr in emails_to_notify:
+            background_tasks.add_task(
+                send_onboarding_reminder_email,
+                to_email=email_addr,
+                candidate_name=app.candidate_name,
+                joining_date=joining_date_str,
+                job_title=job_title
+            )
+
+        app.reminder_sent_at = datetime.now(timezone.utc)
+        reminders_sent += 1
+        
+    db.commit()
+    return {"status": "success", "reminders_queued": reminders_sent}
 
 @router.post("/applications/{application_id}/generate-id-card")
 async def generate_id_card(
