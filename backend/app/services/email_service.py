@@ -662,3 +662,54 @@ async def send_key_reissued_email(to_email: str, job_title: str, new_key: str, h
     if not result["success"]:
         logger.warning(f"Key Reissued Email failed for {to_email}: {result['error']}")
     return result["success"]
+
+async def send_onboarding_reminder_email(to_email: str, candidate_name: str, joining_date: str, job_title: str):
+    subject = f"Upcoming Onboarding Reminder: {candidate_name}"
+    body = f"""
+    <html><body style="font-family:sans-serif; color:#333;">
+      <h2>Onboarding Reminder</h2>
+      <p>This is a reminder that <strong>{candidate_name}</strong> is scheduled to join the company in 7 days on <strong>{joining_date}</strong> for the <strong>{job_title}</strong> role.</p>
+      <p>Please ensure all necessary preparations (IT access, workspace setup) are completed ahead of time.</p>
+    </body></html>
+    """
+    return await execute_email_with_retries(to_email, subject, body, event_type="ONBOARDING_REMINDER")
+
+async def send_joining_confirmation_email(to_email: str, candidate_name: str, job_title: str, candidate_photo_url: str):
+    subject = f"Joining Confirmation: {candidate_name}"
+    body = f"""
+    <html><body style="font-family:sans-serif; color:#333;">
+      <h2>Candidate Joined Today</h2>
+      <p>This is to confirm that <strong>{candidate_name}</strong> has officially joined the company today for the <strong>{job_title}</strong> role.</p>
+      <p>Please find the live photograph of the candidate attached.</p>
+    </body></html>
+    """
+    
+    attachments = []
+    if candidate_photo_url:
+        try:
+            if candidate_photo_url.startswith("http"):
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.get(candidate_photo_url)
+                    if resp.status_code == 200:
+                        content = base64.b64encode(resp.content).decode("utf-8")
+                        attachments.append({
+                            "filename": f"Photo_{candidate_name.replace(' ', '_')}.jpg",
+                            "content": content,
+                        })
+                    else:
+                        logger.error(f"Failed to download candidate photo for email attachment: {resp.status_code}")
+            elif os.path.exists(candidate_photo_url):
+                with open(candidate_photo_url, "rb") as f:
+                    content = base64.b64encode(f.read()).decode("utf-8")
+                    attachments.append({
+                        "filename": os.path.basename(candidate_photo_url),
+                        "content": content,
+                    })
+        except Exception as e:
+            logger.error(f"Email photo attachment processing failed: {e}")
+
+    return await execute_email_with_retries(
+        to_email, subject, body, 
+        attachments=attachments if attachments else None,
+        event_type="JOINING_CONFIRMATION"
+    )

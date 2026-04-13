@@ -34,8 +34,9 @@ def get_dashboard_analytics(
     """Get enterprise analytics (100% Failure-Safe Hard Fallback)"""
     try:
         from app.services.analytics_service import AnalyticsService
-        # Analytics are now global for both Super Admin and HR.
-        hr_id = None
+        # Apply visibility isolation
+        # Apply visibility isolation: Any non-super_admin is restricted to their own data
+        hr_id = current_user.id if current_user.role.lower() != "super_admin" else None
         
         # Call service
         metadata = AnalyticsService.get_dashboard(db, hr_id=hr_id)
@@ -94,8 +95,10 @@ def get_interview_reports(
             Application.status.in_(REPORTABLE_APPLICATION_STATUSES)
         ))
 
-        # Admin/HR globally can see reports in this version (Hardening Phase 5)
-        # Filter by HR ID is disabled here to ensure cross-team visibility as requested.
+        # Apply visibility isolation
+        if current_user.role.lower() != "super_admin":
+            query = query.filter(Application.hr_id == current_user.id)
+        # Super Admin sees all.
         interviews = query.options(
             joinedload(Interview.application).joinedload(Application.hiring_decision),
             joinedload(Interview.application).joinedload(Application.hr),
@@ -342,7 +345,10 @@ def get_filtered_interviews(
             selectinload(Interview.report)
         )
 
-    # Visibility is now global. HR and Super Admin see ALL interviews.
+    # Apply visibility isolation
+    if current_user.role.lower() != "super_admin":
+        query = query.filter(Application.hr_id == current_user.id)
+    # Super Admin sees all.
 
     # Apply global search if present
     if search:

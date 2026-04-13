@@ -230,12 +230,14 @@ def get_application_decision(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found"
         )
-    if current_user.role != "super_admin":
-        # Allow only owner HR or candidate tied to this application email.
-        if current_user.role == "hr":
-            # Global read access for HR
-            pass
-        elif current_user.role == "candidate":
+    if current_user.role.lower() != "super_admin":
+        if current_user.role.lower() == "hr":
+            # Apply strict isolation: deny if HR doesn't own the application
+            if application.hr_id != current_user.id:
+                # Check job ownership if application.hr_id is null/mismatched
+                if not application.job or application.job.hr_id != current_user.id:
+                    raise HTTPException(status_code=403, detail="Forbidden: You do not own this application.")
+        elif current_user.role.lower() == "candidate":
             if (application.candidate_email or "").lower() != (current_user.email or "").lower():
                 raise HTTPException(status_code=403, detail="Unauthorized access")
     
@@ -280,7 +282,10 @@ def get_hiring_pipeline(
     if status_filter:
         query = query.filter(Application.status == status_filter)
 
-    # Global pipeline visibility for HR and Super Admin.
+    # Apply visibility isolation: Anyone not a super_admin is restricted to their own data
+    if current_user.role.lower() != "super_admin":
+        query = query.filter(Application.hr_id == current_user.id)
+    # Super Admin sees all.
     
     total = query.count()
     applications = query.all()

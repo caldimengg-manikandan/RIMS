@@ -150,12 +150,20 @@ class StandardizedAPIRoute(APIRoute):
                     payload = _decode_json_response_body(response)
                     if isinstance(payload, dict) and "success" in payload:
                         return response
+                    error_msg = None
+                    if response.status_code >= 400:
+                         # Try to extract a specific error message from the body
+                         if isinstance(payload, dict):
+                              error_msg = payload.get("error") or payload.get("detail") or "Error"
+                         else:
+                              error_msg = str(payload) or "Error"
+
                     return JSONResponse(
                         status_code=response.status_code,
                         content={
                             "success": response.status_code < 400,
                             "data": payload,
-                            "error": None if response.status_code < 400 else "Error"
+                            "error": error_msg
                         },
                         headers=_headers_without_content_length(response),
                     )

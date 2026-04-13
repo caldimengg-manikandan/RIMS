@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_
 from app.domain.models import Job, Application, Interview, InterviewReport, User
 from typing import Dict, Any, List
 
@@ -116,18 +116,21 @@ class AnalyticsService:
 
         # Candidate aggregate metrics
         # Candidate aggregate metrics with COALESCE for null safety
-        # Candidate aggregate metrics with combined query for efficiency
-        stats_row = self.db.query(
-            func.avg(case((Application.resume_score > 0, Application.resume_score))),
-            func.avg(case((Application.aptitude_score > 0, Application.aptitude_score))),
-            func.avg(case((Application.interview_score > 0, Application.interview_score))),
-            func.avg(case((Application.composite_score > 0, Application.composite_score)))
-        ).first()
+        avg_resume_score_query = self.db.query(func.coalesce(func.avg(Application.resume_score), 0)).filter(Application.resume_score > 0).outerjoin(Job, Application.job_id == Job.id)
+        avg_aptitude_score_query = self.db.query(func.coalesce(func.avg(Application.aptitude_score), 0)).filter(Application.aptitude_score > 0).outerjoin(Job, Application.job_id == Job.id)
+        avg_interview_score_query = self.db.query(func.coalesce(func.avg(Application.interview_score), 0)).filter(Application.interview_score > 0).outerjoin(Job, Application.job_id == Job.id)
+        avg_composite_score_query = self.db.query(func.coalesce(func.avg(Application.composite_score), 0)).filter(Application.composite_score > 0).outerjoin(Job, Application.job_id == Job.id)
 
-        avg_resume_score = stats_row[0] or 0
-        avg_aptitude_score = stats_row[1] or 0
-        avg_interview_score = stats_row[2] or 0
-        avg_composite_score = stats_row[3] or 0
+        if hr_id:
+            avg_resume_score_query = avg_resume_score_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
+            avg_aptitude_score_query = avg_aptitude_score_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
+            avg_interview_score_query = avg_interview_score_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
+            avg_composite_score_query = avg_composite_score_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
+
+        avg_resume_score = avg_resume_score_query.scalar() or 0
+        avg_aptitude_score = avg_aptitude_score_query.scalar() or 0
+        avg_interview_score = avg_interview_score_query.scalar() or 0
+        avg_composite_score = avg_composite_score_query.scalar() or 0
 
         return {
             "recruitment_metrics": {

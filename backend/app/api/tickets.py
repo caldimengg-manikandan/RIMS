@@ -135,7 +135,10 @@ def get_ticket_count(
         .outerjoin(Job, Application.job_id == Job.id)
         .filter(InterviewIssue.status == "pending")
     )
-    # Removal of strict filtering: HR can now see counts for all pending tickets globally.
+    # Apply visibility isolation
+    if current_user.role.lower() == "hr":
+        q = q.filter(Application.hr_id == current_user.id)
+    # Super Admin sees all.
     count = q.count()
     return {"count": count}
 
@@ -164,7 +167,10 @@ def get_tickets(
         .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
         .outerjoin(Job, Application.job_id == Job.id)
     )
-    # Security: Filtering removed. HR and Super Admin see ALL tickets.
+    # Apply visibility isolation
+    if current_user.role.lower() == "hr":
+        query = query.filter(Application.hr_id == current_user.id)
+    # Super Admin sees all.
     if status != 'all':
         query = query.filter(InterviewIssue.status == status)
 
@@ -228,6 +234,11 @@ def resolve_ticket(
     app = ticket.application or (ticket.interview.application if ticket.interview else None)
     job = app.job if app else None
 
+    # Apply visibility isolation
+    if current_user.role.lower() == "hr":
+        if not app or app.hr_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this ticket's application.")
+    
     # Removal of strict filtering: HR can now resolve any ticket.
 
     # Status update logic

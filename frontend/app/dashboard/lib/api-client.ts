@@ -170,11 +170,12 @@ export class APIClient {
     const error = isStandardFormat ? result.error : (result.detail || result.error || response.statusText)
 
     if (!success) {
-      console.warn("API Warning:", error)
+      console.warn("API Failure:", { status: response.status, error, data })
       
+      const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown API error')
+
       if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
-        // We still want toast for non-data errors, but we won't crash the flow
-        toast.error(error)
+        toast.error(errorMessage)
       }
 
       if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
@@ -185,7 +186,9 @@ export class APIClient {
           }
         }
       }
-      return (data || {}) as T
+      
+      // CRITICAL: Throw so that performMutation and other callers detect the failure
+      throw new Error(errorMessage)
     }
 
     // Handled in the success case as well
