@@ -16,7 +16,7 @@ except Exception:
     pass
 # ──────────────────────────────────────────────────────────────────────────────
 
-if os.getenv("BACKEND_START_MODE") != "script":
+if os.getenv("BACKEND_START_MODE") not in ["script", "docker"]:
     print("Use start.ps1 to run the backend")
     sys.exit(1)
 
