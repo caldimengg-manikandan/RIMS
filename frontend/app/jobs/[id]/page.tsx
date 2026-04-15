@@ -12,6 +12,7 @@ import { ArrowLeft, Briefcase, MapPin, Clock, UploadCloud, CheckCircle2, Loader2
 import { ToggleTheme } from '@/components/lightswind/toggle-theme'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const COUNTRY_CODES = [
     { name: "India", code: "+91", format: /^\d{10}$/, placeholder: "9876543210", display: "🇮🇳 (+91)" },
@@ -80,6 +81,7 @@ export default function PublicJobDetailPage() {
     const [phoneError, setPhoneError] = useState<string | null>(null)
     const [extractedPhone, setExtractedPhone] = useState<string | null>(null)
     const [phoneWarning, setPhoneWarning] = useState<string | null>(null)
+    const [confirmAction, setConfirmAction] = useState<'close' | 'delete' | null>(null)
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
 
@@ -234,35 +236,45 @@ export default function PublicJobDetailPage() {
     }
 
     const handleCloseJob = async () => {
-        if (!confirm('Are you sure you want to close this job? Applications will be retained.')) return
-        try {
-            await APIClient.put(`/api/jobs/${jobId}`, { status: 'closed' })
-            fetchJobDetails()
-        } catch (err) {
-            console.error("Close Error:", err)
-            alert('Failed to close job')
-        }
+        setConfirmAction('close')
     }
 
     const handleDeleteJob = async () => {
-        if (!confirm('Are you sure you want to DELETE this job? All applications will be permanently removed.')) return
-        try {
-            await APIClient.delete(`/api/jobs/${jobId}`)
-            router.push('/dashboard/hr/jobs')
-        } catch (err) {
-            console.error("Delete Error:", err)
-            alert('Failed to delete job')
+        setConfirmAction('delete')
+    }
+
+    const handleConfirmAction = async () => {
+        if (!confirmAction) return
+        const action = confirmAction
+        setConfirmAction(null)
+
+        if (action === 'close') {
+            try {
+                await APIClient.put(`/api/jobs/${jobId}`, { status: 'closed' })
+                fetchJobDetails()
+            } catch (err) {
+                console.error("Close Error:", err)
+                toast.error('Failed to close job')
+            }
+        } else {
+            try {
+                await APIClient.delete(`/api/jobs/${jobId}`)
+                router.push('/dashboard/hr/jobs')
+            } catch (err) {
+                console.error("Delete Error:", err)
+                toast.error('Failed to delete job')
+            }
         }
     }
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0]
-            const allowedExtensions = ['.pdf', '.docx']
+            const allowedExtensions = ['.pdf', '.docx', '.doc']
             const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
 
             if (!allowedExtensions.includes(fileExtension)) {
-                setSubmitError('Invalid file type. Only .pdf and .docx are allowed.')
+                setSubmitError('Invalid file type. Only .pdf, .docx, and .doc are allowed.')
                 if (fileInputRef.current) fileInputRef.current.value = ''
                 setResumeFile(null)
                 return
@@ -392,9 +404,9 @@ export default function PublicJobDetailPage() {
         }
         // Re-validate resume file type and size (H005)
         const resumeExt = resumeFile.name.substring(resumeFile.name.lastIndexOf('.')).toLowerCase()
-        const allowedResumeExtensions = ['.pdf', '.docx']
+        const allowedResumeExtensions = ['.pdf', '.docx', '.doc']
         if (!allowedResumeExtensions.includes(resumeExt)) {
-            setSubmitError('Invalid resume file type. Only .pdf and .docx are allowed.')
+            setSubmitError('Invalid resume file type. Only .pdf, .docx, and .doc are allowed.')
             return
         }
         if (resumeFile.size > 5 * 1024 * 1024) {
@@ -402,7 +414,12 @@ export default function PublicJobDetailPage() {
             return
         }
 
-        if (photoFile && photoFile.size > 5 * 1024 * 1024) {
+        if (!photoFile) {
+            setSubmitError("Please upload a candidate photo.")
+            toast.error("Photo upload is mandatory")
+            return
+        }
+        if (photoFile.size > 5 * 1024 * 1024) {
             setSubmitError('Photo is too large. Maximum size is 5MB.')
             return
         }
@@ -803,7 +820,7 @@ export default function PublicJobDetailPage() {
                                                         id="resume"
                                                         type="file"
                                                         required
-                                                            accept=".pdf,.docx"
+                                                            accept=".pdf,.docx,.doc"
                                                         className="hidden"
                                                         ref={fileInputRef}
                                                         onChange={handleFileChange}
@@ -841,7 +858,7 @@ export default function PublicJobDetailPage() {
                                                             </div>
                                                             <div className="space-y-0.5">
                                                                 <p className="text-xs font-semibold text-foreground">Click to upload resume</p>
-                                                                <p className="text-[10px] text-muted-foreground">PDF or DOCX</p>
+                                                                <p className="text-[10px] text-muted-foreground">PDF, DOCX or DOC</p>
                                                             </div>
                                                         </div>
                                                     )}
@@ -946,6 +963,23 @@ export default function PublicJobDetailPage() {
                 </div>
 
             </main>
+
+            <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Action</DialogTitle>
+                        <DialogDescription>
+                            {confirmAction === 'close'
+                                ? 'Are you sure you want to close this job? Applications will be retained.'
+                                : 'Are you sure you want to DELETE this job? All applications will be permanently removed.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleConfirmAction}>Confirm</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

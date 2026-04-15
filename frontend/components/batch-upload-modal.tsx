@@ -298,9 +298,9 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
           formData.append('candidate_email', uniqueEmail)
           formData.append('resume_file', currentItem.file)
 
-          const responseData = await APIClient.postFormData('/api/applications/apply', formData)
+          const responseData = await APIClient.postFormData<any>('/api/applications/apply', formData)
           
-          const appId = responseData.id || responseData.application?.id
+          const appId = responseData?.id || responseData?.application?.id
           if (appId) {
             successfulAppIds.push(appId)
           }

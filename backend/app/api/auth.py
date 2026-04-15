@@ -22,8 +22,14 @@ settings = get_settings()
 from app.core.rate_limiter import limiter
 
 @router.get("/debug/data-health")
-def data_health(db: Session = Depends(get_db)):
-    """Phase 9: Enhanced Safety & Monitoring Debugging Endpoint"""
+def data_health(request: Request, db: Session = Depends(get_db)):
+    """Phase 9: Enhanced Safety & Monitoring Debugging Endpoint - Admin only"""
+    from app.core.auth import get_current_admin
+    try:
+        get_current_admin(request, db)
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
     from sqlalchemy import func, or_
     from app.domain.models import Application, Job, User, Interview
     return {
@@ -116,9 +122,8 @@ def register(request: Request, user_data: UserRegister, background_tasks: Backgr
         return new_user
     except Exception as e:
         db.rollback()
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Registration creation failed: {str(e)}")
+        logger.error(f"Registration failed for {user_data.email}: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Registration creation failed")
 
 @router.post("/verify", response_model=dict)
 @limiter.limit("20/minute")
@@ -139,36 +144,33 @@ def verify_otp(request: Request, verification_data: UserVerifyOTP, db: Session =
     if user.is_verified:
         return {"message": "User is already verified"}
 
-    is_dev = settings.env == "development"
-    
-    if not (is_dev and verification_data.otp == "000000"):
-        if not user.otp_expiry:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No OTP has been generated. Please register again."
-            )
+    if not user.otp_expiry:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OTP has been generated. Please register again."
+        )
 
-        expiry_time = user.otp_expiry
-        if expiry_time.tzinfo is None:
-            expiry_time = expiry_time.replace(tzinfo=timezone.utc)
-            
-        if datetime.now(timezone.utc) > expiry_time:
-            try:
-                user.otp_code = None
-                user.otp_expiry = None
-                db.commit()
-            except Exception:
-                db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OTP has expired. Please register again to receive a new OTP."
-            )
+    expiry_time = user.otp_expiry
+    if expiry_time.tzinfo is None:
+        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+        
+    if datetime.now(timezone.utc) > expiry_time:
+        try:
+            user.otp_code = None
+            user.otp_expiry = None
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has expired. Please register again to receive a new OTP."
+        )
 
-        if not user.otp_code or not pwd_context.verify(verification_data.otp, user.otp_code):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid OTP code"
-            )
+    if not user.otp_code or not pwd_context.verify(verification_data.otp, user.otp_code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP code"
+        )
 
     try:
         user.is_verified = True
@@ -194,7 +196,7 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
             detail="Invalid email or password"
         )
 
-    logger.info(f"Login attempt: User={credentials.email}, Password Length={len(credentials.password)}")
+    logger.info(f"Login attempt: User={credentials.email}")
     if not verify_password(credentials.password, user.password_hash):
         logger.warning(f"Login failed: Password mismatch for user {credentials.email}")
         raise HTTPException(
@@ -213,14 +215,6 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has been rejected and is permanently blocked."
         )
-
-    # A006: In development mode, auto-approve accounts during login to speed up dev flow.
-    is_dev = settings.env == "development"
-    if is_dev and (not user.is_active or user.approval_status != "approved"):
-        user.is_active = True
-        user.approval_status = "approved"
-        user.is_verified = True
-        db.commit()
     
     if user.role == "pending_hr" or user.approval_status != "approved" or not user.is_active:
         raise HTTPException(

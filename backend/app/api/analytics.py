@@ -102,6 +102,7 @@ def get_interview_reports(
         interviews = query.options(
             joinedload(Interview.application).joinedload(Application.hiring_decision),
             joinedload(Interview.application).joinedload(Application.hr),
+            joinedload(Interview.application).joinedload(Application.resume_extraction),
             joinedload(Interview.report)
         ).order_by(Interview.created_at.desc()).all()
 

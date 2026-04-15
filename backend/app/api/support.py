@@ -25,6 +25,31 @@ _SUPPORT_SUBMISSION_BUCKETS: dict[str, deque[float]] = {}
 
 def _check_support_rate_limit(key: str) -> Optional[int]:
     """Returns retry-after seconds if limited, else None."""
+    redis_client = None
+    if settings.redis_url:
+        try:
+            from app.core.redis_store import get_redis_client
+            redis_client = get_redis_client()
+        except Exception:
+            pass
+    
+    if redis_client:
+        try:
+            import redis
+            redis_key = f"rate_limit:support:{key}"
+            current_count = redis_client.get(redis_key)
+            if current_count is None:
+                redis_client.setex(redis_key, _SUPPORT_SUBMISSION_WINDOW_SECONDS, 1)
+                return None
+            count = int(current_count)
+            if count >= _SUPPORT_SUBMISSION_THRESHOLD:
+                ttl = redis_client.ttl(redis_key)
+                return max(1, ttl)
+            redis_client.incr(redis_key)
+            return None
+        except Exception:
+            pass
+    
     now = time.time()
     dq = _SUPPORT_SUBMISSION_BUCKETS.setdefault(key, deque())
     while dq and dq[0] < now - _SUPPORT_SUBMISSION_WINDOW_SECONDS:
@@ -127,21 +152,6 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
                 break
         except Exception:
             continue
-
-    # Magic bypass for onboarding errors (as requested)
-    if not interview and access_key == "onboarding_error":
-        application = db.query(Application).filter(Application.candidate_email == email).first()
-        if not application:
-            log_json(
-                logger,
-                "support_ticket_rejected",
-                request_id=get_request_id(request),
-                endpoint="/api/support/ticket",
-                status=404,
-                level="warning",
-                extra={"reason": "candidate_not_found", "email_hash": safe_hash(email)},
-            )
-            raise HTTPException(status_code=404, detail="No application found for this email.")
 
     # If no interview matched, try finding by offer_token (standard onboarding flow)
     if not interview and not application:

@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     
     # Observability
     sentry_dsn: Optional[str] = Field(default=None, alias="SENTRY_DSN")
+    
+    # Company branding
+    company_name: str = "Company"
 
     # Server
     host: str = "0.0.0.0"

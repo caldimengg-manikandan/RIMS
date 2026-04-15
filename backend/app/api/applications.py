@@ -41,7 +41,7 @@ from sqlalchemy.exc import IntegrityError
 import re
 import hashlib
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -444,7 +444,7 @@ async def apply_for_job(
     
     # 4. Resume Validation
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-    ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
+    ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc"}
     
     from app.core.resume_upload_utils import (
         generate_hashed_resume_filename,
@@ -456,7 +456,7 @@ async def apply_for_job(
     if resume_ext not in ALLOWED_RESUME_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid resume file type. Only .pdf and .docx are allowed.",
+            detail="Invalid resume file type. Only .pdf, .docx, and .doc are allowed.",
         )
     content = await resume_file.read()
     if not content:
@@ -572,7 +572,8 @@ async def apply_for_job(
                 delete_file(settings.supabase_bucket_resumes, resume_storage_path)
             if photo_storage_path and new_application.candidate_photo_path:
                 delete_file(settings.supabase_bucket_id_photos, photo_storage_path)
-        except: pass
+        except Exception as e:
+            logger.warning(f"Failed to clean up files for application: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit application securely.")
 
     background_tasks.add_task(
@@ -1037,12 +1038,14 @@ def get_hr_applications(
             try:
                 sd = datetime.strptime(from_date, "%Y-%m-%d").date()
                 query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) >= sd)
-            except ValueError: pass
+            except ValueError:
+                logger.warning(f"Invalid from_date format: {from_date}")
         if to_date:
             try:
                 ed = datetime.strptime(to_date, "%Y-%m-%d").date()
                 query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) <= ed)
-            except ValueError: pass
+            except ValueError:
+                logger.warning(f"Invalid to_date format: {to_date}")
 
         # 3. Security
         # Apply visibility isolation: Anyone not a super_admin is restricted to their own apps

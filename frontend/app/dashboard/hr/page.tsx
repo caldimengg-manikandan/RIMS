@@ -1,5 +1,10 @@
 'use client'
 
+/**
+ * RIMS HR Dashboard
+ * Forced refresh: 2026-04-15
+ */
+
 import React, { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,10 +28,7 @@ import {
   X,
   Award,
   RotateCw,
-  RotateCcw,
-  Sparkles,
-  SearchCode,
-  Lightbulb
+  RotateCcw
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -105,20 +107,13 @@ export default function HRDashboard() {
     status: 'all'
   })
   
-  // Magic Search States
-  const [magicQuery, setMagicQuery] = useState('')
-  const [magicResults, setMagicResults] = useState<any[] | null>(null)
-  const [isMagicSearching, setIsMagicSearching] = useState(false)
-  const [showMagicPanel, setShowMagicPanel] = useState(false)
-  
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(filters.search)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [filters.search])
+    setCurrentPage(1)
+  }, [debouncedSearch, filters.date, filters.status])
 
   // We use SWR for the initial filtered interviews as well
   const filterQuery = useMemo(() => {
@@ -126,12 +121,17 @@ export default function HRDashboard() {
     if (debouncedSearch) params.append('search', debouncedSearch)
     if (filters.date) params.append('date', filters.date)
     if (filters.status && filters.status !== 'all') params.append('status', filters.status)
+    
+    // Pagination params
+    params.append('skip', String((currentPage - 1) * pageSize))
+    params.append('limit', String(pageSize))
+    
     return params.toString()
-  }, [debouncedSearch, filters.date, filters.status])
+  }, [debouncedSearch, filters.date, filters.status, currentPage, pageSize])
 
-  const { data: filteredInterviews, isValidating: isFiltering, mutate: mutateInterviews } = useSWR<any[]>(
+  const { data: paginatedInterviews, isValidating: isFiltering, mutate: mutateInterviews } = useSWR<{ items: any[], total: number }>(
     `/api/analytics/interviews${filterQuery ? `?${filterQuery}` : ''}`,
-    (url: string) => fetcher<any[]>(url),
+    (url: string) => fetcher<{ items: any[], total: number }>(url),
     { keepPreviousData: true, refreshInterval: 30000 }
   )
 
@@ -181,7 +181,13 @@ export default function HRDashboard() {
   }, [dashboardData])
 
   const chartData = (dashboardData as any)?.chart_data || []
-  const recentInterviews = Array.isArray(filteredInterviews) ? filteredInterviews : (Array.isArray((dashboardData as any)?.recent_interviews) ? (dashboardData as any)?.recent_interviews : [])
+  const recentInterviews = useMemo(() => {
+    if (paginatedInterviews?.items && Array.isArray(paginatedInterviews.items)) {
+      return paginatedInterviews.items
+    }
+    const legacy = (dashboardData as any)?.recent_interviews
+    return Array.isArray(legacy) ? legacy : []
+  }, [paginatedInterviews, dashboardData])
 
   const handleReset = () => {
     setFilters({
@@ -189,26 +195,10 @@ export default function HRDashboard() {
       date: '',
       status: 'all'
     })
-    setMagicResults(null)
-    setMagicQuery('')
-    setShowMagicPanel(false)
+    setCurrentPage(1)
+    setPageSize(10)
   }
 
-  const handleMagicSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!magicQuery.trim()) return
-    
-    setIsMagicSearching(true)
-    setShowMagicPanel(true)
-    try {
-      const resp = await APIClient.post<any>('/api/search/candidates', { query: magicQuery })
-      setMagicResults(resp.candidates || [])
-    } catch (err) {
-      console.error("Magic Search error", err)
-    } finally {
-      setIsMagicSearching(false)
-    }
-  }
 
   const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444'];
 
@@ -221,103 +211,13 @@ export default function HRDashboard() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Enterprise Recruitment Dashboard
+            Recruitment Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">AI-Powered Hiring Intelligence</p>
         </div>
       </div>
 
-      {/* Magic Search Bar */}
-      <div className="relative group/magic animate-in slide-in-from-top-4 duration-500">
-        <form onSubmit={handleMagicSearch} className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 blur-xl group-hover/magic:blur-2xl transition-all duration-700 opacity-70"></div>
-          <div className="relative bg-white dark:bg-slate-900 border border-indigo-100 dark:border-indigo-900/40 p-1.5 rounded-2xl shadow-xl flex items-center gap-2">
-            <div className="bg-indigo-600 rounded-xl p-2.5 shadow-lg group-hover/magic:scale-110 transition-transform duration-500">
-              <Sparkles className="h-5 w-5 text-white animate-pulse" />
-            </div>
-            <Input 
-              placeholder="Magic Search: 'Senior devs with Python and AWS experience'..."
-              className="flex-1 border-none bg-transparent focus-visible:ring-0 text-base md:text-lg font-medium placeholder:text-slate-400 placeholder:font-normal"
-              value={magicQuery}
-              onChange={(e) => setMagicQuery(e.target.value)}
-            />
-            <Button 
-              type="submit" 
-              disabled={isMagicSearching || !magicQuery.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-6 rounded-xl transition-all hover:shadow-[0_0_20px_rgba(79,70,229,0.3)]"
-            >
-              {isMagicSearching ? (
-                <>
-                  <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                'Find Matches'
-              )}
-            </Button>
-          </div>
-        </form>
-      </div>
 
-      {/* Magic Results Panel */}
-      {showMagicPanel && (
-        <Card className="border-indigo-100 bg-indigo-50/20 shadow-none overflow-hidden animate-in zoom-in-95 duration-300">
-          <CardHeader className="border-b border-indigo-100/30 flex flex-row items-center justify-between py-3">
-             <div className="flex items-center gap-2">
-                <SearchCode className="h-4 w-4 text-indigo-500" />
-                <CardTitle className="text-sm font-bold text-indigo-900 uppercase tracking-wider">AI Search Results</CardTitle>
-             </div>
-             <Button variant="ghost" size="sm" onClick={() => setShowMagicPanel(false)} className="h-6 w-6 p-0 hover:bg-indigo-100">
-                <X className="h-4 w-4 text-indigo-400" />
-             </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            {magicResults && magicResults.length > 0 ? (
-              <div className="divide-y divide-indigo-100/30">
-                {magicResults.map((cand) => (
-                  <div key={cand.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/50 transition-colors">
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-900">{cand.candidate_name}</p>
-                      <div className="flex items-center gap-3 text-xs">
-                        <Badge variant="outline" className="text-[10px] bg-white border-indigo-100 text-indigo-600">
-                          {cand.job_title}
-                        </Badge>
-                        <span className="text-slate-500 font-medium">{cand.experience_years}y Exp</span>
-                        <span className="text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                          Score: {((cand.resume_score || 0)*10).toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1 max-w-xl bg-indigo-600/5 p-3 rounded-lg border border-indigo-600/10 flex items-start gap-2">
-                      <Lightbulb className="h-4 w-4 text-indigo-500 mt-1 shrink-0" />
-                      <p className="text-xs leading-relaxed text-indigo-900 font-medium">
-                        <span className="font-bold">Match Insight:</span> {cand.match_insight || "Historical candidate matching query parameters."}
-                      </p>
-                    </div>
-
-                    <Link href={`/dashboard/hr/applications/${cand.id}`}>
-                      <Button size="sm" variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white font-bold transition-all">
-                        Profile
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            ) : isMagicSearching ? (
-               <div className="p-12 flex flex-col items-center justify-center space-y-4">
-                  <div className="relative">
-                     <div className="absolute inset-x-0 bottom-0 top-0 bg-primary/20 animate-ping rounded-full blur-xl"></div>
-                     <RotateCw className="h-10 w-10 text-primary animate-spin relative" />
-                  </div>
-                  <p className="text-sm font-bold text-indigo-900 animate-pulse">Groq LLM is analyzing your database...</p>
-               </div>
-            ) : (
-              <div className="text-center py-12 text-slate-500 font-medium">No candidates matched your natural language query.</div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {isSuperAdmin && pendingApprovals.length > 0 && (
         <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-6 animate-in fade-in duration-300">
@@ -349,13 +249,15 @@ export default function HRDashboard() {
 
       {/* Stats Cards AI Enhanced */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Candidates"
-          value={r_metrics.total_candidates}
-          icon={Users}
-          color="text-primary"
-          bg="bg-primary/10"
-        />
+        <Link href="/dashboard/hr/applications" className="block cursor-pointer">
+          <StatsCard
+            title="Total Candidates"
+            value={r_metrics.total_candidates}
+            icon={Users}
+            color="text-primary"
+            bg="bg-primary/10"
+          />
+        </Link>
         <StatsCard
           title="Hiring Success"
           value={`${r_metrics.hiring_success_rate}%`}
@@ -464,6 +366,24 @@ export default function HRDashboard() {
               </Select>
             </div>
 
+            <div className="w-full md:w-32">
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => setPageSize(Number(value))}
+              >
+                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                  <span className="text-xs text-muted-foreground mr-2">Show:</span>
+                  <SelectValue placeholder="10" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button
               variant="outline"
               size="icon"
@@ -525,6 +445,38 @@ export default function HRDashboard() {
                   ))}
                 </TableBody>
               </Table>
+              
+              {/* Pagination Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <div className="text-sm text-muted-foreground">
+                  Showing <span className="font-bold text-foreground">{recentInterviews.length}</span> of <span className="font-bold text-foreground">{paginatedInterviews?.total || 0}</span> interviews
+                </div>
+                <div className="flex items-center gap-4">
+                   <div className="text-sm font-medium text-muted-foreground mr-2">
+                     Page <span className="text-foreground">{currentPage}</span> of {Math.ceil((paginatedInterviews?.total || 1) / pageSize)}
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       disabled={currentPage === 1 || isFiltering}
+                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                       className="h-8 shadow-sm"
+                     >
+                       Previous
+                     </Button>
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       disabled={currentPage >= Math.ceil((paginatedInterviews?.total || 0) / pageSize) || isFiltering}
+                       onClick={() => setCurrentPage(prev => prev + 1)}
+                       className="h-8 shadow-sm"
+                     >
+                       Next
+                     </Button>
+                   </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground border-2 border-dashed border-muted rounded-lg">

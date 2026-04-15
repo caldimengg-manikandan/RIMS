@@ -229,24 +229,25 @@ async def send_email_async(to_email: str, subject: str, html_body: str, attachme
     if resend_api_key and resend_from:
         smtp_configured = bool(settings.smtp_host and settings.smtp_user and settings.smtp_password)
 
-        # Single Resend attempt; if it fails and SMTP is configured, fall back to SMTP.
-        # Real-world Resend failures include:
-        # - 401/403 (bad key)
-        # - 422 (unverified/invalid "from" domain)
-        # - 429 (rate limit)
-        # Falling back preserves user-visible behavior when SMTP is available.
-        result = await _send_via_resend(to_email, subject, html_body)
-        if result["success"]:
-            return {**result, "provider": "resend"}
+        # Retry Resend up to 3 times with 5 second delay
+        resend_max_retries = 2
+        resend_last_error = "Unknown error"
+        for resend_attempt in range(resend_max_retries + 1):
+            result = await _send_via_resend(to_email, subject, html_body)
+            if result["success"]:
+                return {**result, "provider": "resend"}
+            resend_last_error = result["error"]
+            if resend_attempt < resend_max_retries:
+                await asyncio.sleep(5)
 
-        last_error = result["error"]
+        last_error = resend_last_error
 
         if smtp_configured:
             logger.warning(
                 f"[EMAIL FALLBACK TO SMTP] Resend failed for {to_email} ({last_error}); falling back to SMTP."
             )
             loop = asyncio.get_running_loop()
-            max_smtp_retries = 1
+            max_smtp_retries = 2
             smtp_last_error = "Unknown error"
             try:
                 for smtp_attempt in range(max_smtp_retries + 1):
@@ -399,7 +400,8 @@ async def execute_email_with_retries(
                     .values(email_status='failed')
                 )
                 db.commit()
-        except: pass
+        except Exception as e:
+            logger.warning(f"Failed to update email status for application {application.id}: {e}")
 
     logger.error(f"[EMAIL][PERMANENT_FAILURE] (Event: {event_id}) Failed after {max_retries} attempts for {to_email}")
     return False
@@ -527,13 +529,40 @@ async def send_hired_email(to_email: str, job_title: str, interview=None, offer_
     </body></html>
     """
     attachments = []
-    if offer_letter_path and os.path.exists(offer_letter_path):
-        with open(offer_letter_path, "rb") as f:
-            content = base64.b64encode(f.read()).decode("utf-8")
-            attachments.append({
-                "filename": os.path.basename(offer_letter_path),
-                "content": content,
-            })
+    if offer_letter_path:
+        # 1. Try local disk (legacy support for manual uploads)
+        if os.path.exists(offer_letter_path):
+            try:
+                with open(offer_letter_path, "rb") as f:
+                    content = base64.b64encode(f.read()).decode("utf-8")
+                    attachments.append({
+                        "filename": os.path.basename(offer_letter_path),
+                        "content": content,
+                    })
+            except Exception as e:
+                logger.error(f"Failed to read local offer letter: {e}")
+        
+        # 2. Try Cloud Storage (New template-driven flow)
+        else:
+            try:
+                from app.core.storage import download_file
+                from app.core.config import get_settings
+                settings = get_settings()
+                
+                logger.info(f"Fetching offer letter from cloud storage: {offer_letter_path}")
+                content_bytes = download_file(settings.supabase_bucket_offers, offer_letter_path)
+                
+                if content_bytes:
+                    content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+                    attachments.append({
+                        "filename": f"Offer_Letter_{os.path.basename(offer_letter_path)}",
+                        "content": content_b64,
+                    })
+                else:
+                    logger.error(f"Offer letter not found in bucket {settings.supabase_bucket_offers}: {offer_letter_path}")
+            except Exception as e:
+                logger.error(f"Cloud storage attachment failed for {offer_letter_path}: {e}")
+
     return await execute_email_with_retries(
         to_email, subject, body, 
         attachments=attachments if attachments else None,

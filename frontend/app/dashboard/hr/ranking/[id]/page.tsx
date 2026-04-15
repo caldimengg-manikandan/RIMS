@@ -26,6 +26,10 @@ export default function LeaderboardPage() {
     const jobId = params.id
     const { data: ranked = [], isLoading } = useSWR<RankedCandidate[]>(`/api/applications/ranking/${jobId}`, fetcher)
 
+    const sortedRanked = React.useMemo(() => {
+        return [...ranked].sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
+    }, [ranked])
+
     if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading ranking...</div>
 
     const getRankIcon = (rank: number) => {
@@ -81,11 +85,11 @@ export default function LeaderboardPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {ranked.map((cand) => (
+                            {sortedRanked.map((cand, index) => (
                                 <TableRow key={cand.id} className="hover:bg-muted/20 transition-colors border-border/40 py-4 h-16">
                                     <TableCell className="font-medium align-middle">
                                         <div className="flex items-center gap-3 pl-2">
-                                            {getRankIcon(cand.rank)}
+                                            {getRankIcon(index + 1)}
                                         </div>
                                     </TableCell>
                                     <TableCell className="align-middle">

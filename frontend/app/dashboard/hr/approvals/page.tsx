@@ -13,18 +13,28 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Check, ArrowRight, Trash2 } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+
+interface HRUser {
+  id: number
+  email: string
+  full_name: string
+  approval_status: 'pending' | 'approved' | 'rejected'
+  is_active: boolean
+}
 
 export default function ApprovalsPage() {
   const { user, isLoading: isAuthLoading } = useAuth()
   const [processingId, setProcessingId] = React.useState<number | null>(null)
   const [status, setStatus] = React.useState<string>('pending')
+  const [confirmAction, setConfirmAction] = React.useState<{ type: 'reject' | 'remove'; userId: number; message: string } | null>(null)
 
   const isSuperAdmin = user?.role === 'super_admin'
   const shouldFetch = isSuperAdmin
   const fetchUrl = `/api/auth/hr-requests?status=${status}`
-  const { data: hrUsers = [], error, isValidating, mutate } = useSWR<any[]>(
+  const { data: hrUsers = [], error, isValidating, mutate } = useSWR<HRUser[]>(
     shouldFetch ? fetchUrl : null,
-    (url: string) => fetcher<any[]>(url)
+    (url: string) => fetcher<HRUser[]>(url)
   )
 
   const userCount = hrUsers.length
@@ -32,7 +42,7 @@ export default function ApprovalsPage() {
   const handleApprove = async (userId: number) => {
     setProcessingId(userId)
     try {
-      await performMutation<any[]>(
+      await performMutation<HRUser[]>(
         fetchUrl,
         mutate,
         () => APIClient.post(`/api/auth/approve/${userId}`, {}),
@@ -43,49 +53,51 @@ export default function ApprovalsPage() {
         }
       )
     } catch (err) {
-      console.error('Failed to approve user', err)
+      console.error('Failed to approve user', err instanceof Error ? err.message : String(err))
     } finally {
       setProcessingId(null)
     }
   }
 
   const handleReject = async (userId: number) => {
-    if (!confirm('Are you sure you want to reject this HR registration?')) return
-    setProcessingId(userId)
-    try {
-      await performMutation<any[]>(
-        fetchUrl,
-        mutate,
-        () => APIClient.post(`/api/auth/reject/${userId}`, {}),
-        {
-          lockKey: `approval-${userId}`,
-          successMessage: 'HR user rejected',
-          invalidateKeys: [fetchUrl, '/api/analytics/dashboard']
-        }
-      )
-    } catch (err) {
-      console.error('Failed to reject user', err)
-    } finally {
-      setProcessingId(null)
-    }
+    setConfirmAction({ type: 'reject', userId, message: 'Are you sure you want to reject this HR registration?' })
   }
 
   const handleRemove = async (userId: number) => {
-    if (!confirm('Are you sure you want to deactivate this HR account? They will no longer be able to log in.')) return
+    setConfirmAction({ type: 'remove', userId, message: 'Are you sure you want to deactivate this HR account? They will no longer be able to log in.' })
+  }
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return
+    const { type, userId } = confirmAction
+    setConfirmAction(null)
     setProcessingId(userId)
     try {
-      await performMutation<any[]>(
-        fetchUrl,
-        mutate,
-        () => APIClient.delete(`/api/auth/remove/${userId}`),
-        {
-          lockKey: `approval-remove-${userId}`,
-          successMessage: 'HR user deactivated',
-          invalidateKeys: [fetchUrl, '/api/analytics/dashboard']
-        }
-      )
+      if (type === 'reject') {
+        await performMutation<HRUser[]>(
+          fetchUrl,
+          mutate,
+          () => APIClient.post(`/api/auth/reject/${userId}`, {}),
+          {
+            lockKey: `approval-${userId}`,
+            successMessage: 'HR user rejected',
+            invalidateKeys: [fetchUrl, '/api/analytics/dashboard']
+          }
+        )
+      } else {
+        await performMutation<HRUser[]>(
+          fetchUrl,
+          mutate,
+          () => APIClient.delete(`/api/auth/remove/${userId}`),
+          {
+            lockKey: `approval-remove-${userId}`,
+            successMessage: 'HR user deactivated',
+            invalidateKeys: [fetchUrl, '/api/analytics/dashboard']
+          }
+        )
+      }
     } catch (err) {
-      console.error('Failed to deactivate user', err)
+      console.error('Failed to process action', err instanceof Error ? err.message : String(err))
     } finally {
       setProcessingId(null)
     }
@@ -121,7 +133,7 @@ export default function ApprovalsPage() {
     )
   }
 
-  const getStatusBadge = (user: any) => {
+  const getStatusBadge = (user: HRUser) => {
     if (user.approval_status === 'pending') {
       return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">Pending</Badge>
     }
@@ -250,6 +262,19 @@ export default function ApprovalsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Action</DialogTitle>
+            <DialogDescription>{confirmAction?.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirm} disabled={!!processingId}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

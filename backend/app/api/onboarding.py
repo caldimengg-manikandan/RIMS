@@ -36,11 +36,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 settings = get_settings()
 
-# Point 6: Lightweight Rate Limiting (Simple In-Memory)
 RATE_LIMIT_STORAGE = defaultdict(list)
 MAX_REQUESTS_PER_MIN = 10
 
 def rate_limit(ip: str):
+    redis_client = None
+    if settings.redis_url:
+        try:
+            from app.core.redis_store import get_redis_client
+            redis_client = get_redis_client()
+        except Exception:
+            pass
+    
+    if redis_client:
+        try:
+            import redis
+            redis_key = f"rate_limit:onboarding:{ip}"
+            current_count = redis_client.get(redis_key)
+            if current_count is None:
+                redis_client.setex(redis_key, 60, 1)
+                return
+            count = int(current_count)
+            if count >= MAX_REQUESTS_PER_MIN:
+                raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+            redis_client.incr(redis_key)
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    
     now = time.time()
     RATE_LIMIT_STORAGE[ip] = [t for t in RATE_LIMIT_STORAGE[ip] if now - t < 60]
     if len(RATE_LIMIT_STORAGE[ip]) >= MAX_REQUESTS_PER_MIN:
@@ -621,7 +646,7 @@ async def generate_id_card(
         photo_url = get_signed_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
         
         data = {
-            "company_name": gs.get("company_name", "CALDIM ENGINEERING"),
+            "company_name": gs.get("company_name") or settings.company_name,
             "logo_url": gs.get("company_logo_url", ""),
             "candidate_name": application.candidate_name,
             "employee_id": application.employee_id,

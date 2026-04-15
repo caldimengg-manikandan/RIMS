@@ -5,6 +5,15 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, XCircle, Loader2, PartyPopper, Building2, ShieldAlert, AlertCircle, FileText, Calendar, Briefcase } from 'lucide-react'
+import { toast } from 'sonner'
+
+interface OfferData {
+    company_name?: string
+    candidate_name?: string
+    job_title?: string
+    joining_date?: string
+    candidate_email?: string
+}
 
 export default function OfferRespondPage() {
     const searchParams = useSearchParams()
@@ -12,7 +21,7 @@ export default function OfferRespondPage() {
     const type = searchParams.get('type') // initial intent
     
     const [view, setView] = useState<'loading' | 'preview' | 'success' | 'error'>('loading')
-    const [offerData, setOfferData] = useState<any>(null)
+    const [offerData, setOfferData] = useState<OfferData | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [message, setMessage] = useState('')
     const [finalStatus, setFinalStatus] = useState<'accept' | 'reject' | null>(null)
@@ -243,7 +252,7 @@ export default function OfferRespondPage() {
                                                 setView('error')
                                                 // Reset view with success msg
                                                 const d = await res.json()
-                                                alert("Ticket #"+d.id+" has been raised successfully. We will contact you at " + emailToUse)
+                                                toast.success("Ticket #"+d.id+" has been raised successfully. We will contact you at " + emailToUse)
                                             } else {
                                                 const d = await res.json()
                                                 // If token verification failed, try with magic key automatically
@@ -260,14 +269,14 @@ export default function OfferRespondPage() {
                                                      })
                                                      if (retryRes.ok) {
                                                         const d2 = await retryRes.json()
-                                                        alert("Ticket #"+d2.id+" raised using onboarding fallback. We found your record.")
+                                                        toast.success("Ticket #"+d2.id+" raised using onboarding fallback. We found your record.")
                                                         return
                                                      }
                                                 }
-                                                alert(d.detail || 'Failed to raise ticket.')
+                                                toast.error(d.detail || 'Failed to raise ticket.')
                                             }
                                         } catch (e) {
-                                            alert('Network error.')
+                                            toast.error('Network error.')
                                         } finally {
                                             setIsSubmitting(false)
                                         }

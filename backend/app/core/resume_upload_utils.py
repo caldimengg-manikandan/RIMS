@@ -24,6 +24,8 @@ def validate_resume_signature(resume_ext: str, content: bytes) -> Tuple[bool, Op
         return False, "invalid_pdf_signature"
     if resume_ext == ".docx" and not content.startswith(b"PK"):
         return False, "invalid_docx_signature"
+    if resume_ext == ".doc" and not content.startswith(b"\xd0\xcf\x11\xe0"):
+        return False, "invalid_doc_signature"
     return True, None
 
 

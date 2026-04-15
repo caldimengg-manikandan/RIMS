@@ -123,8 +123,10 @@ def get_current_user(
             )
         
         user_id = int(sub)
+        logger.info(f"[Auth] Validating user_id={user_id} with role '{role}'")
         user = db.query(User).filter(User.id == user_id).first()
         if user is None:
+            logger.warning(f"[Auth] User {user_id} not found in database")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found",
@@ -135,11 +137,14 @@ def get_current_user(
         set_db_identity(db, user.id)
 
         if user.role != role:
+            logger.warning(f"[Auth] Role mismatch for user {user_id}: token={role}, db={user.role}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token role no longer matches this account",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        logger.info(f"[Auth] User {user_id} authenticated successfully as '{user.role}'")
 
         if user.role in APPROVED_STAFF_ROLES:
             ensure_approved_staff(user)
@@ -166,6 +171,8 @@ def get_current_user(
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e
+        import traceback
+        logger.error(f"[Auth] CRITICAL: Unexpected error in get_current_user: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal auth error"

@@ -80,7 +80,19 @@ _REQUIRED_COLUMNS = [
     ("interviews", "termination_reason", "VARCHAR(100)"),
     ("interviews", "report_generated", "BOOLEAN DEFAULT FALSE"),
     ("interviews", "candidate_id", "INTEGER REFERENCES users(id)"),
+    # Repository question set FK columns on jobs — plain INTEGER first, FK added after table exists
+    ("jobs", "aptitude_repo_set_id", "INTEGER"),
+    ("jobs", "technical_repo_set_id", "INTEGER"),
+    ("jobs", "behavioural_repo_set_id", "INTEGER"),
 ]
+
+
+def _safe_rollback(conn) -> None:
+    """Clear aborted transactions so later migrations can continue."""
+    try:
+        conn.rollback()
+    except Exception:
+        pass
 
 
 def column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -115,6 +127,31 @@ def run_startup_migrations(engine: Engine):
     """Check for missing columns and add them safely using PostgreSQL-friendly DDL."""
     inspector = inspect(engine)
 
+    # 0. Create question_sets table FIRST — must exist before FK columns on jobs are added
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS question_sets (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    round_type VARCHAR(50) NOT NULL,
+                    job_roles TEXT,
+                    questions TEXT NOT NULL DEFAULT '[]',
+                    topic_tags TEXT,
+                    hr_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info("Ensured question_sets table exists")
+        except Exception as e:
+            _safe_rollback(conn)
+            logger.warning(f"Failed to create question_sets table: {e}")
+
+    # Refresh inspector after table creation
+    inspector = inspect(engine)
+
     # 1. Ensure columns exist first
     with engine.connect() as conn:
         for table, column, col_type in _REQUIRED_COLUMNS:
@@ -133,6 +170,7 @@ def run_startup_migrations(engine: Engine):
                 else:
                     logger.debug(f"Column {table}.{column} already exists.")
             except Exception as e:
+                _safe_rollback(conn)
                 logger.error(f"Migration FAILED for {table}.{column}: {e}")
                 # For critical updates, we might want to raise, but for baseline, we log and continue
                 # unless it's a manual migration script.
@@ -143,6 +181,7 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Ensured users.approval_status exists")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to add users.approval_status: {e}")
 
         # Backfill resume_status from existing resume_extractions (metadata sync)
@@ -164,6 +203,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Backfilled applications.resume_status from resume_extractions")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to backfill applications.resume_status: {e}")
 
         # 1c. Ensure status constraint is updated for 'offer_sent' and 'onboarded'
@@ -177,6 +217,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Updated check_applications_status constraint")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to update application status constraint: {e}")
 
         # 1d. Create global_settings table if not exists
@@ -193,7 +234,10 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Ensured global_settings table exists")
         except Exception as e:
+            _safe_rollback(conn)
             logger.warning(f"Failed to create global_settings table: {e}")
+
+        # 1e. (question_sets table is created in step 0 above)
 
     # 2. Update Role Constraints
     with engine.connect() as conn:
@@ -206,6 +250,7 @@ def run_startup_migrations(engine: Engine):
             conn.commit()
             logger.info("Updated check_users_role constraint")
         except Exception as exc:
+            _safe_rollback(conn)
             logger.warning(f"Error updating role constraint: {exc}")
 
     # 3. Data normalization and Super Admin promotion
@@ -240,6 +285,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Migration completed: normalized roles and promoted super admin")
             except Exception as exc:
+                _safe_rollback(conn)
                 logger.warning(f"Migration failed to normalize roles: {exc}")
         
         # Populate Application.hr_id
@@ -253,6 +299,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info("Migration completed: populated Application.hr_id")
         except Exception as exc:
+            _safe_rollback(conn)
             logger.warning(f"Migration failed to populate hr_id: {exc}")
 
     # 4. Constraints/Indexes
@@ -283,6 +330,7 @@ def run_startup_migrations(engine: Engine):
                 conn.commit()
                 logger.info(f"Migration completed: ensured index {constraint_name}")
             except Exception as exc:
+                _safe_rollback(conn)
                 logger.warning(f"Migration skipped index {constraint_name}: {exc}")
 
 

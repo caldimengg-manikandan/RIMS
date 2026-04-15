@@ -40,6 +40,17 @@ interface Job {
   status: string
 }
 
+interface BatchApplication {
+  candidate_name?: string
+  candidate_email?: string
+  candidate_phone?: string
+  country_code?: string
+  job?: { title?: string }
+  resume_score?: number
+  resume_extraction?: { resume_score?: number }
+  applied_at?: string
+}
+
 const TIME_OPTIONS = [
   { value: 'all', label: 'All Time' },
   { value: 'morning', label: 'Morning (6 AM – 12 PM)' },
@@ -137,7 +148,7 @@ export default function BatchAnalysisPage() {
       setExportCount(data.length)
 
       // Build Excel rows
-      const rows = data.map((app: any) => {
+      const rows = data.map((app: BatchApplication) => {
         const name = app.candidate_name || 'Unknown'
         const email = app.candidate_email || 'N/A'
         const phone = normalizePhone(app.candidate_phone || '', app.country_code || null)
@@ -165,9 +176,9 @@ export default function BatchAnalysisPage() {
       const datePart = fromDate || toDate ? `_${fromDate || 'start'}_to_${toDate || 'present'}` : ''
       const rolePart = filterJobId !== 'all' ? `_${(jobs?.find(j => j.id.toString() === filterJobId)?.title || 'role').replace(/\s+/g, '_')}` : ''
       XLSX.writeFile(workbook, `candidates_export${datePart}${rolePart}.xlsx`)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Export failed:', err)
-      setExportError(err.message || 'Failed to export data.')
+      setExportError(err instanceof Error ? err.message : 'Failed to export data.')
     } finally {
       setIsExporting(false)
     }

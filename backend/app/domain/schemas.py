@@ -112,6 +112,10 @@ class JobCreate(BaseModel):
     aptitude_questions_file: Optional[str] = None
     aptitude_config: Optional[str] = None
     duration_minutes: Optional[int] = 60
+    # Repository-sourced question sets (used instead of file upload)
+    aptitude_repo_set_id: Optional[int] = None
+    technical_repo_set_id: Optional[int] = None
+    behavioural_repo_set_id: Optional[int] = None
 
     @field_validator('title')
     def validate_title(cls, v):
@@ -178,6 +182,10 @@ class JobUpdate(BaseModel):
     aptitude_config: Optional[dict] = None
     aptitude_questions_file: Optional[str] = None
     duration_minutes: Optional[int] = None
+    # Repository-sourced question sets
+    aptitude_repo_set_id: Optional[int] = None
+    technical_repo_set_id: Optional[int] = None
+    behavioural_repo_set_id: Optional[int] = None
 
     @field_validator('title')
     def validate_title(cls, v):
@@ -235,6 +243,10 @@ class JobResponse(BaseModel):
     aptitude_config: Optional[str] = None
     aptitude_questions_file: Optional[str] = None
     duration_minutes: int = 60
+    # Repository-sourced question sets
+    aptitude_repo_set_id: Optional[int] = None
+    technical_repo_set_id: Optional[int] = None
+    behavioural_repo_set_id: Optional[int] = None
     is_applied: bool = False
     hr_id: int
     created_at: datetime

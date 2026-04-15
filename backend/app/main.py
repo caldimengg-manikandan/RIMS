@@ -16,7 +16,7 @@ except Exception:
     pass
 # ──────────────────────────────────────────────────────────────────────────────
 
-if os.getenv("BACKEND_START_MODE") != "script":
+if os.getenv("BACKEND_START_MODE") not in ["script", "docker"]:
     print("Use start.ps1 to run the backend")
     sys.exit(1)
 
@@ -49,7 +49,7 @@ import logging
 from app.core.auth import hash_password
 from app.core.config import get_settings
 from app.infrastructure.database import Base, engine
-from app.api import auth, jobs, applications, interviews, decisions, notifications, analytics, tickets, support, hr_tickets, ops_email, settings as hr_settings, onboarding, search
+from app.api import auth, jobs, applications, interviews, decisions, notifications, analytics, tickets, support, hr_tickets, ops_email, settings as hr_settings, onboarding, search, repository
 from app.domain.models import (
     User, Job, Application, ResumeExtraction, 
     Interview, InterviewQuestion, InterviewAnswer,
@@ -64,8 +64,10 @@ from app.core.observability import log_json
 settings = get_settings()
 
 if os.environ.get("RIMS_LOGGING_DONE", "0") != "1":
-    # Pass None as logs_dir to use console-only logging by default
-    setup_logging(None, settings.debug)
+    # Enable file logging in the 'logs' directory
+    from pathlib import Path
+    logs_dir = Path(__file__).parent.parent / "logs"
+    setup_logging(logs_dir, settings.debug)
     os.environ["RIMS_LOGGING_DONE"] = "1"
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,7 @@ if os.environ.get("WORKER_ID", "0") == "0":
     if os.environ.get("RIMS_STARTUP_MIGRATIONS_DONE", "0") != "1":
         os.environ["RIMS_STARTUP_MIGRATIONS_DONE"] = "1"
         try:
+            run_startup_migrations(engine)
             validate_required_columns(engine)
         except RuntimeError as e:
             sys.exit(1)
@@ -176,6 +179,9 @@ class StandardizedAPIRoute(APIRoute):
             except HTTPException as exc:
                 raise exc
             except Exception as exc:
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"[GLOBAL ERROR] Handler crash in {request.url.path}: {str(exc)}\n{error_trace}")
                 raise exc
         return standardized_handler
 
@@ -240,11 +246,40 @@ def health_check():
         db.close()
     except Exception:
         db_status = "error"
+    
+    redis_status = "not_configured"
+    if settings.redis_url:
+        try:
+            from app.core.redis_store import get_redis_client
+            redis_client = get_redis_client()
+            if redis_client:
+                redis_client.ping()
+                redis_status = "ok"
+            else:
+                redis_status = "unavailable"
+        except Exception:
+            redis_status = "error"
+    
+    supabase_status = "not_configured"
+    if settings.supabase_url:
+        try:
+            from app.core.storage import get_supabase_client
+            client = get_supabase_client()
+            if client:
+                client.table("users").select("id").limit(1).execute()
+                supabase_status = "ok"
+            else:
+                supabase_status = "unavailable"
+        except Exception:
+            supabase_status = "error"
+    
     rate_limiter_status = "active" if getattr(app.state, "limiter", None) else "inactive"
     return {
         "status": "ok",
         "details": {
             "db": db_status,
+            "redis": redis_status,
+            "supabase": supabase_status,
             "uptime": uptime_seconds,
             "env": settings.env,
             "rate_limit": rate_limiter_status
@@ -277,6 +312,7 @@ app.include_router(ops_email.router)
 app.include_router(hr_settings.router)
 app.include_router(onboarding.router)
 app.include_router(search.router)
+app.include_router(repository.router)
 app.include_router(websocket_router)
 
 
@@ -337,7 +373,8 @@ async def database_exception_handler(request: FastAPIRequest, exc: SQLAlchemyErr
 @app.exception_handler(Exception)
 async def general_exception_handler(request: FastAPIRequest, exc: Exception):
     import traceback
-    error_msg = f"INTERNAL SERVER ERROR: {str(exc)}\n{traceback.format_exc()}"
+    error_trace = traceback.format_exc()
+    error_msg = f"[GLOBAL EXCEPTION] Unhandled error: {str(exc)}\n{error_trace}"
     logger.error(error_msg)
     
     detail = str(exc) if settings.debug else "An unexpected internal server error occurred."

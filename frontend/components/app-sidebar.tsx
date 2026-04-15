@@ -25,6 +25,7 @@ import {
     CheckCircle2,
     Settings,
     Activity,
+    Database,
 } from 'lucide-react'
 import {
     Avatar,
@@ -92,6 +93,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { href: '/dashboard/hr/tickets', label: 'Tickets', icon: LifeBuoy },
         { href: '/dashboard/hr/batch-analysis', label: 'Batch Analysis', icon: FileText },
         { href: '/dashboard/onboarding', label: 'Onboarding', icon: CheckCircle2 },
+        { href: '/dashboard/repository', label: 'Repository', icon: Database },
         { href: '/dashboard/settings', label: 'Settings', icon: Settings },
     ]
 

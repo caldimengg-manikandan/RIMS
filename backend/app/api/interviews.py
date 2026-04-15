@@ -57,6 +57,25 @@ from app.core.rate_limiter import limiter
 from app.core.idempotency import is_duplicate_request
 from app.core.ephemeral_result_cache import cache_get as _idem_cache_get, cache_set as _idem_cache_set
 
+
+def _load_questions_from_repo_set(set_id: int, db: Session) -> list:
+    """Fetch questions from a QuestionSet record in the repository."""
+    from app.domain.models import QuestionSet
+    import json as _json
+    logger.info(f"[Repo] Loading questions from repository set id={set_id}")
+    qs = db.query(QuestionSet).filter(QuestionSet.id == set_id).first()
+    if not qs:
+        logger.warning(f"[Repo] Repository set id={set_id} NOT FOUND in DB — falling back to AI.")
+        return []
+    try:
+        questions = _json.loads(qs.questions) if isinstance(qs.questions, str) else qs.questions
+        result = questions if isinstance(questions, list) else []
+        logger.info(f"[Repo] Set id={set_id} title={qs.title!r} loaded {len(result)} questions successfully.")
+        return result
+    except Exception as e:
+        logger.warning(f"[Repo] Failed to parse questions from set id={set_id}: {e} — falling back to AI.")
+        return []
+
 @router.get("/jobs/{job_id}")
 async def check_job_status(job_id: str):
     """Polling endpoint for async AI generation tasks"""
@@ -140,7 +159,30 @@ async def _generate_aptitude_questions(interview: Interview, job: Job, db: Sessi
 
     aptitude_mode = getattr(job, 'aptitude_mode', 'ai')
     
-    if aptitude_mode == 'upload' and getattr(job, 'aptitude_questions_file', None):
+    # Repository source takes priority over file upload
+    aptitude_repo_set_id = getattr(job, 'aptitude_repo_set_id', None)
+    logger.info(
+        f"[Aptitude] interview={interview.id} mode={aptitude_mode!r} "
+        f"aptitude_repo_set_id={aptitude_repo_set_id} "
+        f"aptitude_questions_file={getattr(job, 'aptitude_questions_file', None)!r}"
+    )
+    if aptitude_mode == 'upload' and aptitude_repo_set_id:
+        repo_questions = _load_questions_from_repo_set(aptitude_repo_set_id, db)
+        if repo_questions:
+            random.shuffle(repo_questions)
+            selected = repo_questions[:APTITUDE_QUESTION_COUNT]
+            for item in selected:
+                if isinstance(item, dict) and 'question' in item:
+                    options = item.get('options', [])
+                    q_text = item['question']
+                    if options:
+                        q_text += '\n' + '\n'.join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(options)])
+                    aptitude_prompts.append(q_text)
+                elif isinstance(item, str):
+                    aptitude_prompts.append(item)
+            logger.info(f"Loaded {len(aptitude_prompts)} aptitude questions from repo set {aptitude_repo_set_id}")
+
+    if not aptitude_prompts and aptitude_mode == 'upload' and getattr(job, 'aptitude_questions_file', None):
         try:
             file_path = settings.base_dir / job.aptitude_questions_file
             if file_path.exists():
@@ -462,54 +504,87 @@ async def _generate_first_level_questions(interview: Interview, job: Job, applic
     uploaded_behav: list[str] = []
 
     if interview_mode in ["upload", "mixed"]:
-        file_name = getattr(job, "uploaded_question_file", None) if job else None
-        if file_name:
-            file_path = settings.base_dir / file_name
-            if file_path.exists():
-                try:
-                    data = None
-                    for encoding in ["utf-8-sig", "latin-1"]:
-                        try:
-                            with open(file_path, "r", encoding=encoding) as f:
-                                data = json.load(f)
-                            break
-                        except (UnicodeDecodeError, json.JSONDecodeError):
-                            continue
+        # Repository source takes priority over file upload
+        technical_repo_set_id = getattr(job, 'technical_repo_set_id', None)
+        behavioural_repo_set_id = getattr(job, 'behavioural_repo_set_id', None)
+        logger.info(
+            f"[FirstLevel] interview={interview.id} mode={interview_mode!r} "
+            f"technical_repo_set_id={technical_repo_set_id} "
+            f"behavioural_repo_set_id={behavioural_repo_set_id} "
+            f"uploaded_question_file={getattr(job, 'uploaded_question_file', None)!r}"
+        )
 
-                    if data is None:
-                        raw_text = parse_content_from_path(str(file_path))
-                        if raw_text:
-                            logger.info(
-                                f"Interview {interview.id}: non-JSON question file detected; extracting via AI"
-                            )
-                            data = await extract_questions_from_text(raw_text)
+        if technical_repo_set_id:
+            repo_qs = _load_questions_from_repo_set(technical_repo_set_id, db)
+            for item in repo_qs:
+                if isinstance(item, dict) and "question" in item:
+                    q_type = str(item.get("type", "technical")).lower()
+                    if "behavioural" in q_type or "behavioral" in q_type:
+                        uploaded_behav.append(item["question"])
+                    else:
+                        uploaded_tech.append(item["question"])
+                elif isinstance(item, str):
+                    uploaded_tech.append(item)
+            logger.info(f"Interview {interview.id}: loaded {len(uploaded_tech)} tech questions from repo set {technical_repo_set_id}")
 
-                    if data and isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict) and "question" in item:
-                                q_text = item["question"]
-                                q_type = str(item.get("type", "technical")).lower()
-                                options = item.get("options", [])
-                                if options:
-                                    q_text += "\n" + "\n".join(
-                                        [f"{chr(65 + j)}) {opt}" for j, opt in enumerate(options)]
-                                    )
-                                if "behavioral" in q_type:
-                                    uploaded_behav.append(q_text)
-                                else:
-                                    uploaded_tech.append(q_text)
-                            elif isinstance(item, str):
-                                uploaded_tech.append(item)
-                except Exception as e:
-                    logger.warning(f"Interview {interview.id}: uploaded question file unreadable: {e}")
+        if behavioural_repo_set_id:
+            repo_bqs = _load_questions_from_repo_set(behavioural_repo_set_id, db)
+            for item in repo_bqs:
+                q_text = item["question"] if isinstance(item, dict) and "question" in item else str(item)
+                uploaded_behav.append(q_text)
+            logger.info(f"Interview {interview.id}: loaded {len(uploaded_behav)} behavioural questions from repo set {behavioural_repo_set_id}")
+
+        # Fall back to file upload if no repo set provided
+        if not technical_repo_set_id and not behavioural_repo_set_id:
+            logger.info(f"[FirstLevel] interview={interview.id}: no repo sets — falling back to uploaded file")
+            file_name = getattr(job, "uploaded_question_file", None) if job else None
+            if file_name:
+                file_path = settings.base_dir / file_name
+                if file_path.exists():
+                    try:
+                        data = None
+                        for encoding in ["utf-8-sig", "latin-1"]:
+                            try:
+                                with open(file_path, "r", encoding=encoding) as f:
+                                    data = json.load(f)
+                                break
+                            except (UnicodeDecodeError, json.JSONDecodeError):
+                                continue
+
+                        if data is None:
+                            raw_text = parse_content_from_path(str(file_path))
+                            if raw_text:
+                                logger.info(
+                                    f"Interview {interview.id}: non-JSON question file detected; extracting via AI"
+                                )
+                                data = await extract_questions_from_text(raw_text)
+
+                        if data and isinstance(data, list):
+                            for item in data:
+                                if isinstance(item, dict) and "question" in item:
+                                    q_text = item["question"]
+                                    q_type = str(item.get("type", "technical")).lower()
+                                    options = item.get("options", [])
+                                    if options:
+                                        q_text += "\n" + "\n".join(
+                                            [f"{chr(65 + j)}) {opt}" for j, opt in enumerate(options)]
+                                        )
+                                    if "behavioral" in q_type:
+                                        uploaded_behav.append(q_text)
+                                    else:
+                                        uploaded_tech.append(q_text)
+                                elif isinstance(item, str):
+                                    uploaded_tech.append(item)
+                    except Exception as e:
+                        logger.warning(f"Interview {interview.id}: uploaded question file unreadable: {e}")
+                else:
+                    logger.warning(
+                        f"Interview {interview.id}: uploaded question file missing at {file_path}; will use AI."
+                    )
             else:
                 logger.warning(
-                    f"Interview {interview.id}: uploaded question file missing at {file_path}; will use AI."
+                    f"Interview {interview.id}: uploaded_question_file missing for mode='{interview_mode}'; will use AI."
                 )
-        else:
-            logger.warning(
-                f"Interview {interview.id}: uploaded_question_file missing for mode='{interview_mode}'; will use AI."
-            )
 
     expected_tech = 15
     expected_behav = 5

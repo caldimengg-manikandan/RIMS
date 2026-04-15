@@ -26,7 +26,9 @@ export default function HREditJobPage({ params }: PageProps) {
     )
 
     const handleSubmit = async (formData: any) => {
+        if (!jobId) return
         setIsSubmitting(true)
+
         try {
             const actionFn = () => APIClient.put(`/api/jobs/${jobId}`, formData)
             
@@ -40,14 +42,6 @@ export default function HREditJobPage({ params }: PageProps) {
                     invalidateKeys: [`/api/jobs/${jobId}`, '/api/analytics/dashboard']
                 }
             )
-
-            // Ensure caches are refreshed before redirecting
-            try {
-                await globalMutate(`/api/jobs/${jobId}`)
-                await globalMutate(
-                    (key) => typeof key === 'string' && (key === '/api/jobs' || key.startsWith('/api/jobs?')),
-                )
-            } catch {}
 
             router.push('/dashboard/hr/jobs')
         } catch (err) {

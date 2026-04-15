@@ -55,8 +55,48 @@ class AnalyticsService:
                 "total_interviews": total_interviews,
                 "completed_interviews": completed_interviews,
                 "success_rate": round(success_rate, 2),
-                "average_score": round(float(average_score), 2)
+                "average_score": round(float(average_score), 2),
+                "offers_released": hired_count
             }
+
+            # ── Application Pipeline (Chart Data) ──
+            # Aggregate status counts for the chart
+            pipeline_query = db.query(
+                Application.status, 
+                func.count(Application.id)
+            )
+            if hr_id:
+                pipeline_query = pipeline_query.outerjoin(Job, Application.job_id == Job.id).filter(
+                    or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
+                )
+            
+            pipeline_results = pipeline_query.group_by(Application.status).all()
+            
+            # Map of internal status -> Display Name
+            status_map = {
+                'applied': 'Applied',
+                'aptitude_round': 'Aptitude',
+                'ai_interview': 'AI Interview',
+                'ai_interview_completed': 'Completed',
+                'review_later': 'Review',
+                'physical_interview': 'Physical',
+                'hired': 'Hired',
+                'rejected': 'Rejected'
+            }
+            
+            # Initialize with 0s for expected stages to keep chart consistent
+            counts = {name: 0 for name in status_map.values()}
+            for stat, count in pipeline_results:
+                display_name = status_map.get(stat, stat.replace('_', ' ').capitalize())
+                counts[display_name] = counts.get(display_name, 0) + count
+            
+            # Format for Recharts: [{ name: "Applied", value: 10 }, ...]
+            result["chart_data"] = [
+                {"name": name, "value": count} 
+                for name, count in counts.items()
+                if count > 0 or name in ["Applied", "AI Interview", "Hired"] # Keep some core stages even if 0
+            ]
+
             logger.info(f"[ANALYTICS DATA] {result}")
             return result
         except Exception as e:

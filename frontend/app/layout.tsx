@@ -6,6 +6,8 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { SWRProvider } from '@/app/dashboard/lib/swr-provider';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'),
@@ -49,16 +51,20 @@ export default function RootLayout({
                 disableTransitionOnChange
               >
                 <div className="app-shell-content flex flex-col min-h-screen flex-1" suppressHydrationWarning>
-                  <Suspense fallback={null}>
-                    <NavigationProgress />
-                  </Suspense>
-                  <header className="shrink-0 flex flex-col">
-                    <GlobalNavbar />
-                  </header>
-                  <main className="flex-1 w-full flex flex-col">
-                    {children}
-                  </main>
-                  <Toaster richColors position="top-right" />
+                  <TooltipProvider delayDuration={300}>
+                    <Suspense fallback={null}>
+                      <NavigationProgress />
+                    </Suspense>
+                    <header className="shrink-0 flex flex-col">
+                      <GlobalNavbar />
+                    </header>
+                    <main className="flex-1 w-full flex flex-col">
+                      <ErrorBoundary>
+                        {children}
+                      </ErrorBoundary>
+                    </main>
+                    <Toaster richColors position="top-right" />
+                  </TooltipProvider>
                 </div>
               </ThemeProvider>
             </AuthProvider>

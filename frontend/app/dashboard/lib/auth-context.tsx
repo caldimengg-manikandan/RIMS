@@ -132,16 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(async (email: string, password: string, full_name: string) => {
     setIsLoading(true)
     try {
-      console.log("[v0] Registering user:", { email, full_name })
-
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name }),
         credentials: 'include'
       })
-
-      console.log("[v0] Register response status:", response.status)
 
       if (!response.ok) {
         let errorMessage = 'Registration failed'
@@ -160,8 +156,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorMessage)
       }
 
-      const userData = await response.json()
-      console.log("[v0] User registered successfully, awaiting OTP verification:", userData)
       // Do not set user or token yet because they need to verify their email
     } catch (error) {
       // Don't log expected registration errors (email exists, etc.) to console
@@ -178,7 +172,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verify = useCallback(async (email: string, otp: string) => {
     setIsLoading(true)
     try {
-      console.log("[v0] Verifying OTP for:", email)
       const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

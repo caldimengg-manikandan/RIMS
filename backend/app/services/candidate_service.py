@@ -84,7 +84,9 @@ class CandidateService:
 
     def update_composite_score(self, application_id: int):
         """
-        Calculate: 40% Resume + 30% Aptitude + 30% Interview (First Level)
+        Calculate composite score based on job configuration:
+        - If aptitude enabled: 30% Resume + 20% Aptitude + 50% Interview
+        - If aptitude NOT enabled: 40% Resume + 60% Interview
         """
         application = self.db.query(Application).filter(Application.id == application_id).with_for_update().first() # Phase 3 Fix
         if not application:
@@ -97,9 +99,16 @@ class CandidateService:
         apt_score = application.aptitude_score or 0
         int_score = application.interview_score or 0 
 
+        # Check if job has aptitude enabled
+        job_aptitude_enabled = getattr(application.job, 'aptitude_enabled', False) if application.job else False
+
         # Weighted calculation
-        # Final Score = 0.4*R + 0.3*A + 0.3*I
-        final_score = (0.4 * res_score) + (0.3 * apt_score) + (0.3 * int_score)
+        if job_aptitude_enabled:
+            # Aptitude enabled: 30% Resume + 20% Aptitude + 50% Interview
+            final_score = (0.3 * res_score) + (0.2 * apt_score) + (0.5 * int_score)
+        else:
+            # Aptitude NOT enabled: redistribute to 40% Resume + 60% Interview
+            final_score = (0.4 * res_score) + (0.6 * int_score)
         
         application.composite_score = round(final_score, 2)
 
@@ -116,9 +125,22 @@ class CandidateService:
         self.db.flush()
 
     def get_ranked_candidates(self, job_id: int):
-        """Get candidates ranked by composite score for a specific job (Point 3)"""
+        """Get candidates ranked by composite score for a specific job, filtered by final decision status."""
+        from app.domain.constants import CandidateState
+        
+        # Candidates are only ranked once a definitive selection/rejection decision is made
+        final_statuses = [
+            CandidateState.HIRED.value,
+            CandidateState.REJECTED.value,
+            CandidateState.OFFER_SENT.value,
+            CandidateState.ACCEPTED.value,
+            CandidateState.ONBOARDED.value,
+            CandidateState.PENDING_APPROVAL.value
+        ]
+        
         return self.db.query(Application).filter(
-            Application.job_id == job_id
+            Application.job_id == job_id,
+            Application.status.in_(final_statuses)
         ).order_by(Application.composite_score.desc()).all()
 
     def ensure_interview_record_exists(self, application: Application) -> str:

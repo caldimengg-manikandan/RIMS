@@ -3,14 +3,16 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Edit2, ChevronRight, Activity, FileText } from 'lucide-react'
-import useSWR from 'swr'
-import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
-import { performMutation } from '@/app/dashboard/lib/swr-utils'
+import useSWR from "swr"
+import { fetcher } from "@/app/dashboard/lib/swr-fetcher"
+import { performMutation } from "@/app/dashboard/lib/swr-utils"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface Job {
     id: number
@@ -32,39 +34,56 @@ export default function HRJobsPage() {
         fetcher,
     )
     const [error, setError] = useState('')
+    const [confirmAction, setConfirmAction] = useState<{ type: 'close' | 'delete'; jobId: number; message: string } | null>(null)
 
-    const handleClose = async (jobId: number) => {
-        if (!confirm('Are you sure you want to close this job? Applications will be retained.')) return
+    const handleConfirm = async () => {
+        if (!confirmAction) return
+        const { type, jobId } = confirmAction
+        setConfirmAction(null)
 
-        await performMutation<Job[]>(
-            '/api/jobs',
-            mutate,
-            () => APIClient.put(`/api/jobs/${jobId}`, { status: 'closed' }),
-            {
-                lockKey: `job-${jobId}`,
-                optimisticData: (current) => (current || []).map(job =>
-                    job.id === jobId ? { ...job, status: 'closed' } : job
-                ),
-                successMessage: 'Job closed successfully',
-                invalidateKeys: ['/api/analytics/dashboard']
-            }
-        )
+        if (type === 'close') {
+            await performMutation<Job[]>(
+                '/api/jobs',
+                mutate,
+                () => APIClient.put(`/api/jobs/${jobId}`, { status: 'closed' }),
+                {
+                    lockKey: `job-${jobId}`,
+                    optimisticData: (current) => (current || []).map(job =>
+                        job.id === jobId ? { ...job, status: 'closed' } : job
+                    ),
+                    successMessage: 'Job closed successfully',
+                    invalidateKeys: ['/api/analytics/dashboard']
+                }
+            )
+        } else if (type === 'delete') {
+            await performMutation<Job[]>(
+                '/api/jobs',
+                mutate,
+                () => APIClient.delete(`/api/jobs/${jobId}`),
+                {
+                    lockKey: `job-${jobId}`,
+                    optimisticData: (current) => (current || []).filter(job => job.id !== jobId),
+                    successMessage: 'Job deleted successfully',
+                    invalidateKeys: ['/api/analytics/dashboard']
+                }
+            )
+        }
     }
 
-    const handleDelete = async (jobId: number) => {
-        if (!confirm('Are you sure you want to DELETE this job? All applications will be permanently removed.')) return
+    const handleClose = (jobId: number) => {
+        setConfirmAction({
+            type: 'close',
+            jobId,
+            message: 'Are you sure you want to close this job? Candidates will still be able to see their already submitted applications.'
+        })
+    }
 
-        await performMutation<Job[]>(
-            '/api/jobs',
-            mutate,
-            () => APIClient.delete(`/api/jobs/${jobId}`),
-            {
-                lockKey: `job-${jobId}`,
-                optimisticData: (current) => (current || []).filter(job => job.id !== jobId),
-                successMessage: 'Job deleted successfully',
-                invalidateKeys: ['/api/analytics/dashboard']
-            }
-        )
+    const handleDelete = (jobId: number) => {
+        setConfirmAction({
+            type: 'delete',
+            jobId,
+            message: 'Are you sure you want to PERMANENTLY DELETE this job? This action cannot be undone and will remove all associated applications.'
+        })
     }
 
     // Filter Logic
@@ -187,16 +206,29 @@ export default function HRJobsPage() {
                             <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
                                 <div>
                                     <CardTitle className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            {job.job_id && (
-                                                <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
-                                                    {job.job_id}
-                                                </span>
-                                            )}
-                                            <Link href={`/jobs/${job.job_id || job.id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                                {job.title}
-                                            </Link>
-                                        </div>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="flex items-center gap-3">
+                                                    {job.job_id && (
+                                                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
+                                                            {job.job_id}
+                                                        </span>
+                                                    )}
+                                                    <Link 
+                                                        href={`/jobs/${job.job_id || job.id}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="hover:underline" 
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {job.title}
+                                                    </Link>
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" align="start" className="bg-primary text-primary-foreground font-bold text-xs px-3 py-1.5 shadow-xl border-0 animate-in fade-in zoom-in-95 duration-200">
+                                                Click to Open Job Page
+                                            </TooltipContent>
+                                        </Tooltip>
                                     </CardTitle>
                                     <div className="flex flex-col mt-1">
                                         <CardDescription className="flex items-center gap-2 text-muted-foreground">
@@ -338,6 +370,19 @@ export default function HRJobsPage() {
                     )}
                 </div>
             )}
+
+            <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Action</DialogTitle>
+                        <DialogDescription className="pt-2">{confirmAction?.message}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="pt-4">
+                        <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleConfirm}>Confirm</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
