@@ -19,7 +19,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ~/rims
+            cd /var/www/rims
             git pull origin main
             chmod +x deploy-zero-downtime.sh
             ./deploy-zero-downtime.sh
