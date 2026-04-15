@@ -24,23 +24,34 @@ echo "Active environment is: $ACTIVE_ENV. Deploying to: $DEPLOY_ENV"
 # 2. Build and boot the new environment safely in the background
 docker compose -f docker-compose.prod.yml up -d --build frontend_$DEPLOY_ENV backend_$DEPLOY_ENV
 
-# 3. Wait for Healthchecks
+# 3. Wait for Healthchecks (Wait up to 120 seconds)
 echo "⌛ Waiting for $DEPLOY_ENV to become healthy..."
-sleep 30
+MAX_RETRIES=24
+RETRY_COUNT=0
+BACKEND_HEALTH="starting"
 
 # Try both underscore and hyphen naming conventions used by different Docker Compose versions
 CONTAINER_NAME="rims-backend_$DEPLOY_ENV-1"
-if [ -z "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+if [ -z "$(docker ps -a -q -f name=$CONTAINER_NAME)" ]; then
     CONTAINER_NAME="rims_backend_${DEPLOY_ENV}_1"
 fi
 
-BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unhealthy")
+while [ "$BACKEND_HEALTH" != "healthy" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    sleep 5
+    BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unhealthy")
+    echo "Current status: $BACKEND_HEALTH ($((RETRY_COUNT * 5))s / 120s)"
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+done
 
 if [ "$BACKEND_HEALTH" != "healthy" ]; then
-    echo "❌ DEPLOYMENT FAILED: Background health-check failed on $DEPLOY_ENV. Triggering instant rollback."
+    echo "❌ DEPLOYMENT FAILED: Background health-check failed on $DEPLOY_ENV after 120 seconds."
+    echo "Last logs:"
+    docker logs $CONTAINER_NAME | tail -n 20
     docker compose -f docker-compose.prod.yml stop frontend_$DEPLOY_ENV backend_$DEPLOY_ENV
     exit 1
 fi
+
+echo "✅ New environment $DEPLOY_ENV is healthy."
 
 echo "✅ New environment $DEPLOY_ENV is healthy."
 
