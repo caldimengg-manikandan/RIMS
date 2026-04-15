@@ -24,10 +24,17 @@ echo "Active environment is: $ACTIVE_ENV. Deploying to: $DEPLOY_ENV"
 # 2. Build and boot the new environment safely in the background
 docker compose -f docker-compose.prod.yml up -d --build frontend_$DEPLOY_ENV backend_$DEPLOY_ENV
 
-# 3. Wait for Healthchecks (Step 1 & 6: Pre-deployment & Failure Detection)
+# 3. Wait for Healthchecks
 echo "⌛ Waiting for $DEPLOY_ENV to become healthy..."
-sleep 15
-BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' rims_backend_${DEPLOY_ENV}_1 2>/dev/null || echo "unhealthy")
+sleep 30
+
+# Try both underscore and hyphen naming conventions used by different Docker Compose versions
+CONTAINER_NAME="rims-backend_$DEPLOY_ENV-1"
+if [ -z "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+    CONTAINER_NAME="rims_backend_${DEPLOY_ENV}_1"
+fi
+
+BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unhealthy")
 
 if [ "$BACKEND_HEALTH" != "healthy" ]; then
     echo "❌ DEPLOYMENT FAILED: Background health-check failed on $DEPLOY_ENV. Triggering instant rollback."
