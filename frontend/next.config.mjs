@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  basePath: '/calrims',
+  basePath: '/calrims', // Uncomment for production deployment
   devIndicators: {
     appIsrStatus: false,
     buildActivity: false,
