@@ -4,8 +4,7 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "9999:80" # Map host 9999 to container 80 (Avoids system port 80 conflict)
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
