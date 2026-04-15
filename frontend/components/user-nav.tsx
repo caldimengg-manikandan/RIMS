@@ -19,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
-import { LogOut, User as UserIcon, Settings } from 'lucide-react'
+import { LogOut, User as UserIcon, Settings, GitFork } from 'lucide-react'
 
 export function UserNav() {
     const { user, logout } = useAuth()
@@ -85,6 +85,10 @@ export function UserNav() {
                     <DropdownMenuItem className="cursor-pointer py-2.5 focus:bg-accent/40" onClick={() => router.push('/dashboard/settings')}>
                         <Settings className="mr-3 h-4 w-4 text-muted-foreground" />
                         <span>Settings</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer py-2.5 focus:bg-accent/40" onClick={() => router.push('/dashboard/repository')}>
+                        <GitFork className="mr-3 h-4 w-4 text-muted-foreground" />
+                        <span>Repository</span>
                     </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator className="opacity-50" />

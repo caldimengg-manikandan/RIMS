@@ -41,7 +41,7 @@ from sqlalchemy.exc import IntegrityError
 import re
 import hashlib
 
-from typing import Optional, List
+from typing import Optional, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ async def apply_for_job(
     candidate_email: Optional[str] = Form(None),
     candidate_phone: Optional[str] = Form(None),
     resume_file: UploadFile = File(...),
-    photo_file: UploadFile = File(...),
+    photo_file: Optional[UploadFile] = File(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
@@ -445,7 +445,7 @@ async def apply_for_job(
     
     # 4. Resume Validation
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-    ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
+    ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc"}
     
     from app.core.resume_upload_utils import (
         generate_hashed_resume_filename,
@@ -457,7 +457,7 @@ async def apply_for_job(
     if resume_ext not in ALLOWED_RESUME_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid resume file type. Only .pdf and .docx are allowed.",
+            detail="Invalid resume file type. Only .pdf, .docx, and .doc are allowed.",
         )
     content = await resume_file.read()
     if not content:
@@ -473,13 +473,17 @@ async def apply_for_job(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid resume content.")
 
     # 5. Photo Validation
-    if not photo_file:
+    is_batch = candidate_email and "@batch.local" in candidate_email
+    if not photo_file and not is_batch:
         raise HTTPException(status_code=400, detail="Candidate photo is required.")
-    photo_content = await photo_file.read()
-    if not photo_content:
-        raise HTTPException(status_code=400, detail="Candidate photo is empty.")
-    if len(photo_content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Photo too large. Maximum size is 5MB.")
+    
+    photo_content = None
+    if photo_file:
+        photo_content = await photo_file.read()
+        if not photo_content:
+            raise HTTPException(status_code=400, detail="Candidate photo is empty.")
+        if len(photo_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Photo too large. Maximum size is 5MB.")
 
     # 6. Database Entry (Atomic Transaction)
     # We flush first to get the ID, then upload to storage using that ID as a prefix.
@@ -524,12 +528,13 @@ async def apply_for_job(
         new_application.resume_file_path = returned_resume_path
 
         # Upload Photo to Supabase
-        photo_ext = os.path.splitext(photo_file.filename)[1] if photo_file.filename else ".jpg"
-        photo_storage_path = f"{new_application.id}/photo_initial{photo_ext}"
-        returned_photo_path = upload_file(settings.supabase_bucket_id_photos, photo_storage_path, photo_content, content_type=photo_file.content_type)
-        if not returned_photo_path:
-            raise Exception("Candidate photo storage upload failed")
-        new_application.candidate_photo_path = returned_photo_path
+        if photo_content:
+            photo_ext = os.path.splitext(photo_file.filename)[1] if photo_file.filename else ".jpg"
+            photo_storage_path = f"{new_application.id}/photo_initial{photo_ext}"
+            returned_photo_path = upload_file(settings.supabase_bucket_id_photos, photo_storage_path, photo_content, content_type=photo_file.content_type)
+            if not returned_photo_path:
+                raise Exception("Candidate photo storage upload failed")
+            new_application.candidate_photo_path = returned_photo_path
 
         # Create HR Notification
         from app.domain.models import Notification
@@ -572,7 +577,8 @@ async def apply_for_job(
                 delete_file(settings.supabase_bucket_resumes, resume_storage_path)
             if photo_storage_path and new_application.candidate_photo_path:
                 delete_file(settings.supabase_bucket_id_photos, photo_storage_path)
-        except: pass
+        except Exception as e:
+            logger.warning(f"Failed to clean up files for application: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit application securely.")
 
     background_tasks.add_task(
@@ -1029,12 +1035,14 @@ def get_hr_applications(
             try:
                 sd = datetime.strptime(from_date, "%Y-%m-%d").date()
                 query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) >= sd)
-            except ValueError: pass
+            except ValueError:
+                logger.warning(f"Invalid from_date format: {from_date}")
         if to_date:
             try:
                 ed = datetime.strptime(to_date, "%Y-%m-%d").date()
                 query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) <= ed)
-            except ValueError: pass
+            except ValueError:
+                logger.warning(f"Invalid to_date format: {to_date}")
 
         # 3. Security
         # Apply visibility isolation: Anyone not a super_admin is restricted to their own apps

@@ -149,12 +149,14 @@ def _validate_interview_pipeline(job_data, experience_level: str):
     if interview_mode == "ai":
         uploaded_question_file = None
 
-    # Rule 5: If mode is upload or mixed, file is required
-    if (interview_mode == "upload" or interview_mode == "mixed") and not uploaded_question_file:
-        raise HTTPException(
-            status_code=400,
-            detail=f"When interview mode is '{interview_mode}', a question file must be uploaded first."
-        )
+    # Rule 5: If mode is upload or mixed, file OR repo_set_id is required
+    if interview_mode == "upload" or interview_mode == "mixed":
+        technical_repo_set_id = getattr(job_data, 'technical_repo_set_id', None)
+        if not uploaded_question_file and not technical_repo_set_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"When interview mode is '{interview_mode}', either upload a question file or select a repository set."
+            )
 
     return {
         "aptitude_enabled": aptitude_enabled,
@@ -166,6 +168,9 @@ def _validate_interview_pipeline(job_data, experience_level: str):
         "aptitude_mode": getattr(job_data, 'aptitude_mode', "ai"),
         "behavioral_role": getattr(job_data, 'behavioral_role', "general"),
         "duration_minutes": getattr(job_data, 'duration_minutes', 60) or 60,
+        "aptitude_repo_set_id": getattr(job_data, 'aptitude_repo_set_id', None),
+        "technical_repo_set_id": getattr(job_data, 'technical_repo_set_id', None),
+        "behavioural_repo_set_id": getattr(job_data, 'behavioural_repo_set_id', None),
     }
 
 
@@ -434,12 +439,31 @@ def create_job(
         aptitude_config=pipeline["aptitude_config"],
         aptitude_questions_file=pipeline["aptitude_questions_file"],
         duration_minutes=pipeline["duration_minutes"],
+        # Repository question sets
+        aptitude_repo_set_id=pipeline.get("aptitude_repo_set_id"),
+        technical_repo_set_id=pipeline.get("technical_repo_set_id"),
+        behavioural_repo_set_id=pipeline.get("behavioural_repo_set_id"),
     )
     
     try:
         db.add(new_job)
         db.commit()
         db.refresh(new_job)
+
+        log_json(
+            logger,
+            "job_created",
+            level="info",
+            extra={
+                "job_id": new_job.id,
+                "title": new_job.title,
+                "interview_mode": new_job.interview_mode,
+                "aptitude_repo_set_id": new_job.aptitude_repo_set_id,
+                "technical_repo_set_id": new_job.technical_repo_set_id,
+                "behavioural_repo_set_id": new_job.behavioural_repo_set_id,
+                "uploaded_question_file": new_job.uploaded_question_file,
+            },
+        )
         
         # ── Phase 6: Critical Audit Logging ──
         from app.services.candidate_service import CandidateService

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import {
   History,
   AlertCircle,
@@ -129,7 +130,7 @@ export default function HRApplicationsPage() {
       setMagicSearchTotal(resp.metadata?.total || 0);
     } catch (err) {
       console.error("Magic Search error", err);
-      alert("Magic Search failed. Falling back to keyword search.");
+      toast.error("Magic Search failed. Falling back to keyword search.");
     } finally {
       setIsMagicLoading(false);
     }
@@ -169,10 +170,6 @@ export default function HRApplicationsPage() {
 
   const swrApplications = paginatedData?.items ?? [];
   
-  // Explicit diagnostic trace for debugging (Phase 3)
-  if (typeof window !== 'undefined') {
-      console.log("Applications API Trace:", paginatedData);
-  }
   const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
   const totalCount = isMagicSearch ? magicSearchTotal : (paginatedData?.total || 0);
   const isLoading = isSwrLoading || isMagicLoading;
@@ -578,7 +575,9 @@ export default function HRApplicationsPage() {
                               </Badge>
                             ));
                           }
-                        } catch (e) {}
+                        } catch (e) {
+                          // Invalid JSON in extracted_skills, show no skills
+                        }
                         return null;
                       })()}
                     </div>

@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import {
   Zap, Mail, Lock, User, Check, ArrowRight,
-  Loader2, Brain, Cpu, Globe
+  Loader2, Brain, Cpu, Globe, LucideIcon
 } from 'lucide-react'
 import { cn } from '@/app/dashboard/lib/utils'
 
@@ -201,7 +201,7 @@ export default function RegisterPage() {
               <InputField
                 id="fullName" label="Full Name" type="text"
                 placeholder="Eleanor Shellstrop" value={fullName}
-                onChange={(e: any) => setFullName(e.target.value)}
+                onChange={(e) => setFullName(e.target.value)}
                 icon={User} disabled={isSubmitting}
               />
             </motion.div>
@@ -210,7 +210,7 @@ export default function RegisterPage() {
               <InputField
                 id="email" label="Work Email" type="email"
                 placeholder="eleanor@company.com" value={email}
-                onChange={(e: any) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 icon={Mail} disabled={isSubmitting}
               />
             </motion.div>
@@ -220,14 +220,14 @@ export default function RegisterPage() {
                 <InputField
                   id="password" label="Password" type="password"
                   placeholder="••••••••" value={password}
-                  onChange={(e: any) => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   icon={Lock} disabled={isSubmitting}
                   autoComplete="new-password"
                 />
                 <InputField
                   id="confirmPassword" label="Confirm Password" type="password"
                   placeholder="••••••••" value={confirmPassword}
-                  onChange={(e: any) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   icon={Check} disabled={isSubmitting}
                   autoComplete="new-password"
                 />
@@ -339,7 +339,7 @@ function InputField({ id, label, type, placeholder, value, onChange, icon: Icon,
   placeholder: string,
   value: string,
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
-  icon: any,
+  icon: LucideIcon,
   disabled: boolean,
   autoComplete?: string
 }) {

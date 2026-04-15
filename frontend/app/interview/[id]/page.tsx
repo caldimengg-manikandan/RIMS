@@ -20,6 +20,7 @@ import {
     ShieldCheck
 } from 'lucide-react'
 import { IssueReportDialog, FeedbackDialog } from '@/components/interview-support'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Question {
     id: number
@@ -72,6 +73,7 @@ export default function InterviewPage() {
     const [sectionMessage, setSectionMessage] = useState<string | null>(null)
     const [lastSection, setLastSection] = useState<string | null>(null)
     const [isFullscreen, setIsFullscreen] = useState(false)
+    const [confirmEndInterview, setConfirmEndInterview] = useState<{ unansweredCount: number; isForced: boolean } | null>(null)
 
     // Refs to always have live values inside event listeners (avoid stale closures)
     const warningsRef = useRef(0)
@@ -192,7 +194,7 @@ export default function InterviewPage() {
             setIsListening(true)
         } catch (err) {
             console.error("Mic access failed", err)
-            alert("Could not access microphone. Please check permissions.")
+            toast.error("Could not access microphone. Please check permissions.")
         }
     }
 
@@ -234,7 +236,7 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Transcription failed", err)
             const detail = err.message || "Please check your microphone and internet connection.";
-            alert(`Voice transcription failed: ${detail}. You can still type your answer manually.`)
+            toast.error(`Voice transcription failed: ${detail}. You can still type your answer manually.`)
         } finally {
             setIsTranscribing(false)
             transcribeInFlightRef.current = false
@@ -243,7 +245,6 @@ export default function InterviewPage() {
 
     const initOverallRecording = async () => {
         if (overallMediaRecorderRef.current || streamRef.current) {
-            console.log("Recording or stream already active, skipping initialization.")
             return
         }
 
@@ -430,7 +431,7 @@ export default function InterviewPage() {
                     )
                     setInterviewStatus('completed')
                     setShowIssueDialog(true)
-                    alert("Session Terminated: Multiple proctoring violations detected (tab switching or losing focus).")
+                    toast.error("Session Terminated: Multiple proctoring violations detected (tab switching or losing focus).")
                 } catch (error) {
                     console.log("Failed to end interview", error)
                     interviewStatusRef.current = 'active'
@@ -505,7 +506,6 @@ export default function InterviewPage() {
                 }
             } else {
                 toast.error(`Tab switch detected! Warning #${newWarnings}/3.`, { duration: 5000 })
-                alert(`Warning ${newWarnings}/3: Tab switching is tracked. Reaching the limit will end your session.`)
             }
         }
 
@@ -578,7 +578,6 @@ export default function InterviewPage() {
                 interviewStatusRef.current === 'active' &&
                 !finishingInterviewRef.current
             ) {
-                console.log("Time is up! Auto-finishing interview.")
                 interviewStatusRef.current = 'finishing'
                 void finishInterview()
             }
@@ -630,7 +629,6 @@ export default function InterviewPage() {
 
     const loadData = async () => {
         try {
-            console.log('interview_token:', localStorage.getItem('interview_token'))
             setIsLoading(true)
             const [data, qs] = await Promise.all([
                 APIClient.get<any>(`/api/interviews/${interviewId}/stage`),
@@ -651,11 +649,11 @@ export default function InterviewPage() {
                 questionsPrepAttemptsRef.current += 1
                 if (questionsPrepAttemptsRef.current > 120) {
                     questionsPrepAttemptsRef.current = 0
-                    alert(
+                    toast.error(
                         'Interview questions are still not ready after several minutes. The background task may have failed — please refresh the page or contact support.'
                     )
                 }
-                console.log("Interview data is still being prepared, retrying in 3 seconds...")
+                
                 setInterviewStatus('preparing')
                 setIsLoading(false)
                 if (loadRetryTimeoutRef.current) clearTimeout(loadRetryTimeoutRef.current)
@@ -706,7 +704,6 @@ export default function InterviewPage() {
                 errorMsg.includes('denied');
 
             if (isAuthError) {
-                console.log("Authentication issue detected. Clearing session and redirecting...");
                 try {
                     const guardKey = `interview_reauth_attempted_${interviewId}`
                     const alreadyAttempted = sessionStorage.getItem(guardKey)
@@ -716,7 +713,9 @@ export default function InterviewPage() {
                         return
                     }
                     sessionStorage.setItem(guardKey, '1')
-                } catch {}
+                } catch (e) {
+                    // sessionStorage not available, continue anyway
+                }
 
                 localStorage.removeItem('interview_token')
                 router.push('/interview/access')
@@ -764,7 +763,7 @@ export default function InterviewPage() {
             if (err.message === "MEDIA_PERMISSION_DENIED") {
                 setMediaError(true)
             } else if (err.message) {
-                alert("Operation failed: " + err.message)
+                toast.error("Operation failed: " + err.message)
             }
         } finally {
             setIsLoading(false)
@@ -818,7 +817,7 @@ export default function InterviewPage() {
             }
 
             if (res.terminated) {
-                alert(res.message || "This interview session has been terminated.");
+                toast.error(res.message || "This interview session has been terminated.");
                 setInterviewStatus('completed');
                 return;
             }
@@ -889,7 +888,7 @@ export default function InterviewPage() {
                             await loadData()
                         } catch (err: any) {
                             console.error("Transition error", err)
-                            alert("Failed to transition from aptitude round. Please refresh.")
+                            toast.error("Failed to transition from aptitude round. Please refresh.")
                         }
                     } else {
                         finishInterview(updatedQuestions)
@@ -902,10 +901,10 @@ export default function InterviewPage() {
             
             // Handle common error states with UI feedback
             if (errorMsg.includes("403") || errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
-                alert(`Session Error: ${errorMsg}. Redirecting to access page.`);
+                toast.error(`Session Error: ${errorMsg}. Redirecting to access page.`);
                 router.push('/interview/access');
             } else {
-                alert(`${errorMsg}\n\nPlease check your internet connection and try again.`);
+                toast.error(`${errorMsg}\n\nPlease check your internet connection and try again.`);
             }
         } finally {
             setIsSubmitting(false)
@@ -932,7 +931,13 @@ export default function InterviewPage() {
             ? `You have ${unansweredCount} unanswered question(s). Are you sure you want to end the interview now? Your answered questions will be submitted.`
             : `Are you sure you want to end and submit your interview?`
 
-        if (!confirm(confirmMsg)) return
+        setConfirmEndInterview({ unansweredCount, isForced })
+    }
+
+    const handleConfirmEndInterview = async () => {
+        if (!confirmEndInterview) return
+        const { unansweredCount, isForced } = confirmEndInterview
+        setConfirmEndInterview(null)
 
         finishingInterviewRef.current = true
         interviewStatusRef.current = 'finishing'
@@ -953,11 +958,12 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Error finishing interview", err)
             interviewStatusRef.current = 'active'
-            alert(err.message || "Failed to complete interview. Please try again.")
+            toast.error(err.message || "Failed to complete interview. Please try again.")
         } finally {
             setIsSubmitting(false)
             finishingInterviewRef.current = false
         }
+    }
     }
 
     if (interviewStatus === 'preparing') {
@@ -1143,7 +1149,15 @@ export default function InterviewPage() {
         )
     }
 
-    const options = currentQuestion?.question_options ? JSON.parse(currentQuestion.question_options) : []
+    const parseOptions = () => {
+      if (!currentQuestion?.question_options) return [];
+      try {
+        return JSON.parse(currentQuestion.question_options);
+      } catch {
+        return [];
+      }
+    };
+    const options = parseOptions();
     const isAptitude = currentQuestion?.question_type === 'aptitude'
 
     const questionNavButtonClass = (q: Question, isActive: boolean) => {
@@ -1343,7 +1357,7 @@ export default function InterviewPage() {
                                             await document.documentElement.requestFullscreen()
                                         }
                                     } catch (e) {
-                                        alert("Please enable fullscreen manually to continue (F11 or Browser menu).")
+                                        toast.error("Please enable fullscreen manually to continue (F11 or Browser menu).")
                                     }
                                 }}
                             >
@@ -1614,6 +1628,22 @@ export default function InterviewPage() {
                 onOpenChange={setShowFeedbackDialog}
                 interviewId={interviewId}
             />
+            <Dialog open={!!confirmEndInterview} onOpenChange={() => setConfirmEndInterview(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Interview End</DialogTitle>
+                        <DialogDescription>
+                            {confirmEndInterview?.unansweredCount && confirmEndInterview.unansweredCount > 0
+                                ? `You have ${confirmEndInterview.unansweredCount} unanswered question(s). Are you sure you want to end the interview now? Your answered questions will be submitted.`
+                                : 'Are you sure you want to end and submit your interview?'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmEndInterview(null)}>Cancel</Button>
+                        <Button onClick={handleConfirmEndInterview}>End Interview</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

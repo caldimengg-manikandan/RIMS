@@ -42,11 +42,40 @@ import {
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
 
+interface OnboardingCandidate {
+    id: number
+    candidate_name: string
+    candidate_email: string
+    job?: { title?: string }
+    status: string
+    joining_date?: string
+    offer_sent?: boolean
+    offer_response_status?: string
+    offer_email_status?: string
+    offer_token_expiry?: string
+    candidate_photo_path?: string
+    id_card_url?: string
+    onboarding_approval_status?: string
+}
+
+interface OnboardingResponse {
+    items: OnboardingCandidate[]
+    total: number
+}
+
+interface OfferPreviewResponse {
+    html: string
+}
+
+interface GenerateIDResponse {
+    employee_id: string
+}
+
 export default function OnboardingPage() {
     const { user } = useAuth()
     const router = useRouter()
     const { toast } = useToast()
-    const { data: resp, isLoading, mutate } = useSWR<any>('/api/onboarding/candidates', fetcher)
+    const { data: resp, isLoading, mutate } = useSWR<OnboardingResponse>('/api/onboarding/candidates', fetcher)
     const candidates = resp?.items || []
     const totalCount = resp?.total || 0
     const [search, setSearch] = useState('')
@@ -67,14 +96,14 @@ export default function OnboardingPage() {
         c.candidate_email.toLowerCase().includes(search.toLowerCase())
     )
 
-    const [approvingCandidate, setApprovingCandidate] = useState<any>(null)
+    const [approvingCandidate, setApprovingCandidate] = useState<OnboardingCandidate | null>(null)
     const [isApproveOpen, setIsApproveOpen] = useState(false)
     const [isCaptureOpen, setIsCaptureOpen] = useState(false)
     const [activeCaptureId, setActiveCaptureId] = useState<number | null>(null)
     const [previewHtml, setPreviewHtml] = useState<string | null>(null)
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
-    const handleApprove = async (candidate: any) => {
+    const handleApprove = async (candidate: OnboardingCandidate) => {
         try {
             await APIClient.post(`/api/onboarding/applications/${candidate.id}/approve-offer`, {})
             toast({ title: "Approved", description: "Offer letter approved and sent to candidate" })
@@ -93,8 +122,9 @@ export default function OnboardingPage() {
             // After successful join, automatically open the capture photo dialog
             setActiveCaptureId(id)
             setIsCaptureOpen(true)
-        } catch (error: any) {
-            toast({ title: "Error", description: error?.response?.data?.error || "Failed to complete onboarding. Candidate's joining date may not have arrived yet.", variant: "destructive" })
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { error?: string } } }
+            toast({ title: "Error", description: err?.response?.data?.error || "Failed to complete onboarding. Candidate's joining date may not have arrived yet.", variant: "destructive" })
         }
     }
 

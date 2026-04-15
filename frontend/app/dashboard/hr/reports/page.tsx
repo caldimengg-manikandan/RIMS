@@ -169,11 +169,9 @@ function getRecommendationColor(score: number) {
 
 export default function ReportsPage() {
   const { data: rawReportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], count: number, failed?: number }>('/api/analytics/reports', (url: string) => fetcher<{ reports: Report[], count: number, failed?: number }>(url))
-  console.log("DIAGNOSTIC - API RESPONSE:", rawReportsResponse);
   const rawReports = Array.isArray(rawReportsResponse)
     ? rawReportsResponse
     : (rawReportsResponse?.reports || []);
-  console.log("DIAGNOSTIC - rawReports:", rawReports);
   const searchParams = useSearchParams()
   const urlReportId = searchParams.get('reportId')
   const urlSearch = searchParams.get('search')

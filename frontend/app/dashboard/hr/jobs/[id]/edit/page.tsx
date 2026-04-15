@@ -133,7 +133,7 @@ export default function HREditJobPage({ params }: PageProps) {
                 location: job.location || '',
                 status: job.status,
                 primary_evaluated_skills: typeof job.primary_evaluated_skills === 'string'
-                    ? JSON.parse(job.primary_evaluated_skills)
+                    ? (() => { try { return JSON.parse(job.primary_evaluated_skills); } catch { return []; } })()
                     : (job.primary_evaluated_skills || []),
                 duration_minutes: job.duration_minutes || 60,
                 aptitude_enabled: job.aptitude_enabled || false,

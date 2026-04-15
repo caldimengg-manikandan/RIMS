@@ -29,7 +29,6 @@ export function useApplicationsMutate() {
     )
 
     await Promise.all(promises)
-    console.log(`[Revalidation Guard] Invalidated ${keysToInvalidate.length} keys for App ${appId || 'ALL'}`)
   }, [mutate])
 
   return { invalidateApplications }

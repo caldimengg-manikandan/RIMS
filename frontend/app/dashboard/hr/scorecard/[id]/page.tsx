@@ -20,19 +20,56 @@ import {
     Star,
     CheckCircle2,
     XCircle,
-    Info
+    Info,
+    LucideIcon
 } from 'lucide-react'
+
+interface PipelineStage {
+    id: number
+    stage_name: string
+    stage_status: string
+    score?: number
+}
+
+interface InterviewReport {
+    communication_score?: number
+    strengths?: string
+    weaknesses?: string
+    status?: string
+}
+
+interface ApplicationScorecard {
+    candidate_name: string
+    candidate_email: string
+    job: { title: string }
+    recommendation?: string
+    composite_score?: number
+    resume_score?: number
+    aptitude_score?: number
+    interview_score?: number
+    candidate_photo_path?: string
+    hr_notes?: string
+    pipeline_stages?: PipelineStage[]
+    interview?: { id: number; status: string }
+}
+
+interface ScoreItemProps {
+    label: string
+    score: number
+    icon: LucideIcon
+    colorClass?: string
+}
 
 export default function CandidateScorecardPage() {
     const params = useParams()
     const applicationId = params.id as string
 
-    const { data: application, isLoading: appLoading } = useSWR<any>(`/api/applications/${applicationId}`, (url: string) => fetcher<any>(url))
+    const { data: application, isLoading: appLoading } = useSWR<ApplicationScorecard>(`/api/applications/${applicationId}`, (url: string) => fetcher<ApplicationScorecard>(url))
     
     // We can also fetch report for more details
-    const { data: report, isLoading: reportLoading } = useSWR(
+    const { data: report, isLoading: reportLoading } = useSWR<InterviewReport>(
         application?.interview?.status === 'completed' ? `/api/interviews/${application.interview.id}/report` : null,
-        (url: string) => fetcher<any>(url)
+        (url: string) => fetcher<InterviewReport>(url)
     )
 
     if (appLoading) return <div className="p-12 text-center text-muted-foreground animate-pulse">Loading Scorecard...</div>
@@ -48,7 +85,7 @@ export default function CandidateScorecardPage() {
         }
     }
 
-    const ScoreItem = ({ label, score, icon: Icon, colorClass = "text-primary" }: any) => (
+    const ScoreItem = ({ label, score, icon: Icon, colorClass = "text-primary" }: ScoreItemProps) => (
         <div className="space-y-2">
             <div className="flex justify-between items-center text-sm">
                 <div className="flex items-center gap-2 font-medium">
@@ -180,7 +217,7 @@ export default function CandidateScorecardPage() {
                             <CardTitle className="text-lg">Pipeline Status</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {application.pipeline_stages?.map((stage: any, idx: number) => (
+                            {application.pipeline_stages?.map((stage: PipelineStage, idx: number) => (
                                 <div key={stage.id} className="flex items-start gap-3">
                                     <div className={`mt-1 h-3 w-3 rounded-full shrink-0 ${
                                         stage.stage_status === 'pass' ? 'bg-emerald-500' : 

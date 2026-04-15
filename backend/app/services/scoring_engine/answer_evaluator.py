@@ -11,9 +11,7 @@ class AnswerEvaluator:
     
     def __init__(self, session_id: str):
         self.session_id = session_id
-        # We assume Groq or OpenAI API key is in the env vars.
-        # RIMS currently uses Groq according to the .env file.
-        self.api_key = os.getenv("GROQ_API_KEY", "dummy_key_if_none")
+        self.api_key = os.getenv("GROQ_API_KEY", "")
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
 
     def evaluate(self, question_text: str, candidate_answer: str, context: str = "") -> dict:

@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { SWRProvider } from '@/app/dashboard/lib/swr-provider';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'),
@@ -56,7 +57,9 @@ export default function RootLayout({
                     <GlobalNavbar />
                   </header>
                   <main className="flex-1 w-full flex flex-col">
-                    {children}
+                    <ErrorBoundary>
+                      {children}
+                    </ErrorBoundary>
                   </main>
                   <Toaster richColors position="top-right" />
                 </div>

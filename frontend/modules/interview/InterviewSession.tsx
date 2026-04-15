@@ -98,8 +98,12 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
     };
 
     ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log('WS Message received:', data);
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
 
       switch (data.type) {
         case 'question':

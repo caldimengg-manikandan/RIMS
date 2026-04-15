@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Zap, Mail, Lock, ArrowRight, Loader2, Sparkles, Brain, Cpu, Globe, ShieldCheck, CheckCircle2, Eye, EyeOff } from 'lucide-react'
+import { Zap, Mail, Lock, ArrowRight, Loader2, Sparkles, Brain, Cpu, Globe, ShieldCheck, CheckCircle2, Eye, EyeOff, LucideIcon } from 'lucide-react'
 import { cn } from '@/app/dashboard/lib/utils'
 import { getSessionData } from '@/lib/session-store'
 
@@ -208,7 +208,7 @@ function LoginContent() {
               <InputField
                 id="email" label="Email Address" type="email"
                 placeholder="name@company.com" value={email}
-                onChange={(e: any) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 icon={Mail} disabled={isSubmitting}
               />
             </motion.div>
@@ -310,7 +310,7 @@ function InputField({ id, label, type, placeholder, value, onChange, icon: Icon,
   placeholder: string,
   value: string,
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
-  icon: any,
+  icon: LucideIcon,
   disabled: boolean
 }) {
   return (

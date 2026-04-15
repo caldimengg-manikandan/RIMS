@@ -75,7 +75,6 @@ export class APIClient {
       clearTimeout(id)
       const isTimeout = err.name === 'AbortError'
       if (retries < this.MAX_RETRIES && (isTimeout || !window.navigator.onLine)) {
-        console.warn(`Retrying fetch (${retries + 1}/${this.MAX_RETRIES})...`)
         // Exponential backoff
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
         return this.fetchWithRetry(url, options, retries + 1)
@@ -170,12 +169,10 @@ export class APIClient {
     const error = isStandardFormat ? result.error : (result.detail || result.error || response.statusText)
 
     if (!success) {
-      console.warn("API Failure:", { status: response.status, error, data })
-      
       const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown API error')
 
       if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
-        toast.error(errorMessage)
+        toast.error(`Error ${response.status}: ${errorMessage}`)
       }
 
       if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {

@@ -3,14 +3,15 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Edit2, ChevronRight, Activity, FileText } from 'lucide-react'
-import useSWR from 'swr'
-import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
-import { performMutation } from '@/app/dashboard/lib/swr-utils'
+import useSWR from "swr"
+import { fetcher } from "@/app/dashboard/lib/swr-fetcher"
+import { performMutation } from "@/app/dashboard/lib/swr-utils"
 
 interface Job {
     id: number
@@ -32,6 +33,7 @@ export default function HRJobsPage() {
         fetcher,
     )
     const [error, setError] = useState('')
+    const [confirmAction, setConfirmAction] = useState<{ type: 'close' | 'delete'; jobId: number; message: string } | null>(null)
 
     const handleClose = async (jobId: number) => {
         if (!confirm('Are you sure you want to close this job? Applications will be retained.')) return
@@ -338,6 +340,19 @@ export default function HRJobsPage() {
                     )}
                 </div>
             )}
+
+            <Dialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Action</DialogTitle>
+                        <DialogDescription>{confirmAction?.message}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleConfirm}>Confirm</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

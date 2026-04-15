@@ -80,6 +80,10 @@ _REQUIRED_COLUMNS = [
     ("interviews", "termination_reason", "VARCHAR(100)"),
     ("interviews", "report_generated", "BOOLEAN DEFAULT FALSE"),
     ("interviews", "candidate_id", "INTEGER REFERENCES users(id)"),
+    # Repository question set FK columns on jobs — plain INTEGER first, FK added after table exists
+    ("jobs", "aptitude_repo_set_id", "INTEGER"),
+    ("jobs", "technical_repo_set_id", "INTEGER"),
+    ("jobs", "behavioural_repo_set_id", "INTEGER"),
 ]
 
 
@@ -121,6 +125,31 @@ def update_role_constraint(conn):
 
 def run_startup_migrations(engine: Engine):
     """Check for missing columns and add them safely using PostgreSQL-friendly DDL."""
+    inspector = inspect(engine)
+
+    # 0. Create question_sets table FIRST — must exist before FK columns on jobs are added
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS question_sets (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    round_type VARCHAR(50) NOT NULL,
+                    job_roles TEXT,
+                    questions TEXT NOT NULL DEFAULT '[]',
+                    topic_tags TEXT,
+                    hr_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info("Ensured question_sets table exists")
+        except Exception as e:
+            _safe_rollback(conn)
+            logger.warning(f"Failed to create question_sets table: {e}")
+
+    # Refresh inspector after table creation
     inspector = inspect(engine)
 
     # 1. Ensure columns exist first
@@ -207,6 +236,8 @@ def run_startup_migrations(engine: Engine):
         except Exception as e:
             _safe_rollback(conn)
             logger.warning(f"Failed to create global_settings table: {e}")
+
+        # 1e. (question_sets table is created in step 0 above)
 
     # 2. Update Role Constraints
     with engine.connect() as conn:

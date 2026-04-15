@@ -19,11 +19,122 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSWRConfig } from 'swr'
 import { performMutation } from '@/app/dashboard/lib/swr-utils'
-import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft, CheckCircle2, BookOpen } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/config'
 import { toast } from 'sonner'
 
 const MAX_QUESTION_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+
+// ── Repository types ──────────────────────────────────────────────────────────
+interface RepoSet {
+    id: number
+    title: string
+    round_type: string
+    job_roles: string[]
+    question_count: number
+    topic_tags: string[]
+}
+
+// ── Repo picker sub-component ─────────────────────────────────────────────────
+function RepoPicker({
+    roundType,
+    jobTitle,
+    selectedId,
+    onSelect,
+}: {
+    roundType: 'aptitude' | 'technical' | 'behavioural'
+    jobTitle: string
+    selectedId: number | null
+    onSelect: (id: number | null, set: RepoSet | null) => void
+}) {
+    const [sets, setSets] = useState<RepoSet[]>([])
+    const [loading, setLoading] = useState(false)
+    const [selectedSet, setSelectedSet] = useState<RepoSet | null>(null)
+
+    useEffect(() => {
+        const fetchSets = async () => {
+            setLoading(true)
+            try {
+                const params = new URLSearchParams({ round_type: roundType })
+                if (jobTitle.trim()) params.set('job_role', jobTitle.trim())
+                const data = await APIClient.get<RepoSet[]>(`/api/repository/sets?${params}`)
+                setSets(Array.isArray(data) ? data : [])
+            } catch {
+                setSets([])
+            } finally {
+                setLoading(false)
+            }
+        }
+        // Debounce: wait 400ms after jobTitle stops changing before fetching
+        const timer = setTimeout(fetchSets, jobTitle ? 400 : 0)
+        return () => clearTimeout(timer)
+    }, [roundType, jobTitle])
+
+    useEffect(() => {
+        if (selectedId) {
+            const found = sets.find(s => s.id === selectedId) || null
+            setSelectedSet(found)
+        } else {
+            setSelectedSet(null)
+        }
+    }, [selectedId, sets])
+
+    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const id = e.target.value ? parseInt(e.target.value) : null
+        const set = id ? sets.find(s => s.id === id) || null : null
+        setSelectedSet(set)
+        onSelect(id, set)
+    }
+
+    return (
+        <div className="space-y-2 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {loading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading repository sets…
+                </div>
+            ) : sets.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                    No matching sets found in the repository for this role. Add sets via the Repository page first.
+                </p>
+            ) : (
+                <>
+                    <select
+                        className="w-full h-10 px-3 border-2 border-input rounded-lg focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary bg-background text-foreground text-sm transition-all"
+                        value={selectedId ?? ''}
+                        onChange={handleChange}
+                    >
+                        <option value="">— Select a question set —</option>
+                        {sets.map(s => (
+                            <option key={s.id} value={s.id}>
+                                {s.title} ({s.question_count} questions)
+                            </option>
+                        ))}
+                    </select>
+
+                    {selectedSet && selectedSet.topic_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                            {selectedSet.topic_tags.map((tag, i) => (
+                                <span
+                                    key={i}
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20"
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {selectedSet && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                            <BookOpen className="h-3 w-3 shrink-0" />
+                            Questions will be pulled from the selected set. No file upload needed.
+                        </p>
+                    )}
+                </>
+            )}
+        </div>
+    )
+}
 
 export default function HRCreateJobPage() {
     const router = useRouter()
@@ -66,6 +177,11 @@ export default function HRCreateJobPage() {
     const [isUploadingAptitude, setIsUploadingAptitude] = useState(false)
     const [aptitudeFileName, setAptitudeFileName] = useState('')
     const [aptitudeQuestionCount, setAptitudeQuestionCount] = useState(0)
+
+    // Repository picker state
+    const [technicalRepoSetId, setTechnicalRepoSetId] = useState<number | null>(null)
+    const [aptitudeRepoSetId, setAptitudeRepoSetId] = useState<number | null>(null)
+    const [behaviouralRepoSetId, setBehaviouralRepoSetId] = useState<number | null>(null)
 
     const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
     const [showSuggestions, setShowSuggestions] = useState(false)
@@ -308,12 +424,12 @@ export default function HRCreateJobPage() {
             return
         }
         if (formData.first_level_enabled && formData.interview_mode === 'upload' && !formData.uploaded_question_file) {
-            setError('Please upload a question file when Upload Questions mode is selected.')
+            setError('Please upload a question file or select a repository set when Upload Questions mode is selected.')
             setShowConfirm(false)
             return
         }
-        if (formData.aptitude_enabled && formData.aptitude_mode === 'upload' && !formData.aptitude_questions_file) {
-            setError('Please upload an aptitude questions file when Upload Excel mode is selected.')
+        if (formData.aptitude_enabled && formData.aptitude_mode === 'upload' && !formData.aptitude_questions_file && !aptitudeRepoSetId) {
+            setError('Please upload an aptitude questions file or select a repository set when Upload Excel mode is selected.')
             setShowConfirm(false)
             return
         }
@@ -322,7 +438,12 @@ export default function HRCreateJobPage() {
         setShowConfirm(false)
 
         try {
-            const actionFn = () => APIClient.post('/api/jobs', formData)
+            const actionFn = () => APIClient.post('/api/jobs', {
+                ...formData,
+                aptitude_repo_set_id: aptitudeRepoSetId,
+                technical_repo_set_id: technicalRepoSetId,
+                behavioural_repo_set_id: behaviouralRepoSetId,
+            })
 
             await performMutation(
                 '/api/jobs',
@@ -382,7 +503,7 @@ export default function HRCreateJobPage() {
         !titleError &&
         !descError &&
         !durationError &&
-        (!requiresQuestionFile || Boolean(formData.uploaded_question_file))
+        (!requiresQuestionFile || Boolean(formData.uploaded_question_file) || Boolean(technicalRepoSetId))
 
     return (
         <div className="p-4 sm:p-6 md:p-8 max-w-3xl mx-auto overflow-x-hidden">
@@ -452,8 +573,8 @@ export default function HRCreateJobPage() {
                         if (durationError) { setError(durationError); return }
 
                         // Upload/Mixed file requirement validation (H022)
-                        if (requiresQuestionFile && !formData.uploaded_question_file) {
-                            setError('Please upload a question file when Upload/Mixed mode is selected.')
+                        if (requiresQuestionFile && !formData.uploaded_question_file && !technicalRepoSetId) {
+                            setError('Please upload a question file or select a repository set when Upload/Mixed mode is selected.')
                             return
                         }
 
@@ -749,8 +870,24 @@ export default function HRCreateJobPage() {
                             {isJunior && formData.aptitude_enabled && formData.aptitude_mode === 'upload' && (
                                 <div className="ml-7 mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Aptitude Questions File
+                                        Aptitude Questions Source
                                     </p>
+
+                                    {/* Repository picker */}
+                                    <RepoPicker
+                                        roundType="aptitude"
+                                        jobTitle={formData.title}
+                                        selectedId={aptitudeRepoSetId}
+                                        onSelect={(id) => setAptitudeRepoSetId(id)}
+                                    />
+
+                                    {/* Divider */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-px bg-border" />
+                                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">or upload Excel</span>
+                                        <div className="flex-1 h-px bg-border" />
+                                    </div>
+
                                     {formData.aptitude_questions_file ? (
                                         <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
                                             <FileText className="h-5 w-5 text-green-600" />
@@ -790,7 +927,7 @@ export default function HRCreateJobPage() {
                                                 ) : (
                                                     <UploadCloud className="h-4 w-4" />
                                                 )}
-                                                {isUploadingAptitude ? 'Uploading & Extracting...' : 'Upload Aptitude Questions'}
+                                                {isUploadingAptitude ? 'Uploading & Extracting...' : 'Upload Aptitude Questions (.xlsx)'}
                                             </Button>
                                         </div>
                                     )}
@@ -849,47 +986,13 @@ export default function HRCreateJobPage() {
 
                                                     {(mode.value === 'upload' || mode.value === 'mixed') && formData.interview_mode === mode.value && (
                                                         <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                            {formData.uploaded_question_file ? (
-                                                                <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-                                                                    <FileText className="h-5 w-5 text-green-600" />
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <p className="text-sm font-medium text-foreground truncate">{questionFileName}</p>
-                                                                        <p className="text-xs text-muted-foreground">Uploaded successfully</p>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={removeQuestionFile}
-                                                                        className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                                                    >
-                                                                        <X className="h-4 w-4" />
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div>
-                                                                    <input
-                                                                        type="file"
-                                                                        ref={questionFileRef}
-                                                                        accept=".txt,.pdf,.docx"
-                                                                        className="hidden"
-                                                                        onChange={handleQuestionFileUpload}
-                                                                    />
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={() => questionFileRef.current?.click()}
-                                                                        disabled={isUploadingQuestions}
-                                                                        className="gap-2"
-                                                                    >
-                                                                        {isUploadingQuestions ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                                                                        {isUploadingQuestions ? 'Uploading...' : 'Upload Questions'}
-                                                                    </Button>
-                                                                    <p className="text-xs text-muted-foreground mt-1.5">
-                                                                        Accepted formats: .txt, .pdf, .docx — Max 5MB
-                                                                        {mode.value === 'upload' && ' (required)'}
-                                                                    </p>
-                                                                </div>
-                                                            )}
+                                                            {/* Repository picker — only source */}
+                                                            <RepoPicker
+                                                                roundType="technical"
+                                                                jobTitle={formData.title}
+                                                                selectedId={technicalRepoSetId}
+                                                                onSelect={(id) => setTechnicalRepoSetId(id)}
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>

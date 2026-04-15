@@ -71,6 +71,10 @@ class Job(Base):
     uploaded_question_file = Column(String(500), nullable=True)
     aptitude_config = Column(Text, nullable=True)
     aptitude_questions_file = Column(String(500), nullable=True)  # Path to uploaded MCQ JSON
+    # Repository-sourced question sets (replaces file upload when source == "repository")
+    aptitude_repo_set_id = Column(Integer, ForeignKey('question_sets.id', ondelete='SET NULL'), nullable=True)
+    technical_repo_set_id = Column(Integer, ForeignKey('question_sets.id', ondelete='SET NULL'), nullable=True)
+    behavioural_repo_set_id = Column(Integer, ForeignKey('question_sets.id', ondelete='SET NULL'), nullable=True)
     duration_minutes = Column(Integer, default=60) # Global interview duration
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())
@@ -526,6 +530,24 @@ class QuestionBank(Base):
     question_text = Column(Text, nullable=False)
     expected_key_points = Column(Text) # JSON array of points
     created_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class QuestionSet(Base):
+    """
+    A reusable, named collection of questions for a specific round type.
+    Used by the Repository feature — HR picks a set instead of uploading a file.
+    """
+    __tablename__ = "question_sets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    round_type = Column(String(50), nullable=False, index=True)  # aptitude | technical | behavioural
+    job_roles = Column(Text, nullable=True)    # JSON array of role tags, e.g. ["Steel Detailer", "CAD Engineer"]
+    questions = Column(Text, nullable=False)   # JSON array of question objects
+    topic_tags = Column(Text, nullable=True)   # JSON array of topic strings for display
+    hr_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now(), onupdate=func.now())
 
 
 class CandidateSkill(Base):
