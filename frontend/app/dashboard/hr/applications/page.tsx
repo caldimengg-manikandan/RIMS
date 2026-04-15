@@ -602,12 +602,12 @@ export default function HRApplicationsPage() {
                       </span>
                       {(app.composite_score! > 0 || app.resume_extraction) && (
                         <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
-                          Score:{" "}
+                          Composite Score:{" "}
                           {(app.composite_score! > 0 
-                            ? Number(app.composite_score) / 10
+                            ? Number(app.composite_score) 
                             : Number(app.resume_extraction?.resume_score || 0)
                           ).toFixed(1)}
-                          /10
+                          /100
                         </span>
                       )}
                       {app.interview?.report && (

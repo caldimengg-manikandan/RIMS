@@ -97,24 +97,33 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
     # Note: Using localhost:3000 assuming frontend is running there during dev
     pdf_service_url = f"{settings.frontend_base_url}/api/generate-pdf"
     
+    start_time = time.time()
+    logger.info(f"Starting Puppeteer PDF generation request to {pdf_service_url} for {filename}...")
+    
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
                 pdf_service_url,
                 json={"html": html_content},
-                timeout=30.0
+                timeout=60.0
             )
+            elapsed_time = time.time() - start_time
+            logger.info(f"Puppeteer responded in {elapsed_time:.2f} seconds with status {response.status_code}")
+            
             if response.status_code != 200:
                 logger.error(f"Puppeteer service failed: {response.status_code} - {response.text}")
-                raise Exception("PDF Generation service is currently unavailable.")
+                raise Exception(f"PDF Generation service is currently unavailable. Status: {response.status_code}")
             
             pdf_bytes = response.content
             storage_path = f"onboarding/{filename}"
             
             # Upload to Supabase
-            return upload_file(bucket, storage_path, pdf_bytes, content_type="application/pdf")
+            upload_start = time.time()
+            result_url = upload_file(bucket, storage_path, pdf_bytes, content_type="application/pdf")
+            logger.info(f"Uploaded PDF to Supabase in {time.time() - upload_start:.2f} seconds. Path: {result_url}")
+            return result_url
         except Exception as e:
-            logger.error(f"Puppeteer transition failed: {e}")
+            logger.error(f"Puppeteer transition failed after {time.time() - start_time:.2f} seconds: {e}")
             raise e
 
 @router.get("/applications/{application_id}/offer-preview")
@@ -229,6 +238,11 @@ async def request_offer_approval(
     application.offer_token_used = False
 
     if auto_approve:
+        # Idempotency guard for frontend retries
+        if application.status == "offer_sent" and application.offer_sent:
+            logger.warning(f"Frontend retry detected for App {application_id}. Offer already sent.")
+            return {"status": "success", "message": "Offer released directly to candidate."}
+            
         # Direct release path
         try:
             fsm.transition(application, TransitionAction.SEND_OFFER, user_id=current_user.id)

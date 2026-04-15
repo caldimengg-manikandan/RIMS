@@ -27,7 +27,7 @@ export function revalidateDashboardData() {
 
 export class APIClient {
   private static MAX_RETRIES = 3
-  private static TIMEOUT_MS = 15000
+  private static TIMEOUT_MS = 60000 // Increased to 60s for heavy tasks (AI/PDF)
 
   private static createRequestId(): string {
     if (typeof window !== 'undefined' && typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -174,7 +174,7 @@ export class APIClient {
       
       const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown API error')
 
-      if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
+      if (typeof window !== 'undefined' && [400, 401, 403, 500].includes(response.status)) {
         toast.error(errorMessage)
       }
 

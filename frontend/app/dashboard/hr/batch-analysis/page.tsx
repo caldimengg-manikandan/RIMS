@@ -125,7 +125,8 @@ export default function BatchAnalysisPage() {
       const qs = params.toString()
       const url = `/api/applications${qs ? '?' + qs : ''}`
 
-      const data: any[] = await APIClient.get(url)
+      const response = await APIClient.get(url) as any
+      const data = Array.isArray(response) ? response : (response?.items || [])
 
       if (!data || data.length === 0) {
         setExportError('No candidates found for selected filters.')
@@ -258,48 +259,50 @@ export default function BatchAnalysisPage() {
                 <p className="text-xs text-destructive mt-1">{dateError}</p>
               )}
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              
+                {/* Job Role */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium">
+                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+                    Job Role
+                  </Label>
+                  <Select value={filterJobId} onValueChange={setFilterJobId} disabled={jobsLoading}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder={jobsLoading ? 'Loading...' : 'All Roles'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      {jobs?.filter(j => j.status === 'open').map(job => (
+                        <SelectItem key={job.id} value={job.id.toString()}>
+                          {job.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* Job Role */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-sm font-medium">
-                <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-                Job Role
-              </Label>
-              <Select value={filterJobId} onValueChange={setFilterJobId} disabled={jobsLoading}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder={jobsLoading ? 'Loading...' : 'All Roles'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  {jobs?.filter(j => j.status === 'open').map(job => (
-                    <SelectItem key={job.id} value={job.id.toString()}>
-                      {job.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {/* Time Window */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    Applied Time
+                  </Label>
+                  <Select value={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+            
             </div>
-
-            {/* Time Window */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-sm font-medium">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                Applied Time
-              </Label>
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Filter Summary */}
             {filterSummary.length > 0 && (
               <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 space-y-1">

@@ -120,9 +120,12 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
       if (!showSummary || stats.applicationIds.length === 0 || isExportReady) return
       
       try {
-        const data = await APIClient.get(`/api/applications?job_id=${selectedJobId}&limit=100&t=${Date.now()}`)
+        const resp = await APIClient.get<any>(`/api/applications?job_id=${selectedJobId}&limit=100&t=${Date.now()}`)
+        // Handle both direct array and normalized { items, total } responses
+        const apps = Array.isArray(resp) ? resp : (resp?.items || [])
+        
         // Filter out applications for this batch
-        const batchApps = data.filter((a: any) => stats.applicationIds.includes(a.id))
+        const batchApps = apps.filter((a: any) => stats.applicationIds.includes(a.id))
         
         // Processing is complete if we have extraction OR it explicitly failed
         const completedCount = batchApps.filter((a: any) => 
@@ -289,7 +292,7 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
           const cleanName = baseName.replace(/[-_]/g, ' ') || 'Unknown Candidate'
           const timestamp = Date.now()
           const randomStr = Math.random().toString(36).substring(7)
-          const uniqueEmail = `batch.${cleanName.replace(/[^a-zA-Z0-9]/g, '')}_${timestamp}_${randomStr}@batch.local`.toLowerCase()
+          const uniqueEmail = `batch.${cleanName.replace(/[^a-zA-Z0-9]/g, '')}_${timestamp}_${randomStr}@batch.example.com`.toLowerCase()
 
           formData.append('candidate_name', cleanName)
           formData.append('candidate_email', uniqueEmail)

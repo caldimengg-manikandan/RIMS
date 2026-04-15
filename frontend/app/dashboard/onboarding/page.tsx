@@ -29,7 +29,7 @@ import {
 import { SendOfferDialog } from '@/components/send-offer-dialog'
 import { CapturePhotoDialog } from '@/components/capture-photo-dialog'
 import { APIClient } from '@/app/dashboard/lib/api-client'
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { 
     Dialog, 
@@ -41,11 +41,11 @@ import {
 } from "@/components/ui/dialog"
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function OnboardingPage() {
     const { user } = useAuth()
     const router = useRouter()
-    const { toast } = useToast()
     const { data: resp, isLoading, mutate } = useSWR<any>('/api/onboarding/candidates', fetcher)
     const candidates = resp?.items || []
     const totalCount = resp?.total || 0
@@ -77,34 +77,36 @@ export default function OnboardingPage() {
     const handleApprove = async (candidate: any) => {
         try {
             await APIClient.post(`/api/onboarding/applications/${candidate.id}/approve-offer`, {})
-            toast({ title: "Approved", description: "Offer letter approved and sent to candidate" })
+            toast.success("Offer letter approved and sent to candidate")
             mutate()
             setIsApproveOpen(false)
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to approve offer letter. Please check permissions.", variant: "destructive" })
+        } catch (error: any) {
+            toast.error(error.message || "Failed to approve offer letter.")
         }
     }
 
     const handleComplete = async (id: number) => {
         try {
             await APIClient.post(`/api/onboarding/applications/${id}/onboard`, {})
-            toast({ title: "Completed", description: "Candidate marked as onboarded" })
+            toast.success("Candidate marked as onboarded")
             mutate()
             // After successful join, automatically open the capture photo dialog
             setActiveCaptureId(id)
             setIsCaptureOpen(true)
         } catch (error: any) {
-            toast({ title: "Error", description: error?.response?.data?.error || "Failed to complete onboarding. Candidate's joining date may not have arrived yet.", variant: "destructive" })
+            // APIClient now handles the toast for 400 errors, 
+            // but we can still show a manual one if needed or just let APIClient handle it.
+            // toast.error(error.message || "Failed to complete onboarding.")
         }
     }
 
     const handleGenerateID = async (id: number) => {
         try {
             const res = await APIClient.post(`/api/onboarding/applications/${id}/generate-id-card`, {}) as any
-            toast({ title: "Success", description: `ID Card generated. Employee ID: ${res.employee_id}` })
+            toast.success(`ID Card generated. Employee ID: ${res.employee_id}`)
             mutate()
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to generate ID card", variant: "destructive" })
+        } catch (error: any) {
+            toast.error(error.message || "Failed to generate ID card")
         }
     }
 
@@ -113,8 +115,8 @@ export default function OnboardingPage() {
             const res = await APIClient.get(`/api/onboarding/applications/${id}/offer-preview`) as any
             setPreviewHtml(res.html)
             setIsPreviewOpen(true)
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to load offer preview", variant: "destructive" })
+        } catch (error: any) {
+            toast.error(error.message || "Failed to load offer preview")
         }
     }
 
@@ -261,7 +263,9 @@ export default function OnboardingPage() {
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <div>
-                                                    <div className="font-bold text-sm text-foreground">{candidate.candidate_name}</div>
+                                                    <Link href={`/dashboard/hr/applications/${candidate.id}`} className="font-bold text-sm text-foreground hover:text-primary hover:underline transition-colors block">
+                                                        {candidate.candidate_name}
+                                                    </Link>
                                                     <Badge variant="outline" className="text-[10px] h-4 font-normal mt-1 opacity-70">
                                                         {candidate.job?.title || 'Unknown Role'}
                                                     </Badge>

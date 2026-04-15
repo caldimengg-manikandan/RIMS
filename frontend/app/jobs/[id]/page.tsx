@@ -369,25 +369,21 @@ export default function PublicJobDetailPage() {
             return
         }
 
-        if (!candidatePhone.trim()) {
-            setSubmitError("Please fill your phone number.");
-            setPhoneError("Phone number is required");
-            return;
-        }
-
         // Validate phone (H004)
-        if (/[^0-9]/.test(candidatePhone)) {
-            const errMsg = 'Phone number must contain numeric characters only';
-            setSubmitError(errMsg);
-            setPhoneError(errMsg);
-            return;
-        }
+        if (candidatePhone.trim()) {
+            if (/[^0-9]/.test(candidatePhone)) {
+                const errMsg = 'Phone number must contain numeric characters only';
+                setSubmitError(errMsg);
+                setPhoneError(errMsg);
+                return;
+            }
 
-        if (candidatePhone.length < 10 || candidatePhone.length > 15) {
-            const errMsg = 'Phone number must be 10–15 digits';
-            setSubmitError(errMsg);
-            setPhoneError(errMsg);
-            return;
+            if (candidatePhone.length < 10 || candidatePhone.length > 15) {
+                const errMsg = 'Phone number must be 10–15 digits';
+                setSubmitError(errMsg);
+                setPhoneError(errMsg);
+                return;
+            }
         }
 
         if (!resumeFile) {
@@ -406,12 +402,7 @@ export default function PublicJobDetailPage() {
             return
         }
 
-        if (!photoFile) {
-            setSubmitError("Please upload a candidate photo.")
-            alert("Photo upload is mandatory")
-            return
-        }
-        if (photoFile.size > 5 * 1024 * 1024) {
+        if (photoFile && photoFile.size > 5 * 1024 * 1024) {
             setSubmitError('Photo is too large. Maximum size is 5MB.')
             return
         }
@@ -760,7 +751,7 @@ export default function PublicJobDetailPage() {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <Label htmlFor="phone" className="text-sm font-semibold">Phone *</Label>
+                                                <Label htmlFor="phone" className="text-sm font-semibold">Phone (Optional)</Label>
                                                 <div className="flex gap-2">
                                                     <Select value={selectedCountry} onValueChange={setSelectedCountry}>
                                                         <SelectTrigger className="w-[125px] h-12 bg-muted/50 border-input shrink-0 px-3">
@@ -778,7 +769,6 @@ export default function PublicJobDetailPage() {
                                                         id="phone"
                                                         type="tel"
                                                         inputMode="numeric"
-                                                        required
                                                         aria-invalid={Boolean(phoneError)}
                                                         aria-describedby={phoneError ? 'phone-error' : undefined}
                                                         value={candidatePhone}
@@ -859,7 +849,7 @@ export default function PublicJobDetailPage() {
                                             </div>
 
                                             <div className="space-y-2 pt-2">
-                                                <Label htmlFor="photo" className="text-sm font-semibold">Candidate Photo *</Label>
+                                                <Label htmlFor="photo" className="text-sm font-semibold">Candidate Photo (Optional)</Label>
                                                 <div
                                                     className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-300 ${photoFile
                                                         ? 'border-primary bg-primary/5'
@@ -869,7 +859,6 @@ export default function PublicJobDetailPage() {
                                                     <input
                                                         id="photo"
                                                         type="file"
-                                                        required
                                                         accept="image/*"
                                                         className="hidden"
                                                         ref={photoInputRef}
@@ -933,7 +922,7 @@ export default function PublicJobDetailPage() {
                                         <Button
                                             type="submit"
                                             className="w-full h-14 text-base font-bold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground rounded-xl shadow-lg hover:shadow-primary/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-                                            disabled={isSubmitting || hasApplied || Boolean(emailError) || Boolean(phoneError) || !resumeFile || !photoFile}
+                                            disabled={isSubmitting || hasApplied || Boolean(emailError) || Boolean(phoneError) || !resumeFile}
                                         >
                                             {isSubmitting ? (
                                                 <span className="flex items-center gap-2">

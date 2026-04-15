@@ -7,17 +7,16 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Calendar } from 'lucide-react'
 import { APIClient } from '@/app/dashboard/lib/api-client'
-import { useToast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 export function SendOfferDialog({ applicationId, candidateName, onSuccess, trigger }: { applicationId: number, candidateName: string, onSuccess: () => void, trigger: React.ReactNode }) {
-    const { toast } = useToast()
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [joiningDate, setJoiningDate] = useState('')
 
     const handleSend = async () => {
         if (!joiningDate) {
-            toast({ title: "Error", description: "Please select a joining date", variant: "destructive" })
+            toast.error("Please select a joining date")
             return
         }
 
@@ -26,18 +25,11 @@ export function SendOfferDialog({ applicationId, candidateName, onSuccess, trigg
             // Always auto_approve for job owners as requested
             const url = `/api/onboarding/applications/${applicationId}/send-offer?joining_date=${joiningDate}&auto_approve=true`
             await APIClient.post(url, {})
-            toast({ 
-                title: "Offer Released", 
-                description: `Offer letter has been sent directly to ${candidateName}.` 
-            })
+            toast.success(`Offer letter has been sent directly to ${candidateName}.`)
             setOpen(false)
             onSuccess()
         } catch (error: any) {
-            toast({ 
-                title: "Failed", 
-                description: error.response?.data?.detail || error.message || "Could not process offer", 
-                variant: "destructive" 
-            })
+            toast.error(error.message || "Could not process offer")
         } finally {
             setLoading(false)
         }

@@ -216,16 +216,16 @@ class CandidateStateMachine:
         Execute an atomic state transition.
         """
         # 0. Idempotency Guard (Double-Click / Retry Protection)
-        # Check if an identical transition occurred within the last 5 seconds.
+        # Check if an identical transition occurred within the last 120 seconds.
         # We look for the action name inside the EncryptedText details.
         if user_id:
-            # FETCH recent logs for this user and app (last 5 seconds)
+            # FETCH recent logs for this user and app (last 120 seconds)
             # We cannot use .contains() on EncryptedText columns in SQL
             recent_logs = self.db.query(AuditLog).filter(
                 AuditLog.user_id == user_id,
                 AuditLog.resource_id == application.id,
                 AuditLog.action == "STATE_TRANSITION",
-                AuditLog.created_at >= datetime.now(timezone.utc) - timedelta(seconds=5)
+                AuditLog.created_at >= datetime.now(timezone.utc) - timedelta(seconds=120)
             ).all()
 
             for log in recent_logs:

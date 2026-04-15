@@ -97,7 +97,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     if (user?.role === 'super_admin') {
         links.splice(3, 0, { href: '/dashboard/hr/approvals', label: 'Pending Approvals', icon: UserCheck })
-        links.splice(links.length - 1, 0, { href: '/dashboard/reliability', label: 'Reliability', icon: Activity })
+        // links.splice(links.length - 1, 0, { href: '/dashboard/reliability', label: 'Reliability', icon: Activity })
     }
 
     return (

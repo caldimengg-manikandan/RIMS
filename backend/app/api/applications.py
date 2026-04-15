@@ -269,17 +269,16 @@ async def apply_for_job(
     candidate_email: Optional[str] = Form(None),
     candidate_phone: Optional[str] = Form(None),
     resume_file: UploadFile = File(...),
-    photo_file: UploadFile = File(...),
+    photo_file: Optional[UploadFile] = File(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db)
 ):
     """Apply for a job with resume (Public endpoint)"""
-    # Name: at least two words, alphabetic-focused regex (allows hyphens, apostrophes, and spaces)
-    name_regex = r"^[a-zA-Z]+(?:['\-\s][a-zA-Z]+)*$"
-    if not candidate_name or len(candidate_name.split()) < 2 or not re.match(name_regex, candidate_name.strip()):
+    # Name validation: just ensure it is not empty to support bulk uploads
+    if not candidate_name :
         raise HTTPException(
             status_code=400,
-            detail="Valid full name required (at least two words, containing letters, hyphens, or apostrophes)."
+            detail="Valid full name required "#(at least two words, containing letters, hyphens, or apostrophes)."
         )
 
     request_id = None
@@ -473,13 +472,13 @@ async def apply_for_job(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid resume content.")
 
     # 5. Photo Validation
-    if not photo_file:
-        raise HTTPException(status_code=400, detail="Candidate photo is required.")
-    photo_content = await photo_file.read()
-    if not photo_content:
-        raise HTTPException(status_code=400, detail="Candidate photo is empty.")
-    if len(photo_content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Photo too large. Maximum size is 5MB.")
+    photo_content = None
+    if photo_file:
+        photo_content = await photo_file.read()
+        if not photo_content:
+            raise HTTPException(status_code=400, detail="Candidate photo is empty.")
+        if len(photo_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="Photo too large. Maximum size is 5MB.")
 
     # 6. Database Entry (Atomic Transaction)
     # We flush first to get the ID, then upload to storage using that ID as a prefix.
@@ -524,12 +523,13 @@ async def apply_for_job(
         new_application.resume_file_path = returned_resume_path
 
         # Upload Photo to Supabase
-        photo_ext = os.path.splitext(photo_file.filename)[1] if photo_file.filename else ".jpg"
-        photo_storage_path = f"{new_application.id}/photo_initial{photo_ext}"
-        returned_photo_path = upload_file(settings.supabase_bucket_id_photos, photo_storage_path, photo_content, content_type=photo_file.content_type)
-        if not returned_photo_path:
-            raise Exception("Candidate photo storage upload failed")
-        new_application.candidate_photo_path = returned_photo_path
+        if photo_content:
+            photo_ext = os.path.splitext(photo_file.filename)[1] if photo_file.filename else ".jpg"
+            photo_storage_path = f"{new_application.id}/photo_initial{photo_ext}"
+            returned_photo_path = upload_file(settings.supabase_bucket_id_photos, photo_storage_path, photo_content, content_type=photo_file.content_type)
+            if not returned_photo_path:
+                raise Exception("Candidate photo storage upload failed")
+            new_application.candidate_photo_path = returned_photo_path
 
         # Create HR Notification
         from app.domain.models import Notification
@@ -752,6 +752,10 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         is_duplicate = False
         duplicate_app_id = None
         
+        # Check for placeholder status BEFORE any updates
+        email_is_placeholder = application.candidate_email and "@batch." in application.candidate_email
+        name_is_placeholder = not application.candidate_name or len(application.candidate_name.split()) < 2
+        
         # 1. Duplicate Detection via Extracted Email
         if extracted_email:
             norm_email = extracted_email.lower().strip()
@@ -769,15 +773,19 @@ async def process_application_background(application_id: int, job_id: int, abs_f
                 application.hr_notes = (application.hr_notes or "") + f"\nNotice: AI detected this as a duplicate of App ID: {duplicate_app_id} (matched on email in resume)."
             else:
                 # Safe to update email if it was missing or obviously wrong (placeholder)
-                if not application.candidate_email or "@batch.local" in application.candidate_email:
+                if not application.candidate_email or email_is_placeholder:
                     application.candidate_email = extracted_email
                     logger.info(f"[IDENTITY SYNC] App #{application_id} | Email updated from resume")
 
         # 2. Name & Phone Sync (Conservative)
-        # We only overwrite if the current value is "weak" (one word name or missing phone)
-        if extracted_name and (not application.candidate_name or len(application.candidate_name.split()) < 2):
+        # We only overwrite if the current value is "weak" (one word name or placeholder from batch)
+        if extracted_name and (name_is_placeholder or email_is_placeholder):
             application.candidate_name = extracted_name
             logger.info(f"[IDENTITY SYNC] App #{application_id} | Name updated from resume")
+            
+        if extracted_phone and not application.candidate_phone:
+            application.candidate_phone = extracted_phone
+            logger.info(f"[IDENTITY SYNC] App #{application_id} | Phone updated from resume")
             
         if extracted_phone and not application.candidate_phone:
             application.candidate_phone = extracted_phone
@@ -1240,7 +1248,7 @@ async def retry_application_background(application_id: int, job_id: int, bucket_
         
         application.resume_score = extraction_data.get("score", 0)
         
-        if "@batch.local" in application.candidate_email:
+        if "@batch." in application.candidate_email:
             if extraction_data.get("candidate_name"):
                 application.candidate_name = extraction_data.get("candidate_name")
             if extraction_data.get("email"):

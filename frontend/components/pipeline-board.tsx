@@ -40,6 +40,7 @@ const STATUS_COLUMNS = [
     { id: "interview_scheduled", label: "Interview Scheduled" },
     { id: "interview_completed", label: "Interview Completed" },
     { id: "hired", label: "Hired" },
+    { id: "rejected", label: "Rejected" },
     { id: "offer_sent", label: "Offer Sent" },
     { id: "onboarded", label: "Onboarded" },
 ]
