@@ -4,7 +4,7 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "9999:80" # Map host 9999 to container 80 (Avoids system port 80 conflict)
+      - "9999:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -20,6 +20,11 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims/api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/calrims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   backend_blue:
@@ -30,6 +35,11 @@ services:
     environment:
       - ENV=production
       - BACKEND_START_MODE=docker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   # --- GREEN ENVIRONMENT ---
@@ -40,6 +50,11 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims/api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/calrims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
   backend_green:
@@ -50,4 +65,9 @@ services:
     environment:
       - ENV=production
       - BACKEND_START_MODE=docker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
