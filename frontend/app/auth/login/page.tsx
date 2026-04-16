@@ -89,7 +89,7 @@ function LoginContent() {
         {/* The generated AI/HR image */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: 'url(/auth-bg-1.png)' }}
+          style={{ backgroundImage: 'url(/calrims/auth-bg-1.png)' }}
         />
         {/* Heavy gradient overlay to make text readable and blend edges */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />

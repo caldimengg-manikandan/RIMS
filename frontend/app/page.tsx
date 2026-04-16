@@ -598,7 +598,7 @@ export default function Home() {
         {/* ── Person image — z-[1] ── */}
         <div className="absolute inset-0 z-[1] pointer-events-none">
           <img
-            src="/1person.png"
+            src="/calrims/1person.png"
             alt=""
             className="absolute right-0 bottom-0 h-auto max-h-[75%] w-auto object-contain object-right-bottom select-none"
             aria-hidden="true"
@@ -678,7 +678,7 @@ export default function Home() {
           <div
             className="w-full h-full"
             style={{
-              backgroundImage: "url(/GLOBE.jpg)",
+              backgroundImage: "url(/calrims/GLOBE.jpg)",
               backgroundSize: "cover",
               backgroundPosition: "center",
               opacity: 0.5,

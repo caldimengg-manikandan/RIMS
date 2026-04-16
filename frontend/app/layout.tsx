@@ -16,11 +16,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'CALRIMS - AI-Powered Recruitment Intelligence System',
     description: 'CALRIMS is an AI-powered automated recruitment platform for seamless hiring, empowering teams to find, evaluate, and hire top-tier talent efficiently.',
-    images: ['/og-image.jpg'],
+    images: ['/calrims/og-image.jpg'],
     type: 'website',
   },
   alternates: {
-    canonical: 'https://caldimproducts.com/cal-rims',
+    canonical: 'https://caldimproducts.com/calrims',
   },
   generator: 'Caldim Engineering',
 }

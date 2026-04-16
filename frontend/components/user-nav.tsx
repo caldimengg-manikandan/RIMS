@@ -32,7 +32,7 @@ export function UserNav() {
             localStorage.removeItem('rims_offline_cache_v4')
         }
         logout()
-        router.push('/')
+        router.push('/calrims/')
     }, [logout, router])
 
     // Memoized initials for efficiency
