@@ -229,7 +229,7 @@ export default function PublicJobsPage() {
                                                 </div>
                                             </CardContent>
 
-                                            <CardFooter className="pt-6 pb-6 relative z-10">
+                                            <CardFooter className="pt-2 pb-2 relative z-10">
                                                 <div className={`w-full flex items-center justify-between font-bold transition-colors ${job.status === 'closed' ? 'text-muted-foreground' : 'text-blue-600 group-hover:text-blue-600'}`}>
                                                     <span>{job.status === 'closed' ? 'View Details' : 'Apply Now'}</span>
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${job.status === 'closed' ? 'bg-muted text-muted-foreground group-hover:bg-muted/80' : 'bg-blue-600/10 group-hover:bg-blue-600 group-hover:text-white'}`}>

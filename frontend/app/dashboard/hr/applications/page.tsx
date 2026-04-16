@@ -82,10 +82,6 @@ export default function HRApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [isMagicSearch, setIsMagicSearch] = useState(false);
-  const [magicSearchResults, setMagicSearchResults] = useState<Application[] | null>(null);
-  const [magicSearchTotal, setMagicSearchTotal] = useState(0);
-  const [isMagicLoading, setIsMagicLoading] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -93,51 +89,8 @@ export default function HRApplicationsPage() {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  const handleMagicSearch = useCallback(async (page: number = 1) => {
-    if (!searchTerm.trim()) return;
-    setIsMagicLoading(true);
-    setIsMagicSearch(true);
-    setApplicationsPage(page);
-    try {
-      const resp = await APIClient.post<any>(
-        "/api/search/candidates", 
-        { 
-          query: searchTerm,
-          skip: (page - 1) * APPLICATIONS_PAGE_SIZE,
-          limit: APPLICATIONS_PAGE_SIZE
-        }
-      );
-      
-      // Map results to the frontend Application interface
-      const mappedResults = (resp.candidates || []).map((c: any) => ({
-        id: c.id,
-        candidate_name: c.candidate_name,
-        status: c.current_status,
-        applied_at: c.applied_at || new Date().toISOString(),
-        job: { title: c.job_title, id: 0, job_id: c.job_id || "" },
-        candidate_photo_path: c.candidate_photo_path,
-        photo_url: c.photo_url,
-        file_status: c.file_status || 'active',
-        composite_score: c.composite_score,
-        resume_extraction: { 
-            resume_score: c.resume_score, 
-            summary: c.match_insight,
-            extracted_skills: c.skills
-        }
-      })) as Application[];
-
-      setMagicSearchResults(mappedResults);
-      setMagicSearchTotal(resp.metadata?.total || 0);
-    } catch (err) {
-      console.error("Magic Search error", err);
-      toast.error("Magic Search failed. Falling back to keyword search.");
-    } finally {
-      setIsMagicLoading(false);
-    }
-  }, [searchTerm]);
 
   const applicationsListUrl = useMemo(() => {
-    if (isMagicSearch) return null; // Don't fetch via SWR if magic search is active
     const q = new URLSearchParams();
     q.set("limit", String(APPLICATIONS_PAGE_SIZE));
     q.set("skip", String((applicationsPage - 1) * APPLICATIONS_PAGE_SIZE));
@@ -146,15 +99,10 @@ export default function HRApplicationsPage() {
     if (dateTo) q.set("to_date", dateTo);
     if (debouncedSearch) q.set("search", debouncedSearch);
     return `/api/applications?${q.toString()}`;
-  }, [applicationsPage, statusFilter, dateFrom, dateTo, debouncedSearch, isMagicSearch]);
+  }, [applicationsPage, statusFilter, dateFrom, dateTo, debouncedSearch]);
 
   useEffect(() => {
     setApplicationsPage(1);
-    // Auto-disable magic search if the user clears the search term or changes filters
-    if (!searchTerm && isMagicSearch) {
-        setIsMagicSearch(false);
-        setMagicSearchResults(null);
-    }
   }, [statusFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
 
   const {
@@ -168,13 +116,11 @@ export default function HRApplicationsPage() {
     { keepPreviousData: true },
   );
 
-  const swrApplications = paginatedData?.items ?? [];
-  
-  const applications = isMagicSearch && magicSearchResults ? magicSearchResults : swrApplications;
-  const totalCount = isMagicSearch ? magicSearchTotal : (paginatedData?.total || 0);
-  const isLoading = isSwrLoading || isMagicLoading;
+  const applications = paginatedData?.items ?? [];
+  const totalCount = paginatedData?.total || 0;
+  const isLoading = isSwrLoading;
 
-  const totalPages = isMagicSearch ? Math.ceil(magicSearchTotal / APPLICATIONS_PAGE_SIZE) : (paginatedData?.pages || 0);
+  const totalPages = paginatedData?.pages || 0;
   const hasMoreApplications = applicationsPage < totalPages;
 
 
@@ -362,10 +308,11 @@ export default function HRApplicationsPage() {
       </p>
 
       {/* Filters Toolbar */}
-      <div className="bg-card p-6 rounded-2xl border border-border/50 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
+      <div className="bg-card p-2 rounded-2xl border border-border/50 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Combined Search Bar */}
           <div className="flex-1 min-w-0">
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Search applications</label>
             <div className="relative group flex gap-2">
               <div className="relative flex-1">
                 <svg
@@ -387,25 +334,8 @@ export default function HRApplicationsPage() {
                     className="w-full pl-12 pr-4 h-11 bg-background border-2 border-input rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-base placeholder:text-muted-foreground text-foreground"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleMagicSearch()}
                 />
               </div>
-              <Button 
-                onClick={() => handleMagicSearch()}
-                disabled={!searchTerm.trim() || isMagicLoading}
-                className={`h-11 px-6 rounded-xl font-bold transition-all shadow-sm ${isMagicSearch ? 'bg-primary text-primary-foreground scale-105' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
-              >
-                {isMagicLoading ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                ) : (
-                    <>
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2L14.5 9H22L16 13.5L18.5 20.5L12 16L5.5 20.5L8 13.5L2 9H9.5L12 2Z" />
-                        </svg>
-                        Magic Search
-                    </>
-                )}
-              </Button>
             </div>
           </div>
 
@@ -429,8 +359,8 @@ export default function HRApplicationsPage() {
               type="date"
               min={dateFrom || "2020-01-01"}
               max={new Date().toLocaleDateString('en-CA')}
+              defaultValue={new Date().toLocaleDateString('en-CA')}
               className="w-full px-3 h-11 bg-background border-2 border-input rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
-              value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
           </div>
@@ -448,7 +378,7 @@ export default function HRApplicationsPage() {
               <option value="screened">Screened</option>
               <option value="interview_scheduled">Interview Scheduled</option>
               <option value="interview_completed">Interview Completed</option>
-              <option value="review_later">Review Later</option>
+              {/* <option value="review_later">Review Later</option> */}
               <option value="physical_interview">Physical Interview</option>
               <option value="hired">Hired</option>
               <option value="rejected">Rejected</option>
@@ -456,7 +386,7 @@ export default function HRApplicationsPage() {
           </div>
 
           {/* Clear Filters */}
-          {(searchTerm || dateFrom || dateTo || statusFilter !== "all" || isMagicSearch) && (
+          {(searchTerm || dateFrom || dateTo || statusFilter !== "all") && (
             <Button 
                 variant="ghost" 
                 size="sm"
@@ -465,8 +395,6 @@ export default function HRApplicationsPage() {
                     setDateFrom("");
                     setDateTo("");
                     setStatusFilter("all");
-                    setIsMagicSearch(false);
-                    setMagicSearchResults(null);
                     setApplicationsPage(1);
                 }}
                 className="h-11 px-4 text-muted-foreground hover:text-foreground transition-colors"
@@ -507,39 +435,17 @@ export default function HRApplicationsPage() {
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4 flex-1">
                   <div className="relative shrink-0">
-                    <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-border/50 bg-muted flex items-center justify-center shadow-sm">
-                      {app.photo_url ? (
-                        <img
-                          src={app.photo_url}
-                          alt={app.candidate_name || 'Candidate'}
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            (e.target as any).style.display = 'none';
-                            (e.target as any).nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      {app.candidate_photo_path ? (
-                        <img
-                          src={app.candidate_photo_path.startsWith('http') 
-                            ? app.candidate_photo_path 
-                            : `${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`}
-                          alt={app.candidate_name || 'Candidate'}
-                          className="h-full w-full object-cover"
-                          style={{ display: app.photo_url ? 'none' : 'block' }}
-                          onError={(e) => {
-                             (e.target as any).style.display = 'none';
-                             (e.target as any).nextSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <span 
-                        className="text-lg font-bold text-muted-foreground items-center justify-center"
-                        style={{ display: (app.photo_url || app.candidate_photo_path) ? 'none' : 'flex' }}
-                      >
+                    <Avatar className="h-14 w-14 border-2 border-border/50 shadow-sm shrink-0">
+                      <AvatarImage 
+                        src={app.photo_url 
+                          || (app.candidate_photo_path ? (app.candidate_photo_path.startsWith('http') ? app.candidate_photo_path : `${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`) : undefined)}
+                        alt={app.candidate_name || 'Candidate'}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
                         {(app.candidate_name || 'U').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
+                      </AvatarFallback>
+                    </Avatar>
                   </div>
 
                   <div className="flex-1">
@@ -795,8 +701,7 @@ export default function HRApplicationsPage() {
                   size="lg"
                   onClick={() => {
                     const nextPage = applicationsPage - 1;
-                    if (isMagicSearch) handleMagicSearch(nextPage);
-                    else setApplicationsPage(nextPage);
+                    setApplicationsPage(nextPage);
                   }}
                   disabled={applicationsPage <= 1 || isLoading}
                   className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
@@ -814,8 +719,7 @@ export default function HRApplicationsPage() {
                   size="lg"
                   onClick={() => {
                     const nextPage = applicationsPage + 1;
-                    if (isMagicSearch) handleMagicSearch(nextPage);
-                    else setApplicationsPage(nextPage);
+                    setApplicationsPage(nextPage);
                   }}
                   disabled={!hasMoreApplications || isLoading}
                   className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"

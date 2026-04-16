@@ -98,7 +98,6 @@ export default function HRJobsPage() {
     const filteredJobs = jobs.filter(job => {
         const matchesSearch =
             job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (job.job_id && job.job_id.toLowerCase().includes(searchTerm.toLowerCase()))
         const matchesStatus = statusFilter === 'all' || job.status === statusFilter
         return matchesSearch && matchesStatus
@@ -315,10 +314,6 @@ export default function HRJobsPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4 relative pr-10">
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Description</h4>
-                                        <p className="text-muted-foreground text-sm line-clamp-2 leading-relaxed">{job.description}</p>
-                                    </div>
                                     {/* Clickable Indicator */}
                                     <div className="absolute top-1/2 -translate-y-1/2 right-0 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 text-muted-foreground">
                                         <ChevronRight className="w-6 h-6" />

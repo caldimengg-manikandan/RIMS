@@ -11,7 +11,6 @@ export function useApplicationsMutate() {
   const invalidateApplications = useCallback(async (appId?: number) => {
     const keysToInvalidate = [
       '/api/applications',         // Standard list
-      '/api/search/candidates',    // Magic search list
       '/api/analytics/dashboard',  // Metrics
     ]
 

@@ -515,7 +515,6 @@ def list_public_jobs(
         # Ensure job search performs case-insensitive partial matching across title, description, and keywords
         query = query.filter(or_(
             Job.title.ilike(search_term),
-            Job.description.ilike(search_term),
             Job.domain.ilike(search_term),
             Job.primary_evaluated_skills.ilike(search_term),
             Job.experience_level.ilike(search_term),

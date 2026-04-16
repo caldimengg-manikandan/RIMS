@@ -405,6 +405,7 @@ class ApplicationSummaryResponse(BaseModel):
     # Pruned for performance (List view doesn't need these)
     resume_url: Optional[str] = None
     photo_url: Optional[str] = None
+    candidate_photo_path: Optional[str] = None
     
     resume_score: Optional[float] = 0.0
     composite_score: Optional[float] = 0.0

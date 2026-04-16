@@ -125,6 +125,11 @@ def build_application_summary_response(application: Application, current_user_id
     # 2. Ownership Calculation (Simplified per Senior Backend Engineer request)
     is_owner = (application.hr_id == current_user_id) if current_user_id else False
 
+    # Generate full photo URL from path (v2 fix for Supabase)
+    photo_url = None
+    if application.candidate_photo_path:
+        photo_url = get_signed_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
+
     # 3. Final Construction (model_construct bypasses all Pydantic validators)
     return ApplicationSummaryResponse.model_construct(
         id=application.id,
@@ -141,7 +146,9 @@ def build_application_summary_response(application: Application, current_user_id
         composite_score=application.composite_score or 0.0,
         is_owner=is_owner,
         assigned_hr_id=application.hr_id,
-        assigned_hr_name=application.hr.full_name if application.hr else None
+        assigned_hr_name=application.hr.full_name if application.hr else None,
+        candidate_photo_path=application.candidate_photo_path,
+        photo_url=photo_url
     )
 
 def build_application_detail_response(application: Application, current_user_id: Optional[int] = None) -> ApplicationDetailResponse:

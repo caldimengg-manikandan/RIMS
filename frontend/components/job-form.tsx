@@ -16,9 +16,119 @@ import {
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { Sparkles, UploadCloud, Loader2, FileText, X, PlusCircle, ArrowLeft, CheckCircle2, BookOpen } from 'lucide-react'
 import { API_BASE_URL } from '@/lib/config'
 import { toast } from 'sonner'
+
+// ── Repository types ──────────────────────────────────────────────────────────
+interface RepoSet {
+    id: number
+    title: string
+    round_type: string
+    job_roles: string[]
+    question_count: number
+    topic_tags: string[]
+}
+
+// ── Repo picker sub-component ─────────────────────────────────────────────────
+function RepoPicker({
+    roundType,
+    jobTitle,
+    selectedId,
+    onSelect,
+}: {
+    roundType: 'aptitude' | 'technical' | 'behavioural'
+    jobTitle: string
+    selectedId: number | null
+    onSelect: (id: number | null, set: RepoSet | null) => void
+}) {
+    const [sets, setSets] = useState<RepoSet[]>([])
+    const [loading, setLoading] = useState(false)
+    const [selectedSet, setSelectedSet] = useState<RepoSet | null>(null)
+
+    useEffect(() => {
+        const fetchSets = async () => {
+            setLoading(true)
+            try {
+                const params = new URLSearchParams({ round_type: roundType })
+                if (jobTitle.trim()) params.set('job_role', jobTitle.trim())
+                const data = await APIClient.get<RepoSet[]>(`/api/repository/sets?${params}`)
+                setSets(Array.isArray(data) ? data : [])
+            } catch {
+                setSets([])
+            } finally {
+                setLoading(false)
+            }
+        }
+        const timer = setTimeout(fetchSets, jobTitle ? 400 : 0)
+        return () => clearTimeout(timer)
+    }, [roundType, jobTitle])
+
+    useEffect(() => {
+        if (selectedId) {
+            const found = sets.find(s => s.id === selectedId) || null
+            setSelectedSet(found)
+        } else {
+            setSelectedSet(null)
+        }
+    }, [selectedId, sets])
+
+    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const id = e.target.value ? parseInt(e.target.value) : null
+        const set = id ? sets.find(s => s.id === id) || null : null
+        setSelectedSet(set)
+        onSelect(id, set)
+    }
+
+    return (
+        <div className="space-y-2 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {loading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading repository sets…
+                </div>
+            ) : sets.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                    No matching sets found in the repository for this role. Add sets via the Repository page first.
+                </p>
+            ) : (
+                <>
+                    <select
+                        className="w-full h-10 px-3 border-2 border-input rounded-lg focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary bg-background text-foreground text-sm transition-all"
+                        value={selectedId ?? ''}
+                        onChange={handleChange}
+                    >
+                        <option value="">— Select a question set —</option>
+                        {sets.map(s => (
+                            <option key={s.id} value={s.id}>
+                                {s.title} ({s.question_count} questions)
+                            </option>
+                        ))}
+                    </select>
+
+                    {selectedSet && selectedSet.topic_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                            {selectedSet.topic_tags.map((tag, i) => (
+                                <span
+                                    key={i}
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary border border-primary/20"
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {selectedSet && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                            <BookOpen className="h-3 w-3 shrink-0" />
+                            Questions will be pulled from the selected set. No file upload needed.
+                        </p>
+                    )}
+                </>
+            )}
+        </div>
+    )
+}
 
 const MAX_QUESTION_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
@@ -60,11 +170,21 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
         aptitude_questions_file: initialData?.aptitude_questions_file || null,
         primary_evaluated_skills: initialData?.primary_evaluated_skills || [],
         duration_minutes: initialData?.duration_minutes || 60,
+
+        // Repository Picker IDs
+        aptitude_repo_set_id: initialData?.aptitude_repo_set_id || null,
+        technical_repo_set_id: initialData?.technical_repo_set_id || null,
+        behavioural_repo_set_id: initialData?.behavioural_repo_set_id || null,
     })
 
     const [isUploadingAptitude, setIsUploadingAptitude] = useState(false)
     const [aptitudeFileName, setAptitudeFileName] = useState(initialData?.aptitude_questions_file ? 'Existing File' : '')
     const [aptitudeQuestionCount, setAptitudeQuestionCount] = useState(0)
+
+    // Repository picker state
+    const [technicalRepoSetId, setTechnicalRepoSetId] = useState<number | null>(initialData?.technical_repo_set_id || null)
+    const [aptitudeRepoSetId, setAptitudeRepoSetId] = useState<number | null>(initialData?.aptitude_repo_set_id || null)
+    const [behaviouralRepoSetId, setBehaviouralRepoSetId] = useState<number | null>(initialData?.behavioural_repo_set_id || null)
 
     const [locationSuggestions, setLocationSuggestions] = useState<string[]>([])
     const [showSuggestions, setShowSuggestions] = useState(false)
@@ -90,6 +210,10 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             })
             if (initialData.uploaded_question_file) setQuestionFileName('Existing File')
             if (initialData.aptitude_questions_file) setAptitudeFileName('Existing File')
+            
+            setTechnicalRepoSetId(initialData.technical_repo_set_id || null)
+            setAptitudeRepoSetId(initialData.aptitude_repo_set_id || null)
+            setBehaviouralRepoSetId(initialData.behavioural_repo_set_id || null)
         }
     }, [initialData])
 
@@ -160,6 +284,16 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             prevExpRef.current = formData.experience_level
         }
     }, [formData.experience_level])
+
+    // Sync repo IDs back to formData
+    useEffect(() => {
+        setFormData(prev => ({
+            ...prev,
+            technical_repo_set_id: technicalRepoSetId,
+            aptitude_repo_set_id: aptitudeRepoSetId,
+            behavioural_repo_set_id: behaviouralRepoSetId,
+        }))
+    }, [technicalRepoSetId, aptitudeRepoSetId, behaviouralRepoSetId])
 
     const handleAIFill = async (file?: File) => {
         setIsAILoading(true)
@@ -707,14 +841,32 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                             {isJunior && formData.aptitude_enabled && formData.aptitude_mode === 'upload' && (
                                 <div className="ml-7 mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                        Aptitude Questions File
+                                        Aptitude Questions Source
                                     </p>
+
+                                    {/* Repository picker */}
+                                    <RepoPicker
+                                        roundType="aptitude"
+                                        jobTitle={formData.title}
+                                        selectedId={aptitudeRepoSetId}
+                                        onSelect={(id) => setAptitudeRepoSetId(id)}
+                                    />
+
+                                    {/* Divider */}
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-px bg-border" />
+                                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">or upload Excel</span>
+                                        <div className="flex-1 h-px bg-border" />
+                                    </div>
+
                                     {formData.aptitude_questions_file ? (
                                         <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
                                             <FileText className="h-5 w-5 text-green-600" />
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium text-foreground truncate">{aptitudeFileName}</p>
-                                                <p className="text-xs text-muted-foreground">Uploaded successfully</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {aptitudeQuestionCount > 0 ? `${aptitudeQuestionCount} questions extracted` : 'Uploaded successfully'}
+                                                </p>
                                             </div>
                                             <button
                                                 type="button"
@@ -746,7 +898,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                                 ) : (
                                                     <UploadCloud className="h-4 w-4" />
                                                 )}
-                                                {isUploadingAptitude ? 'Uploading...' : 'Upload Aptitude Questions'}
+                                                {isUploadingAptitude ? 'Uploading...' : 'Upload Aptitude Questions (.xlsx)'}
                                             </Button>
                                         </div>
                                     )}
@@ -771,9 +923,9 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                     </p>
                                     <div className="space-y-2">
                                         {[
-                                            { value: 'ai', label: 'AI Generated Questions', desc: 'System generates all questions automatically using AI. No file upload needed.' },
-                                            { value: 'upload', label: 'Upload Questions (AI Evaluated)', desc: 'Only your uploaded questions will be asked. AI evaluates candidate answers.' },
-                                            { value: 'mixed', label: 'Mixed Questions', desc: 'Combines your uploaded questions (50%) with AI-generated questions (50%).' },
+                                            { value: 'ai', label: 'AI Generated Questions', desc: 'System generates all questions automatically using AI based on the job description and skills. No file upload needed.' },
+                                            { value: 'upload', label: 'Upload Questions (AI Evaluated)', desc: 'Only your uploaded questions will be asked. AI evaluates candidate answers. File upload is required.' },
+                                            { value: 'mixed', label: 'Mixed Questions', desc: 'Combines your uploaded questions (50%) with AI-generated questions (50%). A question file is required for Mixed mode.' },
                                         ].map((modeItem) => (
                                             <label
                                                 key={modeItem.value}
@@ -805,41 +957,62 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
 
                                                     {(modeItem.value === 'upload' || modeItem.value === 'mixed') && formData.interview_mode === modeItem.value && (
                                                         <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                            {formData.uploaded_question_file ? (
-                                                                <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
-                                                                    <FileText className="h-5 w-5 text-green-600" />
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <p className="text-sm font-medium text-foreground truncate">{questionFileName}</p>
-                                                                        <p className="text-xs text-muted-foreground">Uploaded successfully</p>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={removeQuestionFile}
-                                                                        className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                                                    >
-                                                                        <X className="h-4 w-4" />
-                                                                    </button>
+                                                            {/* Repository picker */}
+                                                            <RepoPicker
+                                                                roundType="technical"
+                                                                jobTitle={formData.title}
+                                                                selectedId={technicalRepoSetId}
+                                                                onSelect={(id) => setTechnicalRepoSetId(id)}
+                                                            />
+
+                                                            {/* Divider for manual upload fallback */}
+                                                            {!technicalRepoSetId && (
+                                                                <div className="flex items-center gap-2 my-2">
+                                                                    <div className="flex-1 h-px bg-border" />
+                                                                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">or upload file</span>
+                                                                    <div className="flex-1 h-px bg-border" />
                                                                 </div>
-                                                            ) : (
-                                                                <div>
-                                                                    <input
-                                                                        type="file"
-                                                                        ref={questionFileRef}
-                                                                        accept=".txt,.pdf,.docx"
-                                                                        className="hidden"
-                                                                        onChange={handleQuestionFileUpload}
-                                                                    />
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={() => questionFileRef.current?.click()}
-                                                                        disabled={isUploadingQuestions}
-                                                                        className="gap-2"
-                                                                    >
-                                                                        {isUploadingQuestions ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                                                                        {isUploadingQuestions ? 'Uploading...' : 'Upload Questions'}
-                                                                    </Button>
+                                                            )}
+
+                                                            {(formData.uploaded_question_file || !technicalRepoSetId) && (
+                                                                <div className="mt-2">
+                                                                    {formData.uploaded_question_file ? (
+                                                                        <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/5">
+                                                                            <FileText className="h-5 w-5 text-green-600" />
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm font-medium text-foreground truncate">{questionFileName}</p>
+                                                                                <p className="text-xs text-muted-foreground">Uploaded successfully</p>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={removeQuestionFile}
+                                                                                className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                                                            >
+                                                                                <X className="h-4 w-4" />
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div>
+                                                                            <input
+                                                                                type="file"
+                                                                                ref={questionFileRef}
+                                                                                accept=".txt,.pdf,.docx"
+                                                                                className="hidden"
+                                                                                onChange={handleQuestionFileUpload}
+                                                                            />
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => questionFileRef.current?.click()}
+                                                                                disabled={isUploadingQuestions}
+                                                                                className="gap-2"
+                                                                            >
+                                                                                {isUploadingQuestions ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                                                                                {isUploadingQuestions ? 'Uploading...' : 'Upload Question File'}
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -866,10 +1039,23 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                     onChange={(e) => setFormData({ ...formData, behavioral_role: e.target.value })}
                                 >
                                     <option value="general">General (Standard Questions)</option>
-                                    <option value="junior">Junior (Learning, Adaptability)</option>
-                                    <option value="mid">Mid-Level (Ownership, Problem Solving)</option>
-                                    <option value="lead">Lead/Manager (Leadership, Mentorship)</option>
+                                    <option value="junior">Junior (Learning, Adaptability, Following instructions)</option>
+                                    <option value="mid">Mid-Level (Ownership, Independent Problem Solving)</option>
+                                    <option value="lead">Lead/Manager (Leadership, System Design, Mentorship)</option>
                                 </select>
+
+                                {/* Repository picker for behavioral */}
+                                <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                                        or select behavioral repository set
+                                    </p>
+                                    <RepoPicker
+                                        roundType="behavioural"
+                                        jobTitle={formData.title}
+                                        selectedId={behaviouralRepoSetId}
+                                        onSelect={(id) => setBehaviouralRepoSetId(id)}
+                                    />
+                                </div>
                             </div>
                         </div>
 

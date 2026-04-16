@@ -264,17 +264,14 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
                                     <CardHeader className="p-3 pb-1.5 flex flex-row items-center space-y-0 relative pr-10">
                                         <div className="flex items-start space-x-2.5 flex-1 min-w-0">
                                             <Avatar className="h-8 w-8 border-2 border-background shadow-sm shrink-0">
-                                                {app.candidate.photo_url || app.candidate.candidate_photo_path ? (
-                                                    <AvatarImage 
-                                                        src={app.candidate.photo_url || (app.candidate.candidate_photo_path ? `${API_BASE_URL}/${app.candidate.candidate_photo_path.replace(/\\/g, '/')}` : undefined)}
-                                                        alt={app.candidate.full_name}
-                                                        className="object-cover"
-                                                    />
-                                                ) : (
-                                                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                                                        {app.candidate.full_name?.charAt(0)}
-                                                    </AvatarFallback>
-                                                )}
+                                                <AvatarImage 
+                                                    src={app.candidate.photo_url || (app.candidate.candidate_photo_path ? (app.candidate.candidate_photo_path.startsWith('http') ? app.candidate.candidate_photo_path : `${API_BASE_URL}/${app.candidate.candidate_photo_path.replace(/\\/g, '/')}`) : undefined)}
+                                                    alt={app.candidate.full_name}
+                                                    className="object-cover"
+                                                />
+                                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                                                    {app.candidate.full_name?.charAt(0)}
+                                                </AvatarFallback>
                                             </Avatar>
                                             <div className="overflow-hidden min-w-0 pt-0.5">
                                                 <CardTitle className="text-[13px] font-bold text-foreground truncate leading-tight">{app.candidate.full_name}</CardTitle>
