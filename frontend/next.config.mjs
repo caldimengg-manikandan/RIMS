@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  basePath: '/calrims', // Uncomment for production deployment
+  basePath: '/calrims',
+  trailingSlash: true,
   devIndicators: {
     appIsrStatus: false,
     buildActivity: false,
@@ -16,16 +17,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    optimizePackageImports: [
-      'lucide-react',
-      '@radix-ui/react-icons',
-      '@radix-ui/react-avatar',
-      '@radix-ui/react-dialog',
-      '@radix-ui/react-dropdown-menu',
-      'framer-motion'
-    ]
-  },
   async rewrites() {
     return [
       {
@@ -35,5 +26,4 @@ const nextConfig = {
     ]
   }
 }
-
 export default nextConfig
