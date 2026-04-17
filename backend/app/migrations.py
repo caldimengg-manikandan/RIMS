@@ -239,6 +239,23 @@ def run_startup_migrations(engine: Engine):
 
         # 1e. (question_sets table is created in step 0 above)
 
+        # 1f. Ensure interview_feedbacks table exists (added after initial DB creation)
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS interview_feedbacks (
+                    id SERIAL PRIMARY KEY,
+                    interview_id INTEGER NOT NULL UNIQUE REFERENCES interviews(id) ON DELETE CASCADE,
+                    ui_ux_rating INTEGER,
+                    feedback_text TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info("Ensured interview_feedbacks table exists")
+        except Exception as e:
+            _safe_rollback(conn)
+            logger.warning(f"Failed to create interview_feedbacks table: {e}")
+
     # 2. Update Role Constraints
     with engine.connect() as conn:
         try:

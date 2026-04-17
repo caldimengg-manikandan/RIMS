@@ -1441,13 +1441,9 @@ async def evaluate_answer_task(
             }
         )
 
-    # If AI returned an empty/zero score, also apply heuristic fallback.
-    try:
-        numeric_answer_score = float(answer_score) if answer_score is not None else 0.0
-    except Exception:
-        numeric_answer_score = 0.0
-
-    if numeric_answer_score <= 0.0:
+    # If AI failed to return a score object, evaluation is None (handled above).
+    # If it returned a JSON but didn't include 'overall' score, it might be None.
+    if answer_score is None:
         heuristic_score = fallback_score_answer(answer_text, question_text)
         fallback_used = True
         answer_score = heuristic_score
@@ -1461,9 +1457,15 @@ async def evaluate_answer_task(
             {
                 "fallback_scored": True,
                 "heuristic_score": heuristic_score,
-                "error": "AI evaluation returned 0/empty; applied heuristic fallback",
+                "error": "AI evaluation returned no overall score; applied heuristic fallback",
             }
         )
+    else:
+        try:
+            numeric_answer_score = float(answer_score)
+            answer_score = max(0.0, min(100.0, numeric_answer_score))
+        except Exception:
+            answer_score = 0.0
 
     # 2. SAVE RESULTS: Use a short-lived transaction specifically for the update.
     db: Session = SessionLocal()
@@ -1507,7 +1509,7 @@ async def evaluate_answer_task(
 
 
 @router.post("/{interview_id}/submit-answer")
-@limiter.limit("10/minute")
+@limiter.limit("60/minute")
 async def submit_answer(
     request: Request,
     interview_id: int,

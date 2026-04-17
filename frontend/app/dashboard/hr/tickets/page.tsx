@@ -51,20 +51,35 @@ interface Ticket {
     resolved_at: string | null
 }
 
+interface Feedback {
+    id: number
+    interview_id: number
+    candidate_name: string
+    candidate_email: string
+    job_title: string
+    job_id: number | null
+    ui_ux_rating: number
+    feedback_text: string | null
+    created_at: string
+}
+
 import useSWR from 'swr'
 import { performMutation } from '@/app/dashboard/lib/swr-utils'
+import { Star } from 'lucide-react'
 
 export default function HRTicketsPage() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [hrResponse, setHrResponse] = useState('')
     const [isResolving, setIsResolving] = useState(false)
-    const [filter, setFilter] = useState<'pending' | 'all'>('pending')
+    const [filter, setFilter] = useState<'pending' | 'all' | 'feedback'>('pending')
     const [sendEmail, setSendEmail] = useState(true)
 
-    const { data: resp, isLoading, mutate } = useSWR<any>(
-        `/api/tickets?status=${filter}`
-    )
-    const tickets = (resp?.items || []) as Ticket[]
+    const endpoint = filter === 'feedback' ? '/api/tickets/feedback' : `/api/tickets?status=${filter}`
+    const { data: resp, isLoading, mutate } = useSWR<any>(endpoint)
+    
+    const tickets = (filter === 'feedback' ? [] : (resp?.items || [])) as Ticket[]
+    const feedbacks = (filter === 'feedback' ? (resp?.items || []) : []) as Feedback[]
+
 
 
     const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed' | 'reply') => {
@@ -156,6 +171,14 @@ export default function HRTicketsPage() {
                     >
                         All History
                     </Button>
+                    <Button
+                        variant={filter === 'feedback' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setFilter('feedback')}
+                        className="rounded-lg font-bold"
+                    >
+                        Feedback
+                    </Button>
                 </div>
             </div>
 
@@ -163,7 +186,7 @@ export default function HRTicketsPage() {
                 <div className="flex justify-center py-20">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 </div>
-            ) : tickets.length === 0 ? (
+            ) : (filter !== 'feedback' && tickets.length === 0) || (filter === 'feedback' && feedbacks.length === 0) ? (
                 <Card className="border-dashed py-20 bg-card/50">
                     <CardContent className="flex flex-col items-center justify-center text-center space-y-4">
                         <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -171,10 +194,43 @@ export default function HRTicketsPage() {
                         </div>
                         <div className="space-y-1">
                             <h3 className="text-xl font-bold">All clear!</h3>
-                            <p className="text-muted-foreground">No pending support tickets at the moment.</p>
+                            <p className="text-muted-foreground">{filter === 'feedback' ? 'No candidate feedback available.' : 'No pending support tickets at the moment.'}</p>
                         </div>
                     </CardContent>
                 </Card>
+            ) : filter === 'feedback' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {feedbacks.map((fb) => (
+                        <Card key={fb.id} className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 overflow-hidden flex flex-col">
+                            <div className="h-1.5 w-full bg-gradient-to-r from-primary/50 to-primary group-hover:from-primary group-hover:to-accent transition-all"></div>
+                            <CardHeader className="pb-3">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex gap-0.5">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <Star key={star} className={`h-4 w-4 ${star <= fb.ui_ux_rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+                                        ))}
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
+                                        <Clock className="h-3 w-3" />
+                                        {fb.created_at ? new Date(fb.created_at).toLocaleDateString() : 'N/A'}
+                                    </span>
+                                </div>
+                                <CardTitle className="text-xl mt-3 line-clamp-1">{fb.candidate_name}</CardTitle>
+                                <CardDescription className="flex flex-col gap-1 mt-1">
+                                    <span className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> {fb.candidate_email}</span>
+                                    <span className="text-xs font-semibold text-primary/80 line-clamp-1">{fb.job_title}</span>
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-1 bg-muted/20 m-4 mt-0 rounded-lg p-4 border border-border/50">
+                                {fb.feedback_text ? (
+                                    <p className="text-sm text-foreground italic">"{fb.feedback_text}"</p>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground italic tracking-tight">No specific comments provided.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {tickets.map((ticket) => (

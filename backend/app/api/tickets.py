@@ -122,6 +122,49 @@ def submit_feedback(feedback: InterviewFeedbackCreate, db: Session = Depends(get
     db.refresh(new_feedback)
     return new_feedback
 
+@router.get("/feedback", response_model=None)
+def list_feedback(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_hr),
+    db: Session = Depends(get_db),
+):
+    """List all candidate feedback submissions. HR sees only their own; super_admin sees all."""
+    query = (
+        db.query(InterviewFeedback)
+        .options(
+            joinedload(InterviewFeedback.interview)
+            .joinedload(Interview.application)
+            .joinedload(Application.job)
+        )
+        .join(Interview, InterviewFeedback.interview_id == Interview.id)
+        .join(Application, Interview.application_id == Application.id)
+        .join(Job, Application.job_id == Job.id)
+    )
+    if current_user.role.lower() == "hr":
+        query = query.filter(Application.hr_id == current_user.id)
+
+    total = query.count()
+    feedbacks = query.order_by(InterviewFeedback.created_at.desc()).offset(skip).limit(limit).all()
+
+    # Enrich with candidate data from the joined tables
+    result = []
+    for fb in feedbacks:
+        app = fb.interview.application if fb.interview else None
+        result.append({
+            "id": fb.id,
+            "interview_id": fb.interview_id,
+            "ui_ux_rating": fb.ui_ux_rating,
+            "feedback_text": fb.feedback_text,
+            "created_at": fb.created_at.isoformat() if fb.created_at else None,
+            "candidate_name": app.candidate_name if app else "Unknown",
+            "candidate_email": app.candidate_email if app else "N/A",
+            "job_title": app.job.title if (app and app.job) else "N/A",
+            "job_id": app.job.id if (app and app.job) else None,
+        })
+
+    return {"items": result, "total": total}
+
 @router.get("/count")
 def get_ticket_count(
     current_user: User = Depends(get_current_hr),
