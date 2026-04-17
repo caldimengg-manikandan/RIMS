@@ -52,9 +52,9 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
       <div className="w-full px-4 md:px-8 flex items-center justify-between">
         
         {/* Left: Logo and Title */}
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link href="/calrims/" className="flex items-center gap-2 group">
           <div className="bg-primary/20 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
-             <img src="/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
+             <img src="/calrims/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
           </div>
           <span className="text-xl font-bold tracking-tight text-white hidden lg:block">
             CALRIMS
