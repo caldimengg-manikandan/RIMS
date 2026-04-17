@@ -2498,6 +2498,7 @@ async def upload_interview_video(
     
     try:
         content = await file.read()
+        logger.info(f"Uploading video for interview {interview_id}: size={len(content)} bytes, type={file.content_type}")
         returned_path = upload_file(
             settings.supabase_bucket_videos, 
             storage_path, 

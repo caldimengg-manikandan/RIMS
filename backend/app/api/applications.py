@@ -1543,8 +1543,8 @@ async def update_application_status(
         background_tasks.add_task(send_rejected_email, candidate_email, job_title, False)
     elif result.email_type == "call_for_interview":
         logger.info(f"[EMAIL] Scheduling call_for_interview email to {candidate_email}")
-        from app.services.email_service import send_approved_for_interview_email
-        background_tasks.add_task(send_approved_for_interview_email, candidate_email, job_title)
+        from app.services.email_service import send_call_for_interview_email
+        background_tasks.add_task(send_call_for_interview_email, candidate_email, job_title)
     elif result.email_type == "hired":
         logger.info(f"[EMAIL] Scheduling hired email to {candidate_email}")
         from app.services.email_service import send_hired_email

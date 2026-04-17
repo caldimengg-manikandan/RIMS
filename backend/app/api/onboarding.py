@@ -688,8 +688,8 @@ def download_id_card(
     signed_url = get_signed_url(settings.supabase_bucket_id_cards, application.id_card_url)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate download link")
-        
-    return RedirectResponse(url=signed_url)
+
+    return {"status": "success", "url": signed_url}
 
 @router.post("/respond")
 async def respond_to_offer(request: Request, response_req: OfferResponseRequest, db: Session = Depends(get_db)):
