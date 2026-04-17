@@ -19,8 +19,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims/api
-      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims
       - HOSTNAME=0.0.0.0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/calrims"]
@@ -38,6 +37,7 @@ services:
     environment:
       - ENV=production
       - BACKEND_START_MODE=docker
+      - FRONTEND_BASE_URL=https://caldimproducts.com/calrims
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
       interval: 10s
@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims/api
+      - NEXT_PUBLIC_API_BASE_URL=https://caldimproducts.com/calrims
       - HOSTNAME=0.0.0.0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/calrims"]
@@ -71,6 +71,7 @@ services:
     environment:
       - ENV=production
       - BACKEND_START_MODE=docker
+      - FRONTEND_BASE_URL=https://caldimproducts.com/calrims
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
       interval: 10s
