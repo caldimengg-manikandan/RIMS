@@ -383,6 +383,7 @@ export default function InterviewPage() {
                 `/api/interviews/${interviewId}/upload-video`,
                 formData,
                 `rims-${interviewId}-upload-video`,
+                300000, // 5 minute timeout for video upload
             )
             console.log("Overall video uploaded successfully")
         } catch (err) {
