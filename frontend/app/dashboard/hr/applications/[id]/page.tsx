@@ -161,7 +161,9 @@ export default function HRApplicationDetailPage() {
                 {
                     lockKey: `application-${applicationId}`,
                     optimisticData: (current) => ({ ...current, status: nextStatus }),
-                    successMessage: `Action ${action} completed`,
+                    successMessage: action === "hire" 
+                        ? "Candidate hired! Visit Onboarding to issue offer letter." 
+                        : `Action ${action} completed`,
                     invalidateKeys: ['/api/analytics/dashboard', '/api/applications']
                 }
             )
@@ -710,17 +712,20 @@ export default function HRApplicationDetailPage() {
                             )}
 
                             {currentStatus === 'hired' && (
-                                <SendOfferDialog
-                                    applicationId={parseInt(applicationId)}
-                                    candidateName={application.candidate_name}
-                                    onSuccess={() => mutateApp()}
-                                    trigger={
-                                        <Button className="w-full h-14 gap-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl rounded-2xl font-black text-sm uppercase tracking-widest">
-                                            <Send className="h-5 w-5" />
-                                            Request Offer Approval
-                                        </Button>
-                                    }
-                                />
+                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-3">
+                                    <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mx-auto">
+                                        <ShieldAlert className="h-5 w-5" />
+                                    </div>
+                                    <p className="text-sm font-bold text-emerald-800 uppercase tracking-tight">Hired & Ready for Onboarding</p>
+                                    <p className="text-xs text-emerald-600">The next step is to issue the offer letter. Please visit the Onboarding page to complete this process.</p>
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-full text-emerald-700 border-emerald-300 hover:bg-emerald-100 font-bold"
+                                        onClick={() => router.push('/dashboard/onboarding')}
+                                    >
+                                        Go to Onboarding Pipeline
+                                    </Button>
+                                </div>
                             )}
 
                             {application.status === 'pending_approval' && (

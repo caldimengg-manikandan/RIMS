@@ -311,13 +311,15 @@ export default function OnboardingPage() {
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <div className="flex flex-col items-center gap-1.5">
-                                                {(() => {
+                                                 {(() => {
                                                     if (candidate.status === 'onboarded') return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] uppercase">🏁 Onboarded</Badge>;
                                                     if (candidate.status === 'accepted' || candidate.offer_response_status === 'accept' || candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
                                                     if (candidate.status === 'rejected' || candidate.offer_response_status === 'reject' || candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
                                                     
-                                                    if (candidate.offer_email_status === 'sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
+                                                    // Check DB status directly — offer_email_status is async and may lag
+                                                    if (candidate.status === 'offer_sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
                                                     if (candidate.status === 'pending_approval') return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] uppercase animate-pulse">⏳ Approval Pending</Badge>;
+                                                    if (candidate.status === 'hired') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">🎉 Hired</Badge>;
                                                     
                                                     return <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">📄 Staging</Badge>;
                                                 })()}

@@ -19,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { APIClient } from "@/app/dashboard/lib/api-client";
 import { RejectDialog } from "@/components/reject-dialog";
-import { HireDialog } from "@/components/hire-dialog";
 import useSWR from "swr";
 import { fetcher } from "@/app/dashboard/lib/swr-fetcher";
 import { performMutation } from "@/app/dashboard/lib/swr-utils";
@@ -214,7 +213,9 @@ export default function HRApplicationsPage() {
               )
             };
           },
-          successMessage: `Status updated to ${nextStatus}`,
+          successMessage: action === "hire" 
+            ? "Candidate hired! Visit Onboarding to issue offer letter." 
+            : `Status updated to ${nextStatus}`,
           invalidateKeys: ["/api/analytics/dashboard", "/api/search/candidates"]
         }
       );
@@ -227,48 +228,7 @@ export default function HRApplicationsPage() {
     }
   }, [mutate, applicationsListUrl]);
 
-  const handleHire = useCallback(async (
-    applicationId: number,
-    joiningDate: string,
-    notes: string,
-  ) => {
-    setProcessingIds(prev => new Set(prev).add(applicationId));
-    const actionFn = () => APIClient.post(
-      `/api/decisions/applications/${applicationId}/hire`,
-      { joining_date: joiningDate, notes }
-    );
 
-    try {
-      await performMutation<PaginatedResponse<Application>>(
-        applicationsListUrl,
-        mutate,
-        actionFn,
-        {
-          lockKey: `application-${applicationId}`,
-          optimisticData: (current) => {
-            const defaultResp = { items: [], total: 0, page: 1, size: 20, pages: 1 };
-            const data = current || defaultResp;
-            return {
-              ...data,
-              items: data.items.map((app) =>
-                app.id === applicationId
-                  ? { ...app, status: "hired" }
-                  : app
-              )
-            };
-          },
-          successMessage: "Candidate hired successfully",
-          invalidateKeys: ["/api/analytics/dashboard", "/api/search/candidates"]
-        }
-      );
-    } finally {
-      setProcessingIds(prev => {
-        const next = new Set(prev);
-        next.delete(applicationId);
-        return next;
-      });
-    }
-  }, [mutate, applicationsListUrl]);
 
   // Get unique job titles for the filter dropdown
   const jobTitles = useMemo(() => Array.from(
@@ -613,23 +573,21 @@ export default function HRApplicationsPage() {
 
                       {/* HIRE: from physical_interview */}
                       {app.status === 'physical_interview' && (
-                        <HireDialog 
-                          candidateName={app.candidate_name}
-                          onConfirm={(date, notes) => handleHire(app.id, date, notes)}
-                          trigger={
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={processingIds.has(app.id)}
-                              className="border-emerald-500 text-emerald-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                            >
-                              {processingIds.has(app.id) ? (
-                                <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                              ) : null}
-                              HIRE
-                            </Button>
-                          }
-                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={processingIds.has(app.id)}
+                          className="border-emerald-500 text-emerald-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleTransition(app.id, "hire");
+                          }}
+                        >
+                          {processingIds.has(app.id) ? (
+                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
+                          ) : null}
+                          HIRE
+                        </Button>
                       )}
 
                       {/* REJECT: from any non-terminal state */}
