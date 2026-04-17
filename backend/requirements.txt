@@ -93,3 +93,4 @@ propcache==0.4.1
 aiosignal==1.4.0
 aiohappyeyeballs==2.6.1
 colorama==0.4.6
+pytest==8.3.4

@@ -334,26 +334,27 @@ def get_filtered_interviews(
     db: Session = Depends(get_db)
 ):
     """
-    Get filtered interviews for the HR user.
+    Get filtered candidates (Applications) for the HR user. 
+    Basing this on Applications ensures the list count matches the 'Total Candidates' metric.
     """
-    from sqlalchemy.orm import contains_eager, selectinload
-    # FIX: Use selectinload for the report to avoid the JOIN ambiguity caused by multiple FK paths
-    query = db.query(Interview)\
-        .outerjoin(Interview.application)\
-        .outerjoin(Application.job)\
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import or_
+    
+    # Source of truth is Application to ensure 100% data alignment with Total Candidates card
+    query = db.query(Application)\
+        .outerjoin(Job, Application.job_id == Job.id)\
+        .outerjoin(Interview, Application.id == Interview.application_id)\
         .options(
-            contains_eager(Interview.application).contains_eager(Application.job),
-            selectinload(Interview.report)
+            selectinload(Application.job),
+            selectinload(Application.interview).selectinload(Interview.report)
         )
 
     # Apply visibility isolation
     if current_user.role.lower() != "super_admin":
         query = query.filter(Application.hr_id == current_user.id)
-    # Super Admin sees all.
 
     # Apply global search if present
     if search:
-        from sqlalchemy import or_
         query = query.filter(or_(
             Application.candidate_name.ilike(f"%{search}%"),
             Application.candidate_email.ilike(f"%{search}%"),
@@ -375,38 +376,66 @@ def get_filtered_interviews(
         query = query.filter(Job.title.ilike(f"%{role_applied}%"))
     
     if status and status != "all":
-        query = query.filter(Interview.status == status)
+        if status == "hired":
+            query = query.filter(Application.status.in_(['hired', 'accepted', 'onboarded']))
+        elif status == "completed":
+            query = query.filter(or_(
+                Interview.status == 'completed',
+                Application.status == 'interview_completed'
+            ))
+        elif status == "rejected":
+            query = query.filter(Application.status == 'rejected')
+        elif status == "not_started":
+            # Either interview explicitly not started, or application still in early stages
+            query = query.filter(or_(
+                Interview.status == 'not_started',
+                Application.status.in_(['applied', 'screened']),
+                Interview.id == None # No interview record yet
+            ))
+        elif status == "in_progress":
+            query = query.filter(or_(
+                Interview.status == 'in_progress',
+                Application.status.in_(['aptitude_round', 'ai_interview', 'physical_interview'])
+            ))
+        else:
+            # Fallback for any other specific status
+            query = query.filter(or_(
+                Interview.status == status,
+                Application.status == status
+            ))
     
     if date:
         try:
-            # Expecting YYYY-MM-DD
             filter_date = datetime.strptime(date, "%Y-%m-%d").date()
             from sqlalchemy import cast, Date
-            query = query.filter(cast(Interview.created_at, Date) == filter_date)
+            query = query.filter(cast(Application.applied_at, Date) == filter_date)
         except ValueError:
-            pass # Ignore invalid date format
+            pass
 
     # Order by newest first
     total = query.count()
-    interviews = query.order_by(Interview.created_at.desc()).offset(skip).limit(limit).all()
+    applications = query.order_by(Application.applied_at.desc()).offset(skip).limit(limit).all()
 
     result = []
-    for interview in interviews:
-        application = interview.application
-        job = application.job if application else None
+    for app in applications:
+        interview = app.interview
+        job = app.job
+        
+        # Use interview status if it exists, otherwise fallback to application status
+        display_status = interview.status if interview else app.status
         
         result.append({
-            "id": interview.id,
-            "test_id": interview.test_id,
-            "candidate_name": application.candidate_name if application else "Unknown",
-            "candidate_email": application.candidate_email if application else "Unknown",
+            "id": interview.id if interview else f"app_{app.id}",
+            "test_id": interview.test_id if interview else None,
+            "candidate_name": app.candidate_name,
+            "candidate_email": app.candidate_email,
             "job_title": job.title if job else "Unknown",
-            "date": interview.created_at.isoformat() if interview.created_at else None,
-            "status": interview.status,
-            "report_id": interview.report.id if interview.report else None,
-            "assigned_hr_id": application.hr_id if application else None,
-            "assigned_hr_name": application.hr.full_name if application and application.hr else "Unknown",
-            "is_owner": (application.hr_id == current_user.id) if application else False
+            "date": (interview.created_at if interview else app.applied_at).isoformat(),
+            "status": display_status,
+            "report_id": interview.report.id if (interview and interview.report) else None,
+            "assigned_hr_id": app.hr_id,
+            "assigned_hr_name": app.hr.full_name if app.hr else "Unknown",
+            "is_owner": (app.hr_id == current_user.id)
         })
 
     return {"items": result, "total": total}

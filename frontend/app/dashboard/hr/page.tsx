@@ -111,6 +111,14 @@ export default function HRDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [filters.search])
+
   useEffect(() => {
     setCurrentPage(1)
   }, [debouncedSearch, filters.date, filters.status])
@@ -144,7 +152,7 @@ export default function HRDashboard() {
         total_candidates: (d as any).total_applications || 0,
         shortlisted_candidates: (d as any).total_interviews || 0,
         interviewed_candidates: (d as any).completed_interviews || 0,
-        offers_released: 0,
+        offers_released: (d as any).offers_released || 0,
         hiring_success_rate: (d as any).success_rate || 0
       }
     }
@@ -450,7 +458,7 @@ export default function HRDashboard() {
               {/* Pagination Controls */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
                 <div className="text-sm text-muted-foreground">
-                  Showing <span className="font-bold text-foreground">{recentInterviews.length}</span> of <span className="font-bold text-foreground">{paginatedInterviews?.total || 0}</span> interviews
+                  Showing <span className="font-semibold text-slate-800 dark:text-slate-200">{Math.min(pageSize, paginatedInterviews?.total || recentInterviews.length)}</span> of <span className="font-semibold text-slate-800 dark:text-slate-200">{paginatedInterviews?.total || recentInterviews.length}</span> candidates
                 </div>
                 <div className="flex items-center gap-4">
                    <div className="text-sm font-medium text-muted-foreground mr-2">
@@ -516,7 +524,10 @@ StatsCard.displayName = 'StatsCard'
 const ActionButton = React.memo(({ href, label }: { href: string, label: string }) => {
   return (
     <Link href={href} className="block group">
-      <Button variant="outline" className="w-full justify-between hover:border-primary/50 hover:bg-primary/5 transition-all">
+      <Button 
+        variant="outline" 
+        className="w-full justify-between text-foreground hover:bg-primary/5 hover:text-primary focus:bg-primary/5 focus:text-primary active:bg-primary/10 active:text-primary border-border hover:border-primary/40 transition-all"
+      >
         {label}
         <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
       </Button>

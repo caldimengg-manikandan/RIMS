@@ -12,15 +12,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Environment-specific dotenv loading (non-breaking).
 # Precedence rules:
-# 1) Load env-specific file first (if present) so it can override base defaults.
-# 2) Load `.env` afterwards (if present) to fill any missing vars.
-# 3) Never override real OS environment variables.
+# 1) Load env-specific file first (if present). We use override=True so explicit production config wins.
+# 2) Load `.env` afterwards (if present) to fill any missing vars (override=False).
 _active_env = (os.getenv("ENV") or "development").strip().lower()
 _env_specific = ".env.production" if _active_env == "production" else ".env.local"
 _env_specific_path = os.path.join(str(BASE_DIR), _env_specific)
 _base_env_path = os.path.join(str(BASE_DIR), ".env")
+
 if os.path.exists(_env_specific_path):
-    load_dotenv(_env_specific_path, override=False)
+    load_dotenv(_env_specific_path, override=True)
 if os.path.exists(_base_env_path):
     load_dotenv(_base_env_path, override=False)
 
@@ -120,15 +120,11 @@ class Settings(BaseSettings):
     supabase_bucket_id_photos: str = "id-photos"
     supabase_bucket_videos: str = "videos"
 
-    frontend_base_url: str = os.getenv(
-        "NEXT_PUBLIC_FRONTEND_URL",
-        os.getenv(
-            "FRONTEND_URL",
-            os.getenv(
-                "NEXT_PUBLIC_APP_URL",
-                os.getenv("FRONTEND_BASE_URL", "http://localhost:3000"),
-            ),
-        ),
+    # Frontend URL (Point 8, A007)
+    # Pydantic-settings will prioritize the env vars listed in validation_alias.
+    frontend_base_url: str = Field(
+        default="http://localhost:3000",
+        validation_alias="FRONTEND_BASE_URL"
     )
 
     class Config:
@@ -152,8 +148,16 @@ class Settings(BaseSettings):
             object.__setattr__(self, "smtp_from", (self.smtp_from or "").strip())
             object.__setattr__(self, "resend_api_key", (self.resend_api_key or "").strip())
             object.__setattr__(self, "resend_from", (self.resend_from or "").strip())
+            object.__setattr__(self, "frontend_base_url", (self.frontend_base_url or "").strip())
         except Exception:
             pass
+
+        # Warning if localhost is used in production
+        if (self.env or "").strip().lower() == "production":
+            if "localhost" in self.frontend_base_url or "127.0.0.1" in self.frontend_base_url:
+                 logging.getLogger(__name__).warning(
+                    f"CRITICAL CONFIG WARNING: frontend_base_url set to '{self.frontend_base_url}' while ENV=production."
+                )
 
         explicit = os.environ.get("WS_ENFORCE_INTERVIEW_JWT")
         if explicit is not None:

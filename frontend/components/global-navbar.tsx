@@ -31,7 +31,7 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const NavContent = () => (
     <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 md:p-0">
       <ThemeTogglerButton variant="ghost" className="rounded-full text-white/70 hover:text-white hover:bg-white/10 hidden md:flex" />
-      
+
       {isDashboard ? (
         <div className="flex items-center gap-2 md:gap-4">
           <NotificationBell />
@@ -50,11 +50,11 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
   return (
     <nav className="sticky top-0 w-full z-50 bg-[#0a1a3c]/90 backdrop-blur-xl border-b border-white/5 shadow-2xl h-16 flex items-center shrink-0">
       <div className="w-full px-4 md:px-8 flex items-center justify-between">
-        
+
         {/* Left: Logo and Title */}
-        <Link href="/calrims/" className="flex items-center gap-2 group">
+        <Link href="" className="flex items-center gap-2 group">
           <div className="bg-primary/20 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
-             <img src="/calrims/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
+            <img src="/calrims/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
           </div>
           <span className="text-xl font-bold tracking-tight text-white hidden lg:block">
             CALRIMS
@@ -69,9 +69,9 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
         {/* Mobile Navigation Toggle */}
         <div className="flex items-center gap-2 md:hidden">
           <ThemeTogglerButton variant="ghost" className="rounded-full text-white/70" />
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="text-white"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >

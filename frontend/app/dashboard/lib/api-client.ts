@@ -51,7 +51,7 @@ export class APIClient {
       headers['Content-Type'] = 'application/json'
     }
     if (typeof window !== 'undefined' && !(endpoint && this.isPublicEndpoint(endpoint))) {
-      const isInterviewRoute = window.location.pathname.startsWith('/interview')
+      const isInterviewRoute = window.location.pathname.includes('/interview')
       if (isInterviewRoute) {
         const interviewToken = localStorage.getItem('interview_token')
         if (interviewToken) {
@@ -179,7 +179,7 @@ export class APIClient {
       if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
         if (response.status === 401) {
           localStorage.removeItem('auth_token')
-          if (!window.location.pathname.startsWith('/interview')) {
+          if (!window.location.pathname.includes('/interview')) {
              window.location.href = '/'
           }
         }

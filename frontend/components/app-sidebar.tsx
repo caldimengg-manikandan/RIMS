@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { cn } from '@/app/dashboard/lib/utils'
 
 import {
     Sidebar,
@@ -143,7 +144,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenu className="gap-1">
                     {links.map((link) => {
                         const Icon = link.icon
-                        const isActive = pathname === link.href
+                        // Robust matching for dashboard routes (handles sub-routes and singular/plural variants)
+                        const isActive = pathname === link.href || 
+                                       (link.href !== '/dashboard/hr' && pathname.startsWith(link.href)) ||
+                                       (link.href.includes('pipeline') && pathname.includes('pipeline'))
 
                         return (
                             <SidebarMenuItem key={link.href}>
@@ -151,12 +155,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                     asChild
                                     isActive={isActive}
                                     tooltip={link.label}
-                                    className="gap-3 rounded-lg data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-primary data-[active=true]:font-bold text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                    className={cn(
+                                        "relative gap-3 rounded-lg transition-all duration-200 group/item",
+                                        "text-sidebar-foreground hover:bg-sidebar-accent/30",
+                                        isActive && "bg-sidebar-accent/60 text-primary font-bold shadow-sm"
+                                    )}
                                 >
                                     <Link href={link.href} className="flex items-center justify-between w-full">
+                                        {isActive && (
+                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-primary rounded-r-lg z-20" />
+                                        )}
                                         <div className="flex items-center gap-3">
-                                            <Icon className="h-5 w-5 shrink-0 transition-colors" />
-                                            <span className="group-data-[collapsible=icon]:hidden">
+                                            <Icon className={cn(
+                                                "h-5 w-5 shrink-0 transition-colors",
+                                                isActive ? "text-primary" : "text-muted-foreground group-hover/item:text-sidebar-foreground"
+                                            )} />
+                                            <span className={cn(
+                                                "group-data-[collapsible=icon]:hidden transition-colors",
+                                                isActive ? "text-primary" : "text-sidebar-foreground"
+                                            )}>
                                                 {link.label}
                                             </span>
                                         </div>
