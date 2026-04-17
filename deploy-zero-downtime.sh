@@ -3,6 +3,11 @@ set -e
 
 echo "🚀 Initiating Zero-Downtime Deployment (Blue/Green)"
 
+# 0. Pull latest changes from GitHub
+echo "📥 Syncing code from GitHub..."
+git fetch --all
+git reset --hard origin/main
+
 # 1. Determine active environment
 ACTIVE_ENV=$(docker ps --format "{{.Names}}" | grep -E "frontend_(blue|green)" | head -n 1 | awk -F'_' '{print $2}')
 if [ -z "$ACTIVE_ENV" ]; then
