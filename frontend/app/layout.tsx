@@ -1,6 +1,5 @@
 import React, { Suspense } from "react"
 import type { Metadata } from 'next'
-import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/app/dashboard/lib/auth-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
@@ -69,7 +68,6 @@ export default function RootLayout({
               </ThemeProvider>
             </AuthProvider>
           </div>
-          <Analytics />
         </SWRProvider>
       </body>
     </html>

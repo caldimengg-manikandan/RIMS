@@ -37,7 +37,10 @@ type Application = {
 const STATUS_COLUMNS = [
     { id: "applied", label: "Applied" },
     { id: "screened", label: "Screened" },
-    // { id: "interview_scheduled", label: "Interview Scheduled" },
+    {
+        id: ["aptitude_round", "interview_scheduled", "physical_interview", "ai_interview"],
+        label: "Interview Scheduled"
+    },
     { id: "interview_completed", label: "Interview Completed" },
     { id: "hired", label: "Hired" },
     { id: "rejected", label: "Rejected" },
@@ -186,8 +189,13 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
         )
     }
 
-    const getColumnApplications = (status: string) => {
-        return applications.filter(app => app.status === status)
+    const getColumnApplications = (columnId: string | string[]) => {
+        return applications.filter(app => {
+            if (Array.isArray(columnId)) {
+                return columnId.includes(app.status)
+            }
+            return app.status === columnId
+        })
     }
 
     // Determine which non-reject action buttons to show on a card
@@ -203,7 +211,7 @@ export function PipelineBoard({ jobId }: { jobId?: string }) {
     return (
         <div className="flex h-full gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
             {STATUS_COLUMNS.map((column, colIndex) => (
-                <div key={column.id} style={{ animationDelay: `${colIndex * 150}ms` }} className="min-w-[280px] flex-1 max-w-[350px] h-full max-h-full flex flex-col bg-muted rounded-xl border border-border/40 p-2.5 shadow-inner overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both">
+                <div key={Array.isArray(column.id) ? column.id.join("-") : column.id} style={{ animationDelay: `${colIndex * 150}ms` }} className="min-w-[280px] flex-1 max-w-[350px] h-full max-h-full flex flex-col bg-muted rounded-xl border border-border/40 p-2.5 shadow-inner overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both">
                     <div className="flex items-center justify-between p-2 mb-2 shrink-0">
                         <div className="flex items-center gap-2">
                             <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">{column.label}</h3>

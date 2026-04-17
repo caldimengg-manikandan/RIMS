@@ -27,7 +27,7 @@ export function revalidateDashboardData() {
 
 export class APIClient {
   private static MAX_RETRIES = 3
-  private static TIMEOUT_MS = 60000 // Increased to 60s for heavy tasks (AI/PDF)
+  private static TIMEOUT_MS = 120000 // Increased to 120s globally for heavy tasks
 
   private static createRequestId(): string {
     if (typeof window !== 'undefined' && typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -63,9 +63,10 @@ export class APIClient {
     return headers
   }
 
-  private static async fetchWithRetry(url: string, options: RequestInit, retries = 0): Promise<Response> {
+  private static async fetchWithRetry(url: string, options: RequestInit, retries = 0, customTimeoutMs?: number): Promise<Response> {
     const controller = new AbortController()
-    const id = setTimeout(() => controller.abort(), this.TIMEOUT_MS)
+    const timeout = customTimeoutMs ?? this.TIMEOUT_MS
+    const id = setTimeout(() => controller.abort(), timeout)
     
     try {
       const response = await fetch(url, { ...options, signal: controller.signal })
@@ -77,7 +78,7 @@ export class APIClient {
       if (retries < this.MAX_RETRIES && (isTimeout || !window.navigator.onLine)) {
         // Exponential backoff
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000))
-        return this.fetchWithRetry(url, options, retries + 1)
+        return this.fetchWithRetry(url, options, retries + 1, customTimeoutMs)
       }
       throw err
     }
@@ -110,7 +111,7 @@ export class APIClient {
     return this.post<T>(endpoint, data, requestId)
   }
 
-  static async postMultipart<T>(endpoint: string, formData: FormData, requestId?: string): Promise<T> {
+  static async postMultipart<T>(endpoint: string, formData: FormData, requestId?: string, timeoutMs?: number): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
     const headers = this.getHeaders(true, endpoint)
     headers['X-Request-ID'] = requestId ?? this.createRequestId()
@@ -119,7 +120,7 @@ export class APIClient {
       headers,
       body: formData,
       credentials: 'include',
-    })
+    }, 0, timeoutMs)
     return this.handleResponse<T>(response)
   }
 

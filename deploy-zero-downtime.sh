@@ -3,6 +3,11 @@ set -e
 
 echo "🚀 Initiating Zero-Downtime Deployment (Blue/Green)"
 
+# 0. Pull latest changes from GitHub
+echo "📥 Syncing code from GitHub..."
+git fetch --all
+git reset --hard origin/main
+
 # 1. Determine active environment
 ACTIVE_ENV=$(docker ps --format "{{.Names}}" | grep -E "frontend_(blue|green)" | head -n 1 | awk -F'_' '{print $2}')
 if [ -z "$ACTIVE_ENV" ]; then
@@ -30,10 +35,13 @@ MAX_RETRIES=24
 RETRY_COUNT=0
 BACKEND_HEALTH="starting"
 
-# Try both underscore and hyphen naming conventions used by different Docker Compose versions
-CONTAINER_NAME="rims-backend_$DEPLOY_ENV-1"
-if [ -z "$(docker ps -a -q -f name=$CONTAINER_NAME)" ]; then
-    CONTAINER_NAME="rims_backend_${DEPLOY_ENV}_1"
+# Dynamically find the actual container name to handle prefixes/suffixes correctly
+CONTAINER_NAME=$(docker ps --format '{{.Names}}' -f "name=backend_$DEPLOY_ENV" | head -n 1)
+
+if [ -z "$CONTAINER_NAME" ]; then
+    echo "⚠️ Warning: Could not find container for backend_$DEPLOY_ENV"
+    # Fallback to a guess if search fails
+    CONTAINER_NAME="rims-backend_$DEPLOY_ENV-1"
 fi
 
 while [ "$BACKEND_HEALTH" != "healthy" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do

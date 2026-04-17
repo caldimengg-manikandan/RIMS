@@ -260,7 +260,7 @@ export default function OnboardingPage() {
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
                                 <TableHead className="font-bold py-4">Candidate</TableHead>
                                 <TableHead className="font-bold">Job & Joining</TableHead>
-                                <TableHead className="font-bold text-center">Lifecycle Status</TableHead>
+                                <TableHead className="font-bold text-center">Status</TableHead>
                                 <TableHead className="font-bold text-right pr-6">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -313,8 +313,8 @@ export default function OnboardingPage() {
                                             <div className="flex flex-col items-center gap-1.5">
                                                 {(() => {
                                                     if (candidate.status === 'onboarded') return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] uppercase">🏁 Onboarded</Badge>;
-                                                    if (candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
-                                                    if (candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
+                                                    if (candidate.status === 'accepted' || candidate.offer_response_status === 'accept' || candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
+                                                    if (candidate.status === 'rejected' || candidate.offer_response_status === 'reject' || candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
                                                     
                                                     if (candidate.offer_email_status === 'sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
                                                     if (candidate.status === 'pending_approval') return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] uppercase animate-pulse">⏳ Approval Pending</Badge>;
@@ -395,7 +395,14 @@ export default function OnboardingPage() {
                                                                 Generate ID
                                                             </Button>
                                                         ) : (
-                                                            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500 hover:bg-emerald-50" onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000'}/${candidate.id_card_url}`, '_blank')}>
+                                                            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500 hover:bg-emerald-50" onClick={async () => {
+                                                                try {
+                                                                    const res = await APIClient.get(`/api/onboarding/applications/${candidate.id}/download-id-card`) as any;
+                                                                    window.open(res.url, '_blank');
+                                                                } catch(e) {
+                                                                    toast.error('Failed to get download link');
+                                                                }
+                                                            }}>
                                                                 <Download className="h-3.5 w-3.5" />
                                                                 Download ID
                                                             </Button>

@@ -299,7 +299,7 @@ export default function HRApplicationDetailPage() {
                             className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors hover:bg-transparent group"
                         >
                             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> 
-                            <span className="text-sm font-bold">Back to Applications</span>
+                            <span className="text-sm font-bold">Back</span>
                         </Button>
                     </div>
 
