@@ -59,7 +59,7 @@ export class APIClient {
         }
       }
     }
-    headers['Cache-Control'] = 'no-store'
+    headers['X-Request-Source'] = 'rims-frontend'
     return headers
   }
 

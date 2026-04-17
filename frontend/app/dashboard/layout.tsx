@@ -98,10 +98,9 @@ export default function DashboardLayout({
     <SWRConfig
       value={{
         fetcher,
-        revalidateOnFocus: true,
+        revalidateOnFocus: false,   // disabled: prevents refetch on every tab focus
         revalidateOnReconnect: true,
-        dedupingInterval: 10_000,
-        focusThrottleInterval: 60_000,
+        dedupingInterval: 15_000,   // increased: reduces duplicate requests on navigation
         errorRetryCount: 3,
         shouldRetryOnError: true
       }}

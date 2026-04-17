@@ -125,10 +125,11 @@ def build_application_summary_response(application: Application, current_user_id
     # 2. Ownership Calculation (Simplified per Senior Backend Engineer request)
     is_owner = (application.hr_id == current_user_id) if current_user_id else False
 
-    # Generate full photo URL from path (v2 fix for Supabase)
+    # Generate full photo URL from path — use public URL (no network call) for list view.
+    # Signed URLs (which require a Supabase round-trip) are only needed on the detail page.
     photo_url = None
     if application.candidate_photo_path:
-        photo_url = get_signed_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
+        photo_url = get_public_url(settings.supabase_bucket_id_photos, application.candidate_photo_path)
 
     # 3. Final Construction (model_construct bypasses all Pydantic validators)
     return ApplicationSummaryResponse.model_construct(
@@ -958,30 +959,18 @@ def get_pending_applications_count(
     db: Session = Depends(get_db),
 ):
     """Sidebar / badges: count applications not in a terminal state, scoped to HR's jobs."""
-    # Phase 4 (System Recovery): Mark jobs stuck in 'parsing' for > 2 hours as failed.
-    # This ensures accuracy of the counter and allows HR to see it's failed.
-    db.execute(text("""
-        UPDATE applications SET 
-            resume_status = 'failed', 
-            failure_reason = 'Stuck in parsing for > 2 hours (System Timeout)'
-        WHERE resume_status = 'parsing' AND (NOW() - updated_at) > INTERVAL '2 hours'
-    """))
-    db.commit()
-
-    # FIX: Use outerjoin to include orphan applications if they exist
-    # FIX: NULL-safe file_status check (Phase 2, point 3)
-    # Sanitized to handle potential trailing spaces or hidden chars in DB
-    q = db.query(Application).filter(
+    # Use func.count() directly — avoids loading full ORM objects just to count them.
+    q = db.query(func.count(Application.id)).filter(
         ~Application.status.in_(("hired", "rejected")),
         or_(func.trim(Application.file_status).in_(('active', 'missing')), Application.file_status == None)
     )
-    
-    # Apply visibility isolation: Anyone not a super_admin is restricted to their own applications
+
+    # Apply visibility isolation
     if current_user.role.lower() != "super_admin":
         q = q.filter(Application.hr_id == current_user.id)
-    # Super Admin sees all.
 
-    return {"count": q.count()}
+    count = q.scalar() or 0
+    return {"count": count}
 
 
 @router.get("", response_model=ApplicationListResponse, response_class=ORJSONResponse)

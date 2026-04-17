@@ -111,7 +111,7 @@ function Start-Backend {
         exit 0
     }
 
-    $proc = Start-Process -FilePath python -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info" -NoNewWindow -PassThru
+    $proc = Start-Process -FilePath python -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2 --log-level info" -NoNewWindow -PassThru
     Write-Host "Backend PID: $($proc.Id)"
     Write-Host "Server running on http://0.0.0.0:$PORT"
     $proc.WaitForExit()

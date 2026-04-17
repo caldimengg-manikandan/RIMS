@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  basePath: '/calrims',
-  trailingSlash: true,
+  ...(process.env.NODE_ENV === 'production' ? {
+    basePath: '/calrims',
+    trailingSlash: true,
+  } : {}),
   devIndicators: {
     appIsrStatus: false,
     buildActivity: false,

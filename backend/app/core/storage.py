@@ -14,12 +14,19 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
+# Module-level singleton — avoids re-creating the HTTP client on every request
+_supabase_client: Optional[Any] = None
+
 def get_supabase_client() -> Optional[Any]:
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
     if settings.supabase_url and settings.supabase_key and SUPABASE_AVAILABLE:
         try:
-            return create_client(settings.supabase_url, settings.supabase_key)
+            _supabase_client = create_client(settings.supabase_url, settings.supabase_key)
+            return _supabase_client
         except Exception as e:
-            logger.error(f"Failed to initialize real Supabase client: {e}")
+            logger.error(f"Failed to initialize Supabase client: {e}")
     return None
 
 def upload_file(bucket: str, path: str, content: bytes, content_type: str = "application/octet-stream") -> Optional[str]:

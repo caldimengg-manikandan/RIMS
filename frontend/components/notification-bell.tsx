@@ -36,8 +36,8 @@ export function NotificationBell() {
         canViewNotifications ? '/api/notifications' : null,
         (url: string) => fetcher<Notification[]>(url),
         {
-            refreshInterval: 60000, // Reduced polling frequency as we now have realtime
-            dedupingInterval: 10000,
+            refreshInterval: 300000, // 5 min — was 60s, notifications are informational
+            dedupingInterval: 60000,
             revalidateOnFocus: false,
             revalidateOnReconnect: false,
         }

@@ -49,8 +49,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         user?.role === 'hr' ? '/api/applications/pending-count' : null,
         (url: string) => fetcher<{ count: number }>(url),
         {
-            refreshInterval: 60000,
-            dedupingInterval: 10000,
+            refreshInterval: 300000, // 5 min — badge counts don't need real-time updates
+            dedupingInterval: 60000,
             revalidateOnFocus: false,
             revalidateOnReconnect: false,
         },
@@ -61,8 +61,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         user?.role === 'hr' ? '/api/tickets/count' : null,
         (url: string) => fetcher<{ count: number }>(url),
         {
-            refreshInterval: 30000, // Tickets count refresh (more frequent)
-            dedupingInterval: 10000,
+            refreshInterval: 180000, // 3 min — ticket count badge
+            dedupingInterval: 60000,
             revalidateOnFocus: false,
             revalidateOnReconnect: false,
         }
@@ -98,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ]
 
     if (user?.role === 'super_admin') {
-        links.splice(3, 0, { href: '/dashboard/hr/approvals', label: 'Pending Approvals', icon: UserCheck })
+        links.splice(3, 0, { href: '/dashboard/hr/approvals', label: 'HR Management', icon: UserCheck })
         // links.splice(links.length - 1, 0, { href: '/dashboard/reliability', label: 'Reliability', icon: Activity })
     }
 

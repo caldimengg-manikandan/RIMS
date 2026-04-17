@@ -85,13 +85,13 @@ export default function HRDashboard() {
   const { data: dashboardData, error: dashboardError, isLoading: dashboardLoading } = useSWR<DashboardData>(
     '/api/analytics/dashboard', 
     (url: string) => fetcher<DashboardData>(url),
-    { refreshInterval: 30000 } // Auto-refresh every 30 seconds for live updates
+    { keepPreviousData: true }
   )
   const isSuperAdmin = user?.role === 'super_admin'
   const { data: pendingApprovals = [] } = useSWR<any[]>(
     isSuperAdmin ? '/api/auth/pending-approvals' : null,
     (url: string) => fetcher<any[]>(url),
-    { refreshInterval: 60000 }
+    {} // no polling — mutations call mutate() explicitly
   )
 
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function HRDashboard() {
   const { data: paginatedInterviews, isValidating: isFiltering, mutate: mutateInterviews } = useSWR<{ items: any[], total: number }>(
     `/api/analytics/interviews${filterQuery ? `?${filterQuery}` : ''}`,
     (url: string) => fetcher<{ items: any[], total: number }>(url),
-    { keepPreviousData: true, refreshInterval: 30000 }
+    { keepPreviousData: true }
   )
 
   // ... helper calculations ...
@@ -240,7 +240,7 @@ export default function HRDashboard() {
             </p>
             <Link href="/dashboard/hr/approvals">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all">
-                Review Pending Approvals
+                Review Pending HR Approvals
               </Button>
             </Link>
           </CardContent>
@@ -316,6 +316,7 @@ export default function HRDashboard() {
               <ActionButton href="/dashboard/hr/applications" label="Review Applications" />
               <ActionButton href="/dashboard/hr/pipeline" label="Hiring Pipeline" />
               <ActionButton href="/dashboard/hr/reports" label="View Reports" />
+              <ActionButton href="/dashboard/hr/tickets" label="Resolve Tickets" />
             </CardContent>
           </Card>
         </div>
