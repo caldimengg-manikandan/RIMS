@@ -33,7 +33,7 @@ class CandidateService:
             "Automated AI Interview": "ai_interview",
             "AI Interview Completed": "interview_completed",
             "Review Later": "review_later",
-            "Physical Interview": "physical_interview",
+            # "Physical Interview": "physical_interview",
             "Hired": "hired",
             "Rejected": "rejected"
         }

@@ -376,11 +376,12 @@ export default function HRApplicationsPage() {
               <option value="all">All Statuses</option>
               <option value="applied">Applied</option>
               <option value="screened">Screened</option>
-              <option value="interview_scheduled">Interview Scheduled</option>
+              {/* <option value="interview_scheduled">Interview Scheduled</option> */}
               <option value="interview_completed">Interview Completed</option>
               {/* <option value="review_later">Review Later</option> */}
-              <option value="physical_interview">Physical Interview</option>
+              {/* <option value="physical_interview">Physical Interview</option> */}
               <option value="hired">Hired</option>
+              <option value="offer_sent">Offer Sent</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>

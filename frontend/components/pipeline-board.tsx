@@ -37,7 +37,7 @@ type Application = {
 const STATUS_COLUMNS = [
     { id: "applied", label: "Applied" },
     { id: "screened", label: "Screened" },
-    { id: "interview_scheduled", label: "Interview Scheduled" },
+    // { id: "interview_scheduled", label: "Interview Scheduled" },
     { id: "interview_completed", label: "Interview Completed" },
     { id: "hired", label: "Hired" },
     { id: "rejected", label: "Rejected" },

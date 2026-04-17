@@ -947,10 +947,12 @@ export default function InterviewPage() {
 
             // Pass force=true when explicitly forced (violations, timer, or user confirmed with unanswered questions)
             const forceFlag = isForced || unansweredCount > 0
+            // Let the backend know the candidate deliberately ended early so it can update hr_notes
+            const endedEarly = isForced && unansweredCount > 0
 
             await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/end`,
-                { force: forceFlag },
+                { force: forceFlag, ended_early: endedEarly },
                 `rims-${interviewId}-end`,
             )
             setInterviewStatus('completed')
@@ -958,6 +960,7 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Error finishing interview", err)
             interviewStatusRef.current = 'active'
+            finishingInterviewRef.current = false
             toast.error(err.message || "Failed to complete interview. Please try again.")
         } finally {
             setIsSubmitting(false)
@@ -1630,16 +1633,25 @@ export default function InterviewPage() {
             <Dialog open={!!confirmEndInterview} onOpenChange={() => setConfirmEndInterview(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Confirm Interview End</DialogTitle>
+                        <DialogTitle>
+                            {confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0
+                                ? 'End Interview Early?'
+                                : 'Confirm Interview Submission'}
+                        </DialogTitle>
                         <DialogDescription>
-                            {confirmEndInterview?.unansweredCount && confirmEndInterview.unansweredCount > 0
-                                ? `You have ${confirmEndInterview.unansweredCount} unanswered question(s). Are you sure you want to end the interview now? Your answered questions will be submitted.`
-                                : 'Are you sure you want to end and submit your interview?'}
+                            {confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0
+                                ? `You have ${confirmEndInterview.unansweredCount} unanswered question(s). Ending early will submit only your answered questions. This action will be noted in your interview record.`
+                                : 'Are you sure you want to end and submit your interview? This action cannot be undone.'}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConfirmEndInterview(null)}>Cancel</Button>
-                        <Button onClick={handleConfirmEndInterview}>End Interview</Button>
+                        <Button
+                            className={confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0 ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+                            onClick={handleConfirmEndInterview}
+                        >
+                            {confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0 ? 'End Early' : 'Submit Interview'}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
