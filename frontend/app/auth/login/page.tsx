@@ -276,7 +276,7 @@ function LoginContent() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <span>Secure Sign In</span>
+                    <span>Sign In</span>
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </>
                 )}

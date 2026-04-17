@@ -186,7 +186,7 @@ def verify_otp(request: Request, verification_data: UserVerifyOTP, db: Session =
 @limiter.limit("30/minute")
 def login(request: Request, response: Response, credentials: UserLogin, db: Session = Depends(get_db)):
     """Login and set secure JWT HttpOnly cookie"""
-    credentials.email = credentials.email.lower()
+    credentials.email = credentials.email.lower().strip()
     user = db.query(User).filter(User.email == credentials.email).first()
 
     if not user:
