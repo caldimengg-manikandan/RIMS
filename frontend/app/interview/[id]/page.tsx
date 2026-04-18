@@ -119,7 +119,7 @@ export default function InterviewPage() {
                 const token = localStorage.getItem('interview_token')
                 if (token && interviewId) {
                     const url = `${API_BASE_URL}/api/interviews/${interviewId}/abandon`
-                    
+
                     // fetch with keepalive: true is the modern way to send "death rattle" analytics/status
                     fetch(url, {
                         method: 'POST',
@@ -127,7 +127,7 @@ export default function InterviewPage() {
                             'Authorization': `Bearer ${token}`
                         },
                         keepalive: true
-                    }).catch(() => {}) // Ignore errors as page is closing
+                    }).catch(() => { }) // Ignore errors as page is closing
                 }
             }
         }
@@ -166,10 +166,10 @@ export default function InterviewPage() {
             if (!stream) {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true })
             }
-            
+
             // Filter to only include audio tracks for the transcription recorder
             const audioStream = new MediaStream(stream.getAudioTracks())
-            
+
             if (audioStream.getAudioTracks().length === 0) {
                 throw new Error("No audio tracks found in stream")
             }
@@ -177,7 +177,7 @@ export default function InterviewPage() {
             // Try to use a standard mime type, but fallback
             const options = { mimeType: 'audio/webm' }
             let mediaRecorder: MediaRecorder
-            
+
             if (MediaRecorder.isTypeSupported('audio/webm')) {
                 mediaRecorder = new MediaRecorder(audioStream, options)
             } else {
@@ -199,7 +199,7 @@ export default function InterviewPage() {
                 if (audioBlob.size > 0) {
                     await handleTranscribe(audioBlob)
                 }
-                
+
                 // CRITICAL: ONLY stop tracks if they were created specifically for this recording
                 if (!isSharedStream) {
                     audioStream.getTracks().forEach(track => track.stop())
@@ -231,7 +231,7 @@ export default function InterviewPage() {
             // Ensure filename extension matches mime type if possible
             const ext = audioBlob.type.includes('ogg') ? 'ogg' : 'webm'
             formData.append('file', audioBlob, `recording.${ext}`)
-            
+
             transcribeSeqRef.current += 1
             const transcribeRid = `rims-${interviewId}-transcribe-${transcribeSeqRef.current}`
             const res = await APIClient.postMultipart<{ text: string }>(
@@ -323,7 +323,7 @@ export default function InterviewPage() {
                     try {
                         const returnTensors = false;
                         const predictions = await detectorRef.current.estimateFaces(videoRef.current, returnTensors);
-                        
+
                         // 1. Basic Face Detection
                         const faceDetected = predictions.length > 0;
                         setIsFaceDetected(faceDetected);
@@ -335,7 +335,7 @@ export default function InterviewPage() {
                         if (faceDetected) {
                             const face = predictions[0];
                             const landmarks = face.landmarks;
-                            
+
                             if (landmarks && landmarks.length >= 2) {
                                 const leftEye = landmarks[0];
                                 const rightEye = landmarks[1];
@@ -348,7 +348,7 @@ export default function InterviewPage() {
                                 const noseOffset = Math.abs(nose[0] - eyesCenterX);
 
                                 // If nose is too far from center relative to eye distance, they are looking away
-                                const isFocusing = noseOffset < (eyeDist * 0.45); 
+                                const isFocusing = noseOffset < (eyeDist * 0.45);
                                 setIsFocusingOnMonitor(isFocusing);
                             } else {
                                 // If landmarks missing but face detected, could be low quality/partially hidden
@@ -449,7 +449,7 @@ export default function InterviewPage() {
             }
             setLastSection(currentQ.question_type)
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentIndex, questions, isListening])
 
     const handleViolation = useCallback(async (type: string) => {
@@ -520,13 +520,13 @@ export default function InterviewPage() {
             if (hiddenSince === null) return
 
             const hiddenDurationMs = Date.now() - hiddenSince
-            
+
             // Leniency adjustment:
             // 1. Filter out micro-flashes (sometimes triggered by system dialogues)
             // 2. Filter out focus losses where the document remains visible (e.g. clicking taskbar or second monitor)
             //    unless the duration is substantial (> 2 seconds).
             if (hiddenDurationMs < 700) return
-            
+
             // If the document was NOT hidden (Visibility API) but focus was lost (Blur API),
             // and the duration was short, we are more lenient.
             if (!document.hidden && hiddenDurationMs < 2000) return
@@ -620,10 +620,10 @@ export default function InterviewPage() {
     // Session Persistence: Save Index and Draft Answer
     useEffect(() => {
         if (interviewStatus === 'active') {
-             localStorage.setItem(`rims_session_progress_${interviewId}`, JSON.stringify({
-                 index: currentIndex,
-                 lastUpdated: Date.now()
-             }));
+            localStorage.setItem(`rims_session_progress_${interviewId}`, JSON.stringify({
+                index: currentIndex,
+                lastUpdated: Date.now()
+            }));
         }
     }, [currentIndex, interviewId, interviewStatus]);
 
@@ -674,12 +674,12 @@ export default function InterviewPage() {
             const handleFullscreenChange = () => {
                 const isNowFullscreen = !!document.fullscreenElement
                 setIsFullscreen(isNowFullscreen)
-                
+
                 if (!isNowFullscreen && interviewStatus === 'active') {
                     // Start a timer to enforce re-entry
                     const timer = setTimeout(() => {
                         if (!document.fullscreenElement && interviewStatusRef.current === 'active') {
-                             handleViolation("Fullscreen Exited")
+                            handleViolation("Fullscreen Exited")
                         }
                     }, 15000) // 15 seconds grace period to re-enter fullscreen
                     return () => clearTimeout(timer)
@@ -731,7 +731,7 @@ export default function InterviewPage() {
                         'Interview questions are still not ready after several minutes. The background task may have failed — please refresh the page or contact support.'
                     )
                 }
-                
+
                 setInterviewStatus('preparing')
                 setIsLoading(false)
                 if (loadRetryTimeoutRef.current) clearTimeout(loadRetryTimeoutRef.current)
@@ -751,7 +751,7 @@ export default function InterviewPage() {
             // Clear re-auth guard once we successfully loaded the session.
             try {
                 sessionStorage.removeItem(`interview_reauth_attempted_${interviewId}`)
-            } catch {}
+            } catch { }
 
             if (data.status === 'completed') {
                 setInterviewStatus('completed')
@@ -761,7 +761,7 @@ export default function InterviewPage() {
                 // Find first unanswered, but check localStorage for persistence first
                 const savedProgress = localStorage.getItem(`rims_session_progress_${interviewId}`);
                 let startIdx = 0;
-                
+
                 if (savedProgress) {
                     try {
                         const { index, lastUpdated } = JSON.parse(savedProgress);
@@ -783,7 +783,7 @@ export default function InterviewPage() {
                 }
 
                 setCurrentIndex(startIdx)
-                
+
                 // Load saved draft answer if exists
                 const savedAnswer = localStorage.getItem(`rims_draft_answer_${interviewId}_${startIdx}`);
                 if (savedAnswer) {
@@ -800,12 +800,12 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Failed to load interview session:", err)
             const errorMsg = err.message || ""
-            
+
             // Handled by APIClient already, but we add redundant safety check
-            const isAuthError = 
-                errorMsg.includes('401') || 
-                errorMsg.includes('403') || 
-                errorMsg.includes('Unauthorized') || 
+            const isAuthError =
+                errorMsg.includes('401') ||
+                errorMsg.includes('403') ||
+                errorMsg.includes('Unauthorized') ||
                 errorMsg.includes('Authentication failed') ||
                 errorMsg.includes('Invalid interview credentials') ||
                 errorMsg.includes('denied');
@@ -852,7 +852,7 @@ export default function InterviewPage() {
                 {},
                 `rims-${interviewId}-start-manual`,
             )
-            
+
             // STEP 3: Media Access (Trigger camera/mic permissions)
             await initOverallRecording()
 
@@ -861,10 +861,10 @@ export default function InterviewPage() {
             await loadData()
         } catch (err: any) {
             console.error("Failed to start interview sequence:", err)
-            
+
             // Exit fullscreen immediately on error so user isn't trapped
             if (document.fullscreenElement) {
-                try { document.exitFullscreen() } catch {}
+                try { document.exitFullscreen() } catch { }
             }
 
             if (err.message === "MEDIA_PERMISSION_DENIED") {
@@ -881,10 +881,10 @@ export default function InterviewPage() {
         // Use ref for the latest value as state might be updated by transcription in the background
         const currentAnswer = answerRef.current;
         const isVoiceActive = isListening || isTranscribing || transcribeInFlightRef.current;
-        
+
         if (!currentAnswer.trim() && !isVoiceActive) return
         if (!currentQuestion || isSubmitting) return
-        
+
         setIsSubmitting(true)
 
         // 1. If currently recording, stop it and wait for the transcription to start processing
@@ -935,11 +935,11 @@ export default function InterviewPage() {
             const updatedQuestions = questions.map((q, idx) =>
                 idx === currentIndex
                     ? {
-                          ...q,
-                          is_answered: true,
-                          evaluation_pending: !isAptitudeQ,
-                          evaluated_at: isAptitudeQ ? new Date().toISOString() : q.evaluated_at,
-                      }
+                        ...q,
+                        is_answered: true,
+                        evaluation_pending: !isAptitudeQ,
+                        evaluated_at: isAptitudeQ ? new Date().toISOString() : q.evaluated_at,
+                    }
                     : q
             )
             setQuestions(updatedQuestions)
@@ -1005,7 +1005,7 @@ export default function InterviewPage() {
         } catch (err: any) {
             console.error("Submission error details:", err)
             const errorMsg = err.message || "Failed to submit answer.";
-            
+
             // Handle common error states with UI feedback
             if (errorMsg.includes("403") || errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
                 toast.error(`Session Error: ${errorMsg}. Redirecting to access page.`);
@@ -1103,42 +1103,43 @@ export default function InterviewPage() {
         return (
             <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
                 <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border-4 border-red-100">
-                        <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
-                            <CameraOff className="w-12 h-12 text-red-600" />
-                        </div>
-                        <h1 className="text-4xl font-black text-red-600 mb-4 tracking-tight uppercase">Permission Required</h1>
-                        
-                        <div className="bg-red-50/50 rounded-2xl p-8 mb-10 border border-red-100">
-                            <p className="text-slate-700 text-lg font-bold mb-4">
-                                Camera and microphone access are mandatory to proceed with this AI-proctored interview.
-                            </p>
-                            <div className="flex items-start gap-4 text-left bg-white p-4 rounded-xl border border-red-200">
-                                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
-                                    <Lock className="w-4 h-4 text-amber-600" />
-                                </div>
-                                <p className="text-sm text-slate-600 font-medium">
-                                    Click the <strong>"Lock" icon</strong> in your browser's address bar next to the URL and select <strong>"Allow"</strong> for Camera and Microphone.
-                                </p>
-                            </div>
-                        </div>
+                    <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+                        <CameraOff className="w-12 h-12 text-red-600" />
+                    </div>
+                    <h1 className="text-4xl font-black text-red-600 mb-4 tracking-tight uppercase">Permission Required</h1>
 
-                        <div className="space-y-4">
-                            <Button
-                                className="w-full bg-red-600 hover:bg-red-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-red-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
-                                onClick={startInterviewManual}
-                                disabled={isLoading}
-                            >
-                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Retry & Grant Permissions <ChevronRight className="w-6 h-6" /></>}
-                            </Button>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center">
-                                You must grant permissions to start the session
+                    <div className="bg-red-50/50 rounded-2xl p-8 mb-10 border border-red-100">
+                        <p className="text-slate-700 text-lg font-bold mb-4">
+                            Camera and microphone access are mandatory to proceed with this AI-proctored interview.
+                        </p>
+                        <div className="flex items-start gap-4 text-left bg-white p-4 rounded-xl border border-red-200">
+                            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
+                                <Lock className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <p className="text-sm text-slate-600 font-medium">
+                                Click the <strong>"Lock" icon</strong> in your browser's address bar next to the URL and select <strong>"Allow"</strong> for Camera and Microphone.
                             </p>
                         </div>
                     </div>
-                </div>
-            )
-        }
 
+                    <div className="space-y-4">
+                        <Button
+                            className="w-full bg-red-600 hover:bg-red-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-red-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
+                            onClick={startInterviewManual}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Retry & Grant Permissions <ChevronRight className="w-6 h-6" /></>}
+                        </Button>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center">
+                            You must grant permissions to start the session
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    if (interviewStatus === 'ready') {
         return (
             <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
                 <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border border-slate-200">
@@ -1146,10 +1147,10 @@ export default function InterviewPage() {
                         <Play className="w-12 h-12 text-blue-600 ml-1" />
                     </div>
                     <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight uppercase">Ready to Start?</h1>
-                    
+
                     <div className="bg-blue-50/50 rounded-2xl p-6 mb-8 border border-blue-100/50">
                         <h2 className="text-blue-700 font-bold mb-2 flex items-center justify-center gap-2">
-                             <ShieldCheck className="w-5 h-5" /> Proctoring Notice
+                            <ShieldCheck className="w-5 h-5" /> Proctoring Notice
                         </h2>
                         <p className="text-slate-600 text-sm font-medium leading-relaxed">
                             To ensure interview integrity, <strong>Fullscreen mode</strong> and <strong>Camera proctoring</strong> will be enabled immediately upon clicking start.
@@ -1268,12 +1269,12 @@ export default function InterviewPage() {
     }
 
     const parseOptions = () => {
-      if (!currentQuestion?.question_options) return [];
-      try {
-        return JSON.parse(currentQuestion.question_options);
-      } catch {
-        return [];
-      }
+        if (!currentQuestion?.question_options) return [];
+        try {
+            return JSON.parse(currentQuestion.question_options);
+        } catch {
+            return [];
+        }
     };
     const options = parseOptions();
     const isAptitude = currentQuestion?.question_type === 'aptitude'
@@ -1317,7 +1318,7 @@ export default function InterviewPage() {
                                 </span>
                             </div>
                             <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                                <div 
+                                <div
                                     className={`h-full transition-all duration-500 ${warnings >= 3 ? 'bg-red-500 w-full' : warnings === 2 ? 'bg-orange-500 w-2/3' : warnings === 1 ? 'bg-amber-500 w-1/3' : 'bg-green-500 w-0'}`}
                                 />
                             </div>
@@ -1558,7 +1559,7 @@ export default function InterviewPage() {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => document.documentElement.requestFullscreen().catch(() => {})}
+                                onClick={() => document.documentElement.requestFullscreen().catch(() => { })}
                                 className="bg-red-50 border-red-200 text-red-600 font-bold animate-pulse hover:bg-red-100 h-8 px-4 rounded-full text-[10px]"
                             >
                                 <ShieldAlert className="w-3 h-3 mr-2" /> GO FULLSCREEN

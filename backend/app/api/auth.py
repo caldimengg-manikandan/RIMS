@@ -26,7 +26,8 @@ def data_health(request: Request, db: Session = Depends(get_db)):
     """Phase 9: Enhanced Safety & Monitoring Debugging Endpoint - Admin only"""
     from app.core.auth import get_current_admin
     try:
-        get_current_admin(request, db)
+        user = get_current_user(request, db)
+        get_current_admin(user)
     except HTTPException:
         raise HTTPException(status_code=403, detail="Admin access required")
     
