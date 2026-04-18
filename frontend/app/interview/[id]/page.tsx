@@ -159,16 +159,29 @@ export default function InterviewPage() {
 
     const startRecording = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            // Use existing stream from proctoring if available to avoid device contention
+            let stream = streamRef.current
+            const isSharedStream = !!stream
+
+            if (!stream) {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            }
             
-            // Try to use a standard mime type, but fallback to whatever the browser supports
+            // Filter to only include audio tracks for the transcription recorder
+            const audioStream = new MediaStream(stream.getAudioTracks())
+            
+            if (audioStream.getAudioTracks().length === 0) {
+                throw new Error("No audio tracks found in stream")
+            }
+
+            // Try to use a standard mime type, but fallback
             const options = { mimeType: 'audio/webm' }
             let mediaRecorder: MediaRecorder
             
             if (MediaRecorder.isTypeSupported('audio/webm')) {
-                mediaRecorder = new MediaRecorder(stream, options)
+                mediaRecorder = new MediaRecorder(audioStream, options)
             } else {
-                mediaRecorder = new MediaRecorder(stream)
+                mediaRecorder = new MediaRecorder(audioStream)
             }
 
             mediaRecorderRef.current = mediaRecorder
@@ -186,8 +199,12 @@ export default function InterviewPage() {
                 if (audioBlob.size > 0) {
                     await handleTranscribe(audioBlob)
                 }
-                // Clean up stream
-                stream.getTracks().forEach(track => track.stop())
+                
+                // CRITICAL: ONLY stop tracks if they were created specifically for this recording
+                if (!isSharedStream) {
+                    audioStream.getTracks().forEach(track => track.stop())
+                }
+                // If it IS a shared stream, we do nothing - proctoring needs it to stay alive
             }
 
             mediaRecorder.start()
@@ -491,8 +508,16 @@ export default function InterviewPage() {
             if (hiddenSince === null) return
 
             const hiddenDurationMs = Date.now() - hiddenSince
-            // Filter out micro-flashes (sometimes triggered by system dialogues)
-            if (hiddenDurationMs < 500) return
+            
+            // Leniency adjustment:
+            // 1. Filter out micro-flashes (sometimes triggered by system dialogues)
+            // 2. Filter out focus losses where the document remains visible (e.g. clicking taskbar or second monitor)
+            //    unless the duration is substantial (> 2 seconds).
+            if (hiddenDurationMs < 700) return
+            
+            // If the document was NOT hidden (Visibility API) but focus was lost (Blur API),
+            // and the duration was short, we are more lenient.
+            if (!document.hidden && hiddenDurationMs < 2000) return
 
             const newWarnings = warningsRef.current + 1
             warningsRef.current = newWarnings
@@ -506,7 +531,7 @@ export default function InterviewPage() {
                         toast.error(`Final warning reached! Terminating session...`, { duration: 5000 })
                         await APIClient.postWithRequestId(
                             `/api/interviews/${interviewId}/end`,
-                            { force: true, termination_reason: "Maximum tab switches (3) exceeded" },
+                            { force: true, termination_reason: "Maximum tab switches or focus losses (3) exceeded" },
                             `rims-${interviewId}-end-force`,
                         )
                         setInterviewStatus('completed')
@@ -518,7 +543,8 @@ export default function InterviewPage() {
                     }
                 }
             } else {
-                toast.error(`Tab switch detected! Warning #${newWarnings}/3.`, { duration: 5000 })
+                const violationType = document.hidden ? "Tab switch" : "Focus loss"
+                toast.error(`${violationType} detected! Warning #${newWarnings}/3.`, { duration: 5000 })
             }
         }
 
@@ -558,7 +584,14 @@ export default function InterviewPage() {
 
     useEffect(() => {
         if (isCameraActive && streamRef.current && videoRef.current) {
-            videoRef.current.srcObject = streamRef.current
+            const video = videoRef.current;
+            if (video.srcObject !== streamRef.current) {
+                video.srcObject = streamRef.current;
+            }
+            // Explicitly trigger play to handle browsers that block autoplay without a direct user action
+            video.play().catch(err => {
+                console.warn("Video play failed or was interrupted:", err);
+            });
         }
     }, [isCameraActive])
 

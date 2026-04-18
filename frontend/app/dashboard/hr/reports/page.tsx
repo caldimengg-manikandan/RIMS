@@ -129,6 +129,7 @@ interface Report {
   aptitude_question_evaluations?: QuestionEvaluation[]
   aptitude_questions_answered?: number
   video_url?: string | null
+  termination_reason?: string | null
 }
 
 // Helper to clean question text that may be stored as JSON array strings
@@ -978,9 +979,23 @@ export default function ReportsPage() {
                     {interviewNotCompleted && (
                       <div
                         role="status"
-                        className="mt-3 w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100"
+                        className={`mt-3 w-full rounded-lg border px-4 py-3 text-sm shadow-sm flex items-center gap-3 ${
+                          viewingReport.termination_reason 
+                            ? 'border-red-500/40 bg-red-500/10 text-red-950 dark:text-red-100' 
+                            : 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
+                        }`}
                       >
-                        ⚠️ This interview was not completed. The candidate exited or terminated the session before answering questions.
+                        <AlertCircle className="h-5 w-5 shrink-0" />
+                        <div>
+                          <p className="font-bold">
+                            {viewingReport.termination_reason ? 'Interview Terminated' : 'Interview Incomplete'}
+                          </p>
+                          <p className="mt-0.5 opacity-90">
+                            {viewingReport.termination_reason 
+                              ? `Reason: ${viewingReport.termination_reason}` 
+                              : 'The candidate exited or terminated the session before answering questions.'}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -544,6 +544,7 @@ class InterviewReportResponse(BaseModel):
     aptitude_score: Optional[float] = None
     behavioral_score: Optional[float] = None
     combined_score: Optional[float] = None
+    termination_reason: Optional[str] = None
 
     @field_validator('overall_score', 'technical_skills_score', 'communication_score', 
                      'problem_solving_score', 'aptitude_score', 'behavioral_score', 

@@ -13,12 +13,14 @@ export function getDisplayedQuestionScore(q: {
 }
 
 export function isInterviewNotCompleted(report: {
+  termination_reason?: string | null
   question_evaluations?: Array<{
     answer?: string | null
     evaluation?: { technical_accuracy?: number; overall?: number }
     score?: number
   }>
 }): boolean {
+  if (report.termination_reason) return true
   const evals = report.question_evaluations ?? []
   if (evals.length === 0) return false
   return evals.every((q) => isAnswerEmpty(q.answer) && getDisplayedQuestionScore(q) === 0)

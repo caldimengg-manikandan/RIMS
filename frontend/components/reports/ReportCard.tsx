@@ -51,14 +51,16 @@ const ReportCardImpl = ({ report, onClick }: ReportCardProps) => {
                     <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest">Suggestion</div>
                     <div
                         className={`w-full justify-center font-bold text-xl
-                          ${notCompleted ? 'text-orange-600 dark:text-orange-400' : ''}
-                          ${!notCompleted && report.overall_score > 6 ? 'text-primary' : ''}
-                          ${!notCompleted && report.overall_score <= 4 ? 'text-destructive' : ''}
-                          ${!notCompleted && report.overall_score > 4 && report.overall_score <= 6 ? 'text-amber-600 dark:text-amber-400' : ''}
+                          ${report.termination_reason ? 'text-red-600 dark:text-red-400' : ''}
+                          ${!report.termination_reason && notCompleted ? 'text-orange-600 dark:text-orange-400' : ''}
+                          ${!report.termination_reason && !notCompleted && report.overall_score > 6 ? 'text-primary' : ''}
+                          ${!report.termination_reason && !notCompleted && report.overall_score <= 4 ? 'text-destructive' : ''}
+                          ${!report.termination_reason && !notCompleted && report.overall_score > 4 && report.overall_score <= 6 ? 'text-amber-600 dark:text-amber-400' : ''}
                         `}
                     >
                         {(() => {
                             const score = Number(report?.overall_score || 0)
+                            if (report.termination_reason) return 'Terminated'
                             if (notCompleted) return 'Not Completed'
                             if (score > 6) return 'Select'
                             if (score > 4) return 'Consider'

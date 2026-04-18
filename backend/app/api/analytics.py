@@ -286,7 +286,8 @@ def get_interview_reports(
                     "video_url": interview.video_recording_path,
                     "assigned_hr_id": app.hr_id if app else None,
                     "assigned_hr_name": app.hr.full_name if app and app.hr else "Unknown",
-                    "is_owner": (app.hr_id == current_user.id) if app else False
+                    "is_owner": (app.hr_id == current_user.id) if app else False,
+                    "termination_reason": report.termination_reason if report else None
                 })
             except Exception as e:
                 import traceback

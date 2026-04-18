@@ -726,14 +726,23 @@ async def generate_interview_report(
     termination_clause = f"\nTermination reason (if applicable): {termination_reason}\n" if termination_reason else ""
 
     prompt = f"""
-    Generate a final recruitment report.
-    Job: {job_title}
-    Skills: {skills_text}
-    Overall AI Score: {overall_score}/10
+    Generate a final recruitment evaluation report based on the candidate's responses and the overall interview context.
+    
+    Job Role: {job_title}
+    Skills Evaluated: {skills_text}
+    Raw Aggregate AI Score: {overall_score}/10
     {termination_clause}
 
-    Interview Q&A:
+    Interview Q&A History:
     {qa_summary}
+
+    INSTRUCTIONS:
+    1. Provide a concise summary of the candidate's performance.
+    2. IF a termination reason is provided above (e.g., proctoring violation, misconduct, or premature exit), you MUST:
+       - Mention the termination reason explicitly in the "summary" and "reasoning" fields.
+       - Adjust the "recommendation" to reflect the nature of the termination (e.g., "Reject" for misconduct).
+       - Ensure the "overall_score" reflects the final standing, accounting for the termination.
+    3. Return valid JSON only.
 
     Return JSON ONLY:
     {{
@@ -746,11 +755,11 @@ async def generate_interview_report(
         "summary": "paragraph",
         "detailed_feedback": "paragraph",
         "recommendation": "Strong Hire | Hire | Borderline | Reject",
-        "reasoning": "Brief justification for the scores provided."
+        "reasoning": "Brief justification for the scores provided, including termination context if applicable."
     }}
     """
     
-    system_instr = "You are a senior recruitment analyst. Return JSON only."
+    system_instr = "You are a professional senior recruitment analyst. You evaluate candidate interviews with precision and provide structured feedback. If an interview was terminated due to a violation, you prioritize reporting that fact."
     
     # 2. AI Generation with Retries
     max_retries = 2

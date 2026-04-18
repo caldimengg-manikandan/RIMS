@@ -2154,7 +2154,7 @@ async def end_interview(
     interview_id: int,
     background_tasks: BackgroundTasks,
     data: dict = Body(None),
-    interview_session: Interview = Depends(get_current_interview),
+    interview_session: Interview = Depends(get_current_interview_any_status),
     db: Session = Depends(get_db)
 ):
     """End interview manually (standard path).
@@ -2277,7 +2277,7 @@ async def end_interview(
 @router.post("/{interview_id}/abandon")
 async def abandon_interview(
     interview_id: int,
-    interview_session: Interview = Depends(get_current_interview),
+    interview_session: Interview = Depends(get_current_interview_any_status),
     db: Session = Depends(get_db)
 ):
     """

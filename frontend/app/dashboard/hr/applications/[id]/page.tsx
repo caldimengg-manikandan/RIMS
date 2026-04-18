@@ -25,6 +25,8 @@ import { APIClient } from "@/app/dashboard/lib/api-client"
 import { API_BASE_URL } from "@/lib/config"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { normalizeHireRecommendation } from "@/lib/recommendation-label"
+import { isInterviewNotCompleted } from "@/components/reports/interviewIncomplete"
+import { AlertCircle } from "lucide-react"
 
 // ─── FSM Button Config ──────────────────────────────────────────────────
 const FSM_BUTTONS: Record<string, { action: string; label: string; icon: React.ReactNode; className: string }[]> = {
@@ -543,6 +545,26 @@ export default function HRApplicationDetailPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-2 space-y-6 flex-grow flex flex-col">
+                                {report && isInterviewNotCompleted(report) && (
+                                    <div className={`p-4 rounded-2xl border-2 mb-2 flex items-start gap-4 animate-in fade-in zoom-in duration-300 ${report.termination_reason ? 'bg-red-50 border-red-100 text-red-900' : 'bg-amber-50 border-amber-100 text-amber-900'}`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${report.termination_reason ? 'bg-white text-red-600' : 'bg-white text-amber-600'}`}>
+                                            <AlertCircle className="w-6 h-6" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <p className="text-xs font-black uppercase tracking-widest opacity-70">
+                                                    {report.termination_reason ? 'Interview Terminated' : 'Interview Incomplete'}
+                                                </p>
+                                                <Badge className={`text-[10px] font-bold ${report.termination_reason ? 'bg-red-600' : 'bg-amber-600'}`}>
+                                                    ACTION REQUIRED
+                                                </Badge>
+                                            </div>
+                                            <p className="text-sm font-bold leading-tight">
+                                                {report.termination_reason || 'This candidate abandoned the interview before completion or encountered a critical issue.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                                 {report ? (
                                     <div className="space-y-6 flex-grow">
                                         <div className="grid grid-cols-2 gap-3">
