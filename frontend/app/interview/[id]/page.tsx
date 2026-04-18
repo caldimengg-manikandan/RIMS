@@ -245,6 +245,10 @@ export default function InterviewPage() {
 
     const initOverallRecording = async () => {
         if (overallMediaRecorderRef.current || streamRef.current) {
+            // Even if stream exists, ensure UI state is synced
+            if (streamRef.current?.active) {
+                setIsCameraActive(true);
+            }
             return
         }
 
@@ -366,12 +370,20 @@ export default function InterviewPage() {
                 resolve();
             }
 
-            // Stop camera stream
-            if (videoRef.current && videoRef.current.srcObject) {
-                const stream = videoRef.current.srcObject as MediaStream;
-                stream.getTracks().forEach(track => track.stop());
+                // Stop camera stream
+                if (videoRef.current && videoRef.current.srcObject) {
+                    const stream = videoRef.current.srcObject as MediaStream;
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Ensure internal refs and state are cleared
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(track => track.stop());
+                }
+                streamRef.current = null;
+                overallMediaRecorderRef.current = null;
                 setIsCameraActive(false);
-            }
+                resolve();
         });
     }
 
@@ -983,11 +995,10 @@ export default function InterviewPage() {
         )
     }
 
-    if (interviewStatus === 'ready') {
-        if (mediaError) {
-            return (
-                <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
-                    <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border-4 border-red-100">
+    if (mediaError && interviewStatus !== 'completed') {
+        return (
+            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
+                <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border-4 border-red-100">
                         <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
                             <CameraOff className="w-12 h-12 text-red-600" />
                         </div>
@@ -1197,13 +1208,13 @@ export default function InterviewPage() {
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-slate-400 text-[10px] font-bold uppercase">Tab Warnings</span>
-                                <span className={`text-xs font-black ${warnings >= 2 ? 'text-red-400' : warnings === 1 ? 'text-amber-400' : 'text-slate-200'}`}>
-                                    {warnings}/2
+                                <span className={`text-xs font-black ${warnings >= 3 ? 'text-red-400' : warnings >= 1 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                    {warnings}/3
                                 </span>
                             </div>
                             <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                                 <div 
-                                    className={`h-full transition-all duration-500 ${warnings >= 2 ? 'bg-red-500 w-full' : warnings === 1 ? 'bg-amber-500 w-1/2' : 'bg-green-500 w-0'}`}
+                                    className={`h-full transition-all duration-500 ${warnings >= 3 ? 'bg-red-500 w-full' : warnings === 2 ? 'bg-orange-500 w-2/3' : warnings === 1 ? 'bg-amber-500 w-1/3' : 'bg-green-500 w-0'}`}
                                 />
                             </div>
                             <p className="text-[9px] text-slate-500 font-medium leading-tight">
