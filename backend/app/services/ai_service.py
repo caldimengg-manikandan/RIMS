@@ -67,19 +67,40 @@ def extract_name_heuristic(text: str):
                 return line
     return None
 
-def extract_years_from_summary(text: str) -> float:
-    """Extract years of experience from AI summary text using regex."""
+def extract_years_heuristic(text: str) -> float:
+    """Extract years of experience from text using multiple regex patterns."""
     if not text:
         return 0.0
-    # Match "11 years", "11+ years", "11.5 years", "11 years of experience"
-    # Added optional "of experience" and improved capture groups
-    pattern = r'(\d+(?:\.\d+)?)\+?\s*years?(?:\s+of\s+experience)?'
-    match = re.search(pattern, text.lower())
+    
+    # Priority patterns for total experience
+    patterns = [
+        r'(\d+(?:\.\d+)?)\+?\s*years?(?:\s+of)?(?:\s+total)?\s+experience',
+        r'total\s+(?:\s+experience\s+of)?\s*(\d+(?:\.\d+)?)\+?\s*years?',
+        r'exp(?:\.|erience)?\s*[:\-\s]*\s*(\d+(?:\.\d+)?)\+?\s*yrs?',
+        r'(\d+(?:\.\d+)?)\+?\s*years?\s+exp',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text.lower())
+        if match:
+            try:
+                val = float(match.group(1))
+                # Sanity check: cap at 50 years to avoid matching phone fragments or years like 2024
+                if 0 < val < 50:
+                    return val
+            except (ValueError, IndexError):
+                continue
+                
+    # Fallback to simple pattern
+    match = re.search(r'(\d+(?:\.\d+)?)\+?\s*years?', text.lower())
     if match:
         try:
-            return float(match.group(1))
-        except (ValueError, IndexError):
-            return 0.0
+            val = float(match.group(1))
+            if 0 < val < 50:
+                return val
+        except:
+            pass
+            
     return 0.0
 
 def sanitize_ai_input(text: str, log_context: str = "Input") -> str:
@@ -326,10 +347,17 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         
         # 1. Experience Fallback: If calculation results in 0 but summary mentions years, use summary value.
         if result.get("experience", 0) == 0:
-            summary_years = extract_years_from_summary(result.get("summary", ""))
+            summary_years = extract_years_heuristic(result.get("summary", ""))
             if summary_years > 0:
                 logger.info(f"Experience fallback: Using summary years {summary_years}")
                 result["experience"] = summary_years
+        
+        # 2. Heuristic check on full text if still 0
+        if result.get("experience", 0) == 0:
+            text_years = extract_years_heuristic(resume_text)
+            if text_years > 0:
+                logger.info(f"Experience fallback: Using full text years {text_years}")
+                result["experience"] = text_years
         
         # Ensure experience is a rounded float
         experience_years = round(float(result.get("experience", 0)), 1)
@@ -383,12 +411,22 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         # Robust Fallback
         extracted_skills = extract_skills(resume_text)
         result["skills"] = extracted_skills
-        result["summary"] = resume_text[:200] + "..." if len(resume_text) > 200 else resume_text
+        result["summary"] = resume_text[:300] + "..." if len(resume_text) > 300 else resume_text
         result["education"] = []
         result["roles"] = []
         result["experience_level"] = "Not specified"
-        result["score"] = 5.0
-        result["match_percentage"] = 0.0
+        
+        # KEY FIX: Recalculate match and experience even in fallback
+        match_pct = calculate_match_percentage(extracted_skills, job_description)
+        exp_yrs = extract_years_heuristic(resume_text)
+        
+        result["match_percentage"] = round(match_pct, 1)
+        result["experience"] = round(exp_yrs, 1)
+        
+        # Heuristic score based on match
+        result["score"] = round(max(5.0, match_pct / 10), 1)
+        
+        logger.info(f"Fallback Metrics: Match={match_pct}%, Exp={exp_yrs}y")
 
     # Final cleanup of results
     if not result.get("skills"):

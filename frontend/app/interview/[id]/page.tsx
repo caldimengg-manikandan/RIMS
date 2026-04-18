@@ -376,31 +376,43 @@ export default function InterviewPage() {
         }
 
         return new Promise<void>((resolve) => {
-            if (overallMediaRecorderRef.current && overallMediaRecorderRef.current.state !== 'inactive') {
-                overallMediaRecorderRef.current.onstop = async () => {
-                    const videoBlob = new Blob(overallVideoChunksRef.current, { type: 'video/webm' });
-                    await uploadOverallVideo(videoBlob);
-                    resolve();
-                }
-                overallMediaRecorderRef.current.stop();
-            } else {
-                resolve();
-            }
-
+            const cleanupTracks = () => {
                 // Stop camera stream
                 if (videoRef.current && videoRef.current.srcObject) {
                     const stream = videoRef.current.srcObject as MediaStream;
-                    stream.getTracks().forEach(track => track.stop());
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`Stopped track: ${track.kind}`);
+                    });
+                    videoRef.current.srcObject = null;
                 }
-                
-                // Ensure internal refs and state are cleared
                 if (streamRef.current) {
                     streamRef.current.getTracks().forEach(track => track.stop());
+                    streamRef.current = null;
                 }
-                streamRef.current = null;
                 overallMediaRecorderRef.current = null;
                 setIsCameraActive(false);
+            };
+
+            if (overallMediaRecorderRef.current && overallMediaRecorderRef.current.state !== 'inactive') {
+                overallMediaRecorderRef.current.onstop = async () => {
+                    try {
+                        const videoBlob = new Blob(overallVideoChunksRef.current, { type: 'video/webm' });
+                        if (videoBlob.size > 0) {
+                            await uploadOverallVideo(videoBlob);
+                        }
+                    } catch (e) {
+                        console.error("Final video upload failed during cleanup", e);
+                    } finally {
+                        cleanupTracks();
+                        resolve();
+                    }
+                };
+                overallMediaRecorderRef.current.stop();
+            } else {
+                cleanupTracks();
                 resolve();
+            }
         });
     }
 
@@ -600,8 +612,28 @@ export default function InterviewPage() {
             initOverallRecording()
         } else if (interviewStatus === 'completed') {
             stopOverallRecording()
+            // Clear persistence on completion
+            localStorage.removeItem(`rims_session_progress_${interviewId}`);
         }
-    }, [interviewStatus])
+    }, [interviewStatus, interviewId])
+
+    // Session Persistence: Save Index and Draft Answer
+    useEffect(() => {
+        if (interviewStatus === 'active') {
+             localStorage.setItem(`rims_session_progress_${interviewId}`, JSON.stringify({
+                 index: currentIndex,
+                 lastUpdated: Date.now()
+             }));
+        }
+    }, [currentIndex, interviewId, interviewStatus]);
+
+    useEffect(() => {
+        if (interviewStatus === 'active' && answer) {
+            localStorage.setItem(`rims_draft_answer_${interviewId}_${currentIndex}`, answer);
+        } else if (interviewStatus === 'active' && !answer) {
+            localStorage.removeItem(`rims_draft_answer_${interviewId}_${currentIndex}`);
+        }
+    }, [answer, currentIndex, interviewId, interviewStatus]);
 
     useEffect(() => {
         if (!interviewData?.started_at || interviewStatus !== 'active') return
@@ -726,10 +758,39 @@ export default function InterviewPage() {
             } else if (data.status === 'not_started') {
                 setInterviewStatus('ready')
             } else if (qs.length > 0) {
-                // Find first unanswered
-                const firstUnanswered = qs.findIndex(q => !q.is_answered)
-                const startIdx = firstUnanswered !== -1 ? firstUnanswered : 0
+                // Find first unanswered, but check localStorage for persistence first
+                const savedProgress = localStorage.getItem(`rims_session_progress_${interviewId}`);
+                let startIdx = 0;
+                
+                if (savedProgress) {
+                    try {
+                        const { index, lastUpdated } = JSON.parse(savedProgress);
+                        // Only use saved index if it's recent (within 2 hours) and valid
+                        if (index >= 0 && index < qs.length && (Date.now() - lastUpdated < 7200000)) {
+                            startIdx = index;
+                            console.log(`Resuming session at question index ${startIdx}`);
+                        } else {
+                            const firstUnanswered = qs.findIndex(q => !q.is_answered);
+                            startIdx = firstUnanswered !== -1 ? firstUnanswered : 0;
+                        }
+                    } catch {
+                        const firstUnanswered = qs.findIndex(q => !q.is_answered);
+                        startIdx = firstUnanswered !== -1 ? firstUnanswered : 0;
+                    }
+                } else {
+                    const firstUnanswered = qs.findIndex(q => !q.is_answered);
+                    startIdx = firstUnanswered !== -1 ? firstUnanswered : 0;
+                }
+
                 setCurrentIndex(startIdx)
+                
+                // Load saved draft answer if exists
+                const savedAnswer = localStorage.getItem(`rims_draft_answer_${interviewId}_${startIdx}`);
+                if (savedAnswer) {
+                    setAnswer(savedAnswer);
+                    answerRef.current = savedAnswer;
+                }
+
                 setVisitedIds(new Set([qs[startIdx].id]))
                 setInterviewStatus('active')
             } else {
@@ -1001,6 +1062,16 @@ export default function InterviewPage() {
                 { force: forceFlag, ended_early: endedEarly },
                 `rims-${interviewId}-end`,
             )
+            // Clear persistence
+            localStorage.removeItem(`rims_session_progress_${interviewId}`);
+            // Clear all draft answers for this interview
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(`rims_draft_answer_${interviewId}_`)) {
+                    localStorage.removeItem(key);
+                    i--; // Adjust index after removal
+                }
+            }
             setInterviewStatus('completed')
             setShowFeedbackDialog(true)
         } catch (err: any) {

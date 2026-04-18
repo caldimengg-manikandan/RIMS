@@ -136,8 +136,14 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
             logger.info(f"Puppeteer responded in {elapsed_time:.2f} seconds with status {response.status_code}")
             
             if response.status_code != 200:
-                logger.error(f"Puppeteer service failed: {response.status_code} - {response.text}")
-                raise Exception(f"PDF Generation service is currently unavailable. Status: {response.status_code}")
+                logger.error(
+                    f"PDF_GENERATION_FAILED: Puppeteer service at {pdf_service_url} "
+                    f"returned {response.status_code}. Response: {response.text[:200]}"
+                )
+                raise Exception(
+                    f"PDF Generation service is currently unavailable. "
+                    f"Status: {response.status_code}. Please verify FRONTEND_BASE_URL is correct."
+                )
             
             pdf_bytes = response.content
             storage_path = f"onboarding/{filename}"
