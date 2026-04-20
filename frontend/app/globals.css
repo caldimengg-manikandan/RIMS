@@ -276,7 +276,7 @@
     width: 60vw;
     max-width: 600px;
     aspect-ratio: 1 / 1;
-    background-image: url("/virtual-hr-watermark.svg");
+    background-image: url("/calrims/virtual-hr-watermark.svg");
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;

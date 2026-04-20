@@ -875,7 +875,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/4 lg:w-1/3 flex justify-center items-center opacity-50 pointer-events-none transition-opacity duration-500 hover:opacity-80">
                 <img
-                  src="/interview.png"
+                  src="/calrims/interview.png"
                   alt="Live AI Interview Dashboard"
                   className="w-full h-auto object-contain rounded-2xl drop-shadow-2xl border border-primary/10"
                 />
@@ -916,7 +916,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/4 lg:w-1/3 flex justify-center items-center opacity-50 pointer-events-none transition-opacity duration-500 hover:opacity-80">
                 <img
-                  src="/portfolio.png"
+                  src="/calrims/portfolio.png"
                   alt="Signal-rich screening"
                   className="w-full h-auto object-contain rounded-2xl drop-shadow-2xl border border-primary/10"
                 />
@@ -956,7 +956,7 @@ export default function Home() {
               </div>
               <div className="w-full md:w-1/4 lg:w-1/3 flex justify-center items-center opacity-50 pointer-events-none transition-opacity duration-500 hover:opacity-80">
                 <img
-                  src="/aim.png"
+                  src="/calrims/aim.png"
                   alt="Unbiased decisions"
                   className="w-full h-auto object-contain rounded-2xl drop-shadow-2xl border border-primary/10"
                 />
@@ -1051,7 +1051,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
               <img
-                src="/caldim-logo-dark.png"
+                src="/calrims/caldim-logo-dark.png"
                 alt="Caldim.ai Logo"
                 className="h-9 w-auto"
               />

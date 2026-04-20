@@ -87,7 +87,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = process.env.NEXT_PUBLIC_API_BASE_URL
       ? new URL(process.env.NEXT_PUBLIC_API_BASE_URL).host
-      : 'localhost:10000';
+      : '127.0.0.1:10000';
     const wsUrl = `${protocol}//${host}/ws/interview/${sessionId}?token=${token}`;
 
     ws.current = new WebSocket(wsUrl);
