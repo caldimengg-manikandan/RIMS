@@ -83,7 +83,7 @@ export default function InterviewPage() {
     const audioChunksRef = useRef<any[]>([])
 
     // Overall Video Recording Refs
-    const videoRef = useRef<HTMLVideoElement>(null)
+    const videoRef = useRef<HTMLVideoElement | null>(null)
     const streamRef = useRef<MediaStream | null>(null)
     const overallMediaRecorderRef = useRef<MediaRecorder | null>(null)
     const overallVideoChunksRef = useRef<Blob[]>([])
@@ -159,26 +159,39 @@ export default function InterviewPage() {
 
     const startRecording = async () => {
         try {
-            // Use existing stream from proctoring if available to avoid device contention
             let stream = streamRef.current
+            
+            // Check if stream is active and has audio tracks
+            if (stream && (!stream.active || stream.getAudioTracks().length === 0)) {
+                stream = null
+            }
+
             const isSharedStream = !!stream
 
             if (!stream) {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true })
             }
 
-            // Filter to only include audio tracks for the transcription recorder
-            const audioStream = new MediaStream(stream.getAudioTracks())
+            // Filter and CLONE to only include audio tracks for the transcription recorder
+            // Cloning ensures the recorder has an independent track that won't be interfered with
+            const audioStream = new MediaStream(stream.getAudioTracks().map(t => t.clone()))
 
-            if (audioStream.getAudioTracks().length === 0) {
-                throw new Error("No audio tracks found in stream")
-            }
+            // Ensure all audio tracks are active and enabled
+            audioStream.getAudioTracks().forEach(track => {
+                track.enabled = true
+                if (track.readyState !== 'live') {
+                    console.warn("Audio track not live, attempting to restart...")
+                }
+            })
 
             // Try to use a standard mime type, but fallback
-            const options = { mimeType: 'audio/webm' }
+            let options: any = { mimeType: 'audio/webm;codecs=opus' }
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'audio/webm' }
+            }
+            
             let mediaRecorder: MediaRecorder
-
-            if (MediaRecorder.isTypeSupported('audio/webm')) {
+            if (MediaRecorder.isTypeSupported(options.mimeType)) {
                 mediaRecorder = new MediaRecorder(audioStream, options)
             } else {
                 mediaRecorder = new MediaRecorder(audioStream)
@@ -188,26 +201,34 @@ export default function InterviewPage() {
             audioChunksRef.current = []
 
             mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
+                if (event.data && event.data.size > 0) {
                     audioChunksRef.current.push(event.data)
+                    console.log(`Audio chunk received: ${event.data.size} bytes`)
                 }
             }
 
             mediaRecorder.onstop = async () => {
+                const chunks = audioChunksRef.current
                 const mimeType = mediaRecorder.mimeType || 'audio/webm'
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
-                if (audioBlob.size > 0) {
+                const audioBlob = new Blob(chunks, { type: mimeType })
+                
+                console.log(`Recording stopped. Total size: ${audioBlob.size} bytes. Mime: ${mimeType}`)
+                
+                if (audioBlob.size > 200) { // Header-only webm is usually ~100-150 bytes
                     await handleTranscribe(audioBlob)
+                } else {
+                    console.warn("Audio blob too small or empty, skipping transcription")
+                    toast.error("Audio recording was too short or silent. Please try again.")
                 }
 
                 // CRITICAL: ONLY stop tracks if they were created specifically for this recording
                 if (!isSharedStream) {
                     audioStream.getTracks().forEach(track => track.stop())
                 }
-                // If it IS a shared stream, we do nothing - proctoring needs it to stay alive
             }
 
-            mediaRecorder.start()
+            // Provide timeslice (500ms) to ensure continuous data events
+            mediaRecorder.start(500)
             setIsListening(true)
         } catch (err) {
             console.error("Mic access failed", err)
@@ -605,7 +626,7 @@ export default function InterviewPage() {
                 console.warn("Video play failed or was interrupted:", err);
             });
         }
-    }, [isCameraActive])
+    }, [isCameraActive, isLoading, interviewStatus])
 
     useEffect(() => {
         if (interviewStatus === 'active') {
@@ -1530,11 +1551,16 @@ export default function InterviewPage() {
                 {isCameraActive && (
                     <div className="fixed bottom-6 right-6 z-[100] w-48 h-36 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 bg-slate-900 group transition-all hover:scale-110">
                         <video
-                            ref={videoRef}
+                            ref={(el) => {
+                                videoRef.current = el;
+                                if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                                    el.srcObject = streamRef.current;
+                                    el.play().catch(() => {});
+                                }
+                            }}
                             autoPlay
                             muted
                             playsInline
-                            onLoadedMetadata={(e) => (e.target as HTMLVideoElement).play()}
                             className="w-full h-full object-cover"
                         />
                         <div className="absolute top-2 right-2 flex gap-1">

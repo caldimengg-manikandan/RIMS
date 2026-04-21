@@ -10,6 +10,8 @@ import os
 import traceback
 from datetime import datetime
 import logging
+from app.core.config import get_settings
+from app.core.storage import get_signed_url
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +285,7 @@ def get_interview_reports(
                     "aptitude_question_evaluations": aptitude_evals,
                     "candidate_profile": candidate_profile,
                     "recommendation": report.recommendation if report else "consider",
-                    "video_url": interview.video_recording_path,
+                    "video_url": f"/api/interviews/{interview.id}/video-stream" if interview.video_recording_path else None,
                     "assigned_hr_id": app.hr_id if app else None,
                     "assigned_hr_name": app.hr.full_name if app and app.hr else "Unknown",
                     "is_owner": (app.hr_id == current_user.id) if app else False,

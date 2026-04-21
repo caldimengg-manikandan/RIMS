@@ -1041,10 +1041,12 @@ export default function ReportsPage() {
                   {viewingReport.video_url ? (
                     <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-xl aspect-video relative group">
                       <video
-                        src={`${API_BASE_URL}/${viewingReport.video_url}`}
+                        key={viewingReport.id}
+                        src={viewingReport.video_url?.startsWith('http') ? viewingReport.video_url : `${API_BASE_URL}${viewingReport.video_url}`}
                         controls
                         className="w-full h-full"
                         poster="/video-placeholder.png"
+                        crossOrigin="use-credentials"
                       />
                       <div className="absolute top-4 left-4 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                         <Badge className="bg-black/50 backdrop-blur-md border-white/20 text-white flex items-center gap-2">

@@ -1913,6 +1913,8 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     and send notifications. Reusable for normal completion and auto-termination.
     """
     from app.services.ai_service import generate_interview_report
+    from app.core.config import get_settings
+    from app.core.storage import get_public_url
     from app.domain.models import InterviewReport, InterviewQuestion, InterviewAnswer, Notification
     
     # 1. Fetch live interview state with row-level lock to prevent double reporting
@@ -2241,7 +2243,6 @@ async def end_interview(
 
     # 1.6 Annotate hr_notes when the candidate deliberately ends the interview early
     if (ended_early or is_forced) and interview.application:
-        from datetime import datetime, timezone
         now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         early_note = (
             f"[{now_str}] Candidate ended the interview early using the 'End Early' button "
@@ -2386,9 +2387,88 @@ async def get_interview_report(
     
     # Return report data plus video_url from interview
     report_dict = {column.name: getattr(report, column.name) for column in report.__table__.columns}
-    report_dict['video_url'] = interview.video_recording_path
+    
+    _settings = __import__('app.core.config', fromlist=['get_settings']).get_settings()
+    report_dict['video_url'] = f"/api/interviews/{interview.id}/video-stream"
     
     return report_dict
+
+@router.get("/{interview_id}/video-stream")
+async def get_video_stream(
+    interview_id: int,
+    current_user: User = Depends(get_current_hr),
+    db: Session = Depends(get_db)
+):
+    """Proxy video stream from Supabase (HR only)"""
+    import httpx
+    _settings = __import__('app.core.config', fromlist=['get_settings']).get_settings()
+    _get_signed_url = __import__('app.core.storage', fromlist=['get_signed_url']).get_signed_url
+    
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+        
+    validate_hr_ownership_for_interview(interview, current_user, resource_name="interview")
+    
+    if not interview.video_recording_path:
+        raise HTTPException(status_code=404, detail="No video recording found for this interview")
+
+    signed_url = _get_signed_url(_settings.supabase_bucket_videos, interview.video_recording_path)
+    
+    if not signed_url:
+        raise HTTPException(status_code=500, detail="Failed to generate playback URL")
+
+    # 1. Get the Range header from the client request
+    range_header = request.headers.get("range")
+    
+    # 2. Proxy the stream with Range support
+    async def stream_video():
+        headers = {}
+        if range_header:
+            headers["Range"] = range_header
+            
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", signed_url, headers=headers) as response:
+                # If Supabase returns 416 (Range Not Satisfiable), we should handle it
+                # but for simplicity, we'll just yield what we get if it's 200/206
+                if response.status_code >= 400:
+                    logger.error(f"Supabase streaming error {response.status_code} for {signed_url}")
+                    return
+                
+                # Pass back headers like Content-Range, Content-Length
+                remote_headers = response.headers
+                
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+
+    # We need to know the response status and headers from Supabase before returning.
+    # To do this cleanly, we can use a slightly different approach or just pass the Range.
+    
+    headers = {}
+    if range_header:
+        headers["Range"] = range_header
+
+    # For a robust proxy, we should actually fetch the first chunk/headers first
+    async with httpx.AsyncClient() as client:
+        # Check the remote response to mirror the status code (206) and headers correctly
+        resp = await client.head(signed_url, headers=headers)
+        status_code = resp.status_code if resp.status_code in [200, 206] else 200
+        content_length = resp.headers.get("content-length")
+        content_range = resp.headers.get("content-range")
+
+    res_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f"inline; filename=interview_{interview_id}.webm"
+    }
+    if content_length: res_headers["Content-Length"] = content_length
+    if content_range: res_headers["Content-Range"] = content_range
+
+    return StreamingResponse(
+        stream_video(), 
+        status_code=status_code,
+        media_type="video/webm",
+        headers=res_headers
+    )
 
 @router.post("/{interview_id}/transcribe")
 async def transcribe_interview_audio(
