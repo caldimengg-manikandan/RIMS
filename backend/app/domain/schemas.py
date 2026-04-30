@@ -85,6 +85,24 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        return UserRegister.validate_email_robust(v)
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        return UserRegister.validate_email_robust(v)
+
 # ============================================================================
 # Job Schemas
 # ============================================================================

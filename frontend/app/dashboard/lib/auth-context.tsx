@@ -145,6 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const errorData = await response.json()
           if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
+          } else if (errorData.error) {
+            errorMessage = errorData.error
           } else if (Array.isArray(errorData.detail)) {
             errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ')
           } else if (errorData.message) {
@@ -184,6 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const errorData = await response.json()
           if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
+          } else if (errorData.error) {
+            errorMessage = errorData.error
           } else if (Array.isArray(errorData.detail)) {
             errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ')
           } else if (errorData.message) {
@@ -228,6 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const errorData = await response.json()
           if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
+          } else if (errorData.error) {
+            errorMessage = errorData.error
           } else if (Array.isArray(errorData.detail)) {
             // Handle Pydantic validation errors (e.g. invalid email format)
             errorMessage = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join(', ')

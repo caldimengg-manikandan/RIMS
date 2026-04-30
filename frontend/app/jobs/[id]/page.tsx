@@ -768,7 +768,7 @@ export default function PublicJobDetailPage() {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <Label htmlFor="phone" className="text-sm font-semibold">Phone (Optional)</Label>
+                                                <Label htmlFor="phone" className="text-sm font-semibold">Phone*</Label>
                                                 <div className="flex gap-2">
                                                     <Select value={selectedCountry} onValueChange={setSelectedCountry}>
                                                         <SelectTrigger className="w-[125px] h-12 bg-muted/50 border-input shrink-0 px-3">
@@ -866,7 +866,7 @@ export default function PublicJobDetailPage() {
                                             </div>
 
                                             <div className="space-y-2 pt-2">
-                                                <Label htmlFor="photo" className="text-sm font-semibold">Candidate Photo (Optional)</Label>
+                                                <Label htmlFor="photo" className="text-sm font-semibold">Candidate Photo*</Label>
                                                 <div
                                                     className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-300 ${photoFile
                                                         ? 'border-primary bg-primary/5'
