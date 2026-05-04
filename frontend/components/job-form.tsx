@@ -476,7 +476,10 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
     const isFormValid =
         formData.title.trim().length >= 3 &&
         formData.description.trim().length >= 10 &&
-        !titleError && !descError && !durationError
+        !titleError && !descError && !durationError &&
+        (formData.mode_of_work === 'Remote' || formData.location.trim().length > 0) &&
+        (!requiresQuestionFile || Boolean(formData.uploaded_question_file) || Boolean(formData.technical_repo_set_id)) &&
+        (!formData.aptitude_enabled || formData.aptitude_mode !== 'upload' || Boolean(formData.aptitude_questions_file) || Boolean(formData.aptitude_repo_set_id))
 
     const isJunior = formData.experience_level === 'junior' || formData.experience_level === 'intern'
 
@@ -818,12 +821,18 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                                     value={mode.value}
                                                     checked={formData.aptitude_mode === mode.value}
                                                     onChange={() => {
-                                                        setFormData(prev => ({
+                                                         setFormData(prev => ({
                                                             ...prev,
                                                             aptitude_mode: mode.value,
-                                                            ...(mode.value !== 'upload' && { aptitude_questions_file: null }),
+                                                            ...(mode.value !== 'upload' && { 
+                                                                aptitude_questions_file: null,
+                                                                aptitude_repo_set_id: null 
+                                                            }),
                                                         }))
-                                                        if (mode.value !== 'upload') removeAptitudeFile()
+                                                        if (mode.value !== 'upload') {
+                                                            removeAptitudeFile()
+                                                            setAptitudeRepoSetId(null)
+                                                        }
                                                     }}
                                                     className="mt-0.5 h-4 w-4 text-primary focus:ring-primary border-input"
                                                 />
@@ -944,9 +953,15 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                                             ...prev,
                                                             interview_mode: modeItem.value,
                                                             first_level_enabled: true,
-                                                            ...(modeItem.value === 'ai' && { uploaded_question_file: null }),
+                                                            ...(modeItem.value === 'ai' && { 
+                                                                uploaded_question_file: null,
+                                                                technical_repo_set_id: null 
+                                                            }),
                                                         }))
-                                                        if (modeItem.value === 'ai') setQuestionFileName('')
+                                                        if (modeItem.value === 'ai') {
+                                                            setQuestionFileName('')
+                                                            setTechnicalRepoSetId(null)
+                                                        }
                                                     }}
                                                     className="mt-0.5 h-4 w-4 text-primary focus:ring-primary border-input"
                                                 />

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { CheckCircle, Calendar } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface HireDialogProps {
     candidateName: string;
@@ -28,7 +29,7 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
 
     const handleConfirm = async () => {
         if (!joiningDate) {
-            alert("Please select a joining date.");
+            toast.error("Please select a joining date.");
             return;
         }
 
@@ -40,7 +41,7 @@ export function HireDialog({ candidateName, onConfirm, trigger }: HireDialogProp
             setNotes("");
         } catch (error) {
             console.error("Failed to hire candidate:", error);
-            alert("Failed to hire candidate. Please try again.");
+            toast.error("Failed to hire candidate. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

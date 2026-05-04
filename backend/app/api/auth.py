@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from app.infrastructure.database import get_db
 from app.domain.models import User
-from app.domain.schemas import UserRegister, UserLogin, TokenResponse, UserResponse, UserVerifyOTP
+from app.domain.schemas import UserRegister, UserLogin, TokenResponse, UserResponse, UserVerifyOTP, ForgotPasswordRequest, ResetPasswordRequest
 from app.core.auth import hash_password, verify_password, create_access_token, get_current_user, get_current_admin, pwd_context
-from app.services.email_service import send_otp_email
+from app.services.email_service import send_otp_email, send_password_reset_email
 from app.core.config import get_settings
 from app.domain.models import Application, Job, User
 import secrets
@@ -194,7 +194,7 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
         logger.warning(f"Login failed: User {credentials.email} not found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Email not registered"
         )
 
     logger.info(f"Login attempt: User={credentials.email}")
@@ -202,7 +202,7 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
         logger.warning(f"Login failed: Password mismatch for user {credentials.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid User Id or Password"
         )
 
     if not user.is_verified:
@@ -378,3 +378,59 @@ def logout(response: Response):
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current authenticated user info"""
     return current_user
+
+@router.post("/forgot-password")
+@limiter.limit("5/minute")
+def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Generate a password reset OTP and send email"""
+    user = db.query(User).filter(User.email == data.email.lower()).first()
+    
+    # We return success even if user doesn't exist to prevent email enumeration
+    if not user:
+        logger.info(f"Forgot password requested for non-existent email: {data.email}")
+        return {"message": "If an account exists with this email, a reset OTP has been sent."}
+    
+    raw_otp = ''.join(secrets.choice(string.digits) for _ in range(6))
+    user.otp_code = hash_password(raw_otp)
+    user.otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+    
+    try:
+        db.commit()
+        background_tasks.add_task(send_password_reset_email, user.email, raw_otp)
+        return {"message": "If an account exists with this email, a reset OTP has been sent."}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Forgot password failed for {user.email}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process request")
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+def reset_password(request: Request, data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password using OTP"""
+    user = db.query(User).filter(User.email == data.email.lower()).first()
+    if not user:
+         raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user.otp_code or not user.otp_expiry:
+        raise HTTPException(status_code=400, detail="No reset request found")
+        
+    expiry_time = user.otp_expiry
+    if expiry_time.tzinfo is None:
+        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+        
+    if datetime.now(timezone.utc) > expiry_time:
+        raise HTTPException(status_code=400, detail="Reset OTP has expired")
+        
+    if not pwd_context.verify(data.otp, user.otp_code):
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+        
+    try:
+        user.password_hash = hash_password(data.new_password)
+        user.otp_code = None
+        user.otp_expiry = None
+        db.commit()
+        return {"message": "Password has been successfully reset"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Reset password failed for {user.email}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")

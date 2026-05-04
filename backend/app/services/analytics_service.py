@@ -8,16 +8,37 @@ class AnalyticsService:
         self.db = db
 
     @classmethod
-    def get_dashboard(cls, db: Session, hr_id: int = None) -> Dict[str, Any]:
+    def get_dashboard(cls, db: Session, hr_id: int = None, job_id: int = None, from_date: str = None, to_date: str = None) -> Dict[str, Any]:
         """
         Get consistent dashboard metrics with null safety and zero defaults.
         """
         import logging
+        from datetime import datetime, timedelta
         logger = logging.getLogger(__name__)
 
         try:
             from sqlalchemy import and_
             
+            # Helper to apply shared filters
+            def apply_filters(q, model_for_date=Application):
+                if hr_id:
+                    q = q.outerjoin(Job, Application.job_id == Job.id).filter(
+                        or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
+                    )
+                if job_id:
+                    q = q.filter(Application.job_id == job_id)
+                if from_date:
+                    try:
+                        sd = datetime.strptime(from_date, "%Y-%m-%d").date()
+                        q = q.filter(model_for_date.created_at >= sd)
+                    except: pass
+                if to_date:
+                    try:
+                        ed = datetime.strptime(to_date, "%Y-%m-%d").date()
+                        q = q.filter(model_for_date.created_at <= ed + timedelta(days=1))
+                    except: pass
+                return q
+
             # Combine all core metrics into a single row fetch to minimize network round-trips
             metrics_query = db.query(
                 func.count(Application.id).label("total_apps"),
@@ -26,10 +47,7 @@ class AnalyticsService:
                 func.avg(case((Application.composite_score > 0, Application.composite_score))).label("avg_score")
             )
             
-            if hr_id:
-                metrics_query = metrics_query.outerjoin(Job, Application.job_id == Job.id).filter(
-                    or_(Job.hr_id == hr_id, Application.hr_id == hr_id)
-                )
+            metrics_query = apply_filters(metrics_query)
             
             m_res = metrics_query.first()
             total_applications = m_res.total_apps or 0
@@ -41,10 +59,9 @@ class AnalyticsService:
             int_query = db.query(
                 func.count(Interview.id).label("total_ints"),
                 func.count(case((Interview.status == "completed", Interview.id))).label("completed_ints")
-            ).outerjoin(Application, Interview.application_id == Application.id).outerjoin(Job, Application.job_id == Job.id)
-
-            if hr_id:
-                int_query = int_query.filter(or_(Job.hr_id == hr_id, Application.hr_id == hr_id))
+            ).outerjoin(Application, Interview.application_id == Application.id)
+            
+            int_query = apply_filters(int_query)
             
             i_res = int_query.first()
             total_interviews = i_res.total_ints or 0

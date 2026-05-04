@@ -424,6 +424,32 @@ async def send_otp_email(to_email: str, otp: str):
         logger.warning(f"Email failed for {to_email}: {result['error']}")
     return result["success"]
 
+async def send_password_reset_email(to_email: str, otp: str):
+    subject = "Password Reset Request"
+    frontend_url = settings.frontend_base_url
+    reset_link = f"{frontend_url}/auth/reset-password?email={to_email}&otp={otp}"
+    body = f"""
+    <html><body style="font-family:sans-serif; color:#333;">
+      <h2>Password Reset</h2>
+      <p>We received a request to reset your password. Use the OTP below to proceed, or click the button to go directly to the reset page. This OTP will expire in 30 minutes.</p>
+      <div style="margin: 20px 0; text-align: center;">
+        <h3 style="background:#f4f4f4; padding:15px; display:inline-block; letter-spacing:5px; border-radius:5px; border:1px solid #ddd;">{otp}</h3>
+      </div>
+      <div style="margin: 20px 0; text-align: center;">
+        <a href="{reset_link}" style="background-color: #2563eb; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+      </div>
+      <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+      <p><a href="{reset_link}">{reset_link}</a></p>
+      <p>If you did not request this, please ignore this email.</p>
+    </body></html>
+    """
+    result = await send_email_async(to_email, subject, body)
+    if result["success"]:
+        logger.info(f"[EMAIL][EXECUTED] Password reset email sent to {_safe_email_target(to_email)}")
+    else:
+        logger.warning(f"Password reset email failed for {to_email}: {result['error']}")
+    return result["success"]
+
 async def send_application_received_email(to_email_or_app: Any, job_title: str = None):
     if hasattr(to_email_or_app, 'candidate_email'):
         to_email = to_email_or_app.candidate_email

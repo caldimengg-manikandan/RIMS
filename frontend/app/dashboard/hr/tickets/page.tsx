@@ -83,8 +83,9 @@ export default function HRTicketsPage() {
 
 
     const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed' | 'reply') => {
+        // 'dismissed' action doesn't require a response; all others do
         if (!hrResponse.trim() && action !== 'dismissed') {
-            toast.error("Please provide a response for the candidate")
+            toast.error("Please provide a response message for the candidate before taking this action.")
             return
         }
 
@@ -118,7 +119,7 @@ export default function HRTicketsPage() {
                                 ...data,
                                 items: data.items.map((t: Ticket) => t.id === ticketId ? {
                                     ...t,
-                                    status: (action === 'dismissed' ? 'dismissed' : action === 'reply' ? 'pending' : 'resolved') as const,
+                                    status: (action === 'dismissed' ? 'dismissed' : action === 'reply' ? 'pending' : 'resolved') as Ticket['status'],
                                     hr_response: hrResponse || t.hr_response,
                                 } : t)
                             };
@@ -320,9 +321,17 @@ export default function HRTicketsPage() {
                                     <div className="space-y-1 min-w-0">
                                         <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Position & Timing</Label>
                                         <div className="flex items-center gap-2 font-bold text-lg text-foreground truncate">
-                                            <Link href={`/dashboard/hr/jobs/${selectedTicket.job_id}`} className="max-w-full">
-                                                <Badge variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 transition-colors cursor-pointer font-black px-2 py-0.5 truncate max-w-full">JOB ID: {selectedTicket.job_identifier || 'N/A'}</Badge>
-                                            </Link>
+                                            {selectedTicket.job_id ? (
+                                                <Link href={`/dashboard/hr/jobs/${selectedTicket.job_id}`}>
+                                                    <Badge variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 transition-colors cursor-pointer font-black px-2 py-0.5 truncate max-w-full">
+                                                        JOB ID: {selectedTicket.job_identifier || selectedTicket.job_id}
+                                                    </Badge>
+                                                </Link>
+                                            ) : (
+                                                <Badge variant="outline" className="border-muted text-muted-foreground font-black px-2 py-0.5">
+                                                    JOB ID: N/A
+                                                </Badge>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mt-1 truncate">
                                             <Clock className="h-3.5 w-3.5 text-primary/70 flex-shrink-0" />

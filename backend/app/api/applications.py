@@ -269,7 +269,7 @@ def get_candidate_ranking(
 
 
 @router.post("/apply", response_model=ApplicationResponse, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")
+@limiter.limit("300/minute")  # High limit for batch uploads (up to 50 files × 3 workers)
 async def apply_for_job(
     request: Request,
     job_id: int = Form(...),
@@ -290,6 +290,10 @@ async def apply_for_job(
         )
 
     request_id = None
+    try:
+        from app.core.observability import log_json
+    except ImportError:
+        log_json = None
     ip_address = None
     try:
         request_id = get_request_id(request)
@@ -378,8 +382,7 @@ async def apply_for_job(
     # Check if job exists and is open
     job = db.query(Job).filter(Job.id == job_id, Job.status == "open").first()
     if not job:
-        try:
-            from app.core.observability import log_json
+        if log_json:
             log_json(
                 logger,
                 "validation_failed",
@@ -389,8 +392,6 @@ async def apply_for_job(
                 level="warning",
                 extra={"module": "applications", "field": "job_id", "reason": "not_found_or_closed", "input_preview": str(job_id)},
             )
-        except Exception:
-            pass
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found or not open"
@@ -961,7 +962,7 @@ def get_pending_applications_count(
     """Sidebar / badges: count applications not in a terminal state, scoped to HR's jobs."""
     # Use func.count() directly — avoids loading full ORM objects just to count them.
     q = db.query(func.count(Application.id)).filter(
-        ~Application.status.in_(("hired", "rejected")),
+        ~Application.status.in_(("onboarded", "rejected", "permanent_failure")),
         or_(func.trim(Application.file_status).in_(('active', 'missing')), Application.file_status == None)
     )
 
@@ -982,7 +983,7 @@ def get_hr_applications(
     time_range: str = None,
     search: str = None,
     skip: int = 0,
-    limit: int = 20,
+    limit: int = 1000,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
@@ -991,7 +992,7 @@ def get_hr_applications(
     items = []
     total = 0
     safe_skip = max(0, int(skip or 0))
-    safe_limit = max(1, min(int(limit or 20), 100))
+    safe_limit = max(1, min(int(limit or 1000), 1000))
     
     try:
         # 1. Base Query with optimized loading
@@ -1033,15 +1034,28 @@ def get_hr_applications(
         if from_date:
             try:
                 sd = datetime.strptime(from_date, "%Y-%m-%d").date()
-                query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) >= sd)
+                query = query.filter(func.date(Application.applied_at) >= sd)
             except ValueError:
                 logger.warning(f"Invalid from_date format: {from_date}")
         if to_date:
             try:
                 ed = datetime.strptime(to_date, "%Y-%m-%d").date()
-                query = query.filter(func.date(func.timezone("UTC", Application.applied_at)) <= ed)
+                query = query.filter(func.date(Application.applied_at) <= ed)
             except ValueError:
                 logger.warning(f"Invalid to_date format: {to_date}")
+
+        if time_range and time_range != 'all':
+            # Applied Time Window Filter (Hour of Day in UTC)
+            # morning: 6-12, afternoon: 12-18, evening: 18-0, night: 0-6
+            hour_col = extract('hour', Application.applied_at)
+            if time_range == 'morning':
+                query = query.filter(hour_col >= 6, hour_col < 12)
+            elif time_range == 'afternoon':
+                query = query.filter(hour_col >= 12, hour_col < 18)
+            elif time_range == 'evening':
+                query = query.filter(hour_col >= 18, hour_col < 24)
+            elif time_range == 'night':
+                query = query.filter(hour_col >= 0, hour_col < 6)
 
         # 3. Security
         # Apply visibility isolation: Anyone not a super_admin is restricted to their own apps

@@ -25,13 +25,9 @@ export async function POST(req: NextRequest) {
       deviceScaleFactor: 2, // Higher scale factor for better quality rendering (shadows, paths)
     })
 
-    // Inject necessary CSS adjustments for A4 printing
+    // Inject necessary CSS adjustments for printing
     const styledHtml = `
       <style>
-        @page {
-          size: A4;
-          margin: 0;
-        }
         body {
           margin: 0 !important;
           padding: 0 !important;
@@ -39,19 +35,6 @@ export async function POST(req: NextRequest) {
           display: block !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
-        }
-        .page {
-          width: 210mm !important; /* Force exact A4 width */
-          height: 297mm !important; /* Force exact A4 height */
-          min-height: 297mm !important;
-          box-shadow: none !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          overflow: hidden !important;
-          position: relative !important;
-        }
-        .content {
-          padding: 80px 60px !important; /* Ensure content spacing is maintained */
         }
         * {
           -webkit-print-color-adjust: exact !important;
@@ -66,9 +49,8 @@ export async function POST(req: NextRequest) {
       waitUntil: "networkidle0",
     })
 
-    // Generate PDF
+    // Generate PDF - Respect CSS page size
     const pdfBuffer = await page.pdf({
-      format: "A4",
       printBackground: true,
       margin: {
         top: "0px",
@@ -82,7 +64,7 @@ export async function POST(req: NextRequest) {
     await browser.close()
 
     // Return the PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

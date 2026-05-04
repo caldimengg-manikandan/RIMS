@@ -11,15 +11,32 @@ export default function ForgotPasswordPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSent, setIsSent] = useState(false)
 
+    const [error, setError] = useState('')
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
+        setError('')
 
-        // Simulate API call
-        setTimeout(() => {
-            setIsSubmitting(false)
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:10000'}/api/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || data.detail || 'Failed to send reset email')
+            }
+
             setIsSent(true)
-        }, 1500)
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     return (
@@ -40,6 +57,12 @@ export default function ForgotPasswordPage() {
                                 : "No worries, we'll send you reset instructions."}
                         </p>
                     </div>
+
+                    {error && (
+                        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-sm font-medium">
+                            {error}
+                        </div>
+                    )}
 
                     {!isSent ? (
                         <form onSubmit={handleSubmit} className="space-y-6">
@@ -83,13 +106,21 @@ export default function ForgotPasswordPage() {
                             </Button>
                         </form>
                     ) : (
-                        <Button
-                            onClick={() => setIsSent(false)}
-                            variant="outline"
-                            className="w-full py-6 rounded-xl border-border/60 hover:bg-muted"
-                        >
-                            Didn't receive the email? Click to retry
-                        </Button>
+                        <div className="space-y-4">
+                            <Button
+                                onClick={() => setIsSent(false)}
+                                variant="outline"
+                                className="w-full py-6 rounded-xl border-border/60 hover:bg-muted"
+                            >
+                                Didn't receive the email? Click to retry
+                            </Button>
+                            <Link href={`/auth/reset-password?email=${encodeURIComponent(email)}`} className="block">
+                                <Button className="w-full py-6 rounded-xl bg-primary text-primary-foreground">
+                                    Go to reset page
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </Link>
+                        </div>
                     )}
 
                     <div className="mt-8 text-center">
