@@ -54,7 +54,7 @@ export default function RootLayout({
                     <Suspense fallback={null}>
                       <NavigationProgress />
                     </Suspense>
-                    <header className="shrink-0 flex flex-col">
+                    <header className="shrink-0 flex flex-col sticky top-0 z-[100]">
                       <GlobalNavbar />
                     </header>
                     <main className="flex-1 w-full flex flex-col">

@@ -674,6 +674,11 @@ def update_job(
         job_data.interview_mode is not None,
         job_data.uploaded_question_file is not None,
         job_data.aptitude_config is not None,
+        job_data.technical_repo_set_id is not None,
+        job_data.aptitude_repo_set_id is not None,
+        job_data.behavioural_repo_set_id is not None,
+        job_data.behavioral_role is not None,
+        job_data.aptitude_mode is not None,
     ])
 
     if pipeline_fields_sent:
@@ -688,12 +693,24 @@ def update_job(
             uploaded_question_file = job_data.uploaded_question_file if job_data.uploaded_question_file is not None else job.uploaded_question_file
             aptitude_config = job_data.aptitude_config
             duration_minutes = job_data.duration_minutes if job_data.duration_minutes is not None else job.duration_minutes
+            technical_repo_set_id = job_data.technical_repo_set_id if job_data.technical_repo_set_id is not None else job.technical_repo_set_id
+            aptitude_repo_set_id = job_data.aptitude_repo_set_id if job_data.aptitude_repo_set_id is not None else job.aptitude_repo_set_id
+            behavioural_repo_set_id = job_data.behavioural_repo_set_id if job_data.behavioural_repo_set_id is not None else job.behavioural_repo_set_id
+            behavioral_role = job_data.behavioral_role if job_data.behavioral_role is not None else job.behavioral_role
+            aptitude_mode = job_data.aptitude_mode if getattr(job_data, "aptitude_mode", None) is not None else job.aptitude_mode
+            aptitude_questions_file = job_data.aptitude_questions_file if job_data.aptitude_questions_file is not None else job.aptitude_questions_file
 
         pipeline = _validate_interview_pipeline(_Combined(), effective_exp)
         job.aptitude_enabled = pipeline["aptitude_enabled"]
         job.first_level_enabled = pipeline["first_level_enabled"]
         job.interview_mode = pipeline["interview_mode"]
         job.uploaded_question_file = pipeline["uploaded_question_file"]
+        job.technical_repo_set_id = pipeline.get("technical_repo_set_id")
+        job.aptitude_repo_set_id = pipeline.get("aptitude_repo_set_id")
+        job.behavioural_repo_set_id = pipeline.get("behavioural_repo_set_id")
+        job.behavioral_role = pipeline.get("behavioral_role") or "general"
+        job.aptitude_mode = pipeline.get("aptitude_mode") or "ai"
+        
         if pipeline["aptitude_config"] is not None:
             job.aptitude_config = pipeline["aptitude_config"]
         if pipeline["aptitude_questions_file"] is not None:

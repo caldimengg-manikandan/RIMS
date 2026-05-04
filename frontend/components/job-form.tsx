@@ -476,8 +476,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
     const isFormValid =
         formData.title.trim().length >= 3 &&
         formData.description.trim().length >= 10 &&
-        !titleError && !descError && !durationError &&
-        (!requiresQuestionFile || Boolean(formData.uploaded_question_file))
+        !titleError && !descError && !durationError
 
     const isJunior = formData.experience_level === 'junior' || formData.experience_level === 'intern'
 

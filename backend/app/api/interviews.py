@@ -2088,9 +2088,9 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
         if existing_report:
             report = existing_report
             report.overall_score = report_data["overall_score"]
-            report.technical_skills_score = report_data.get("technical_skills_score", report_data["overall_score"])
-            report.communication_score = report_data.get("communication_score", report_data["overall_score"])
-            report.problem_solving_score = report_data.get("problem_solving_score", report_data["overall_score"])
+            report.technical_skills_score = report_data.get("technical_skills_score")  # None if AI did not return it
+            report.communication_score = report_data.get("communication_score")        # None if AI did not return it
+            report.problem_solving_score = report_data.get("problem_solving_score")    # None if AI did not return it
             report.summary = str(report_data.get("summary", ""))
             report.detailed_feedback = detailed_feedback_val
             report.recommendation = rec_val
@@ -2105,9 +2105,9 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
                 candidate_email=interview.application.candidate_email if interview.application else "Email N/A",
                 applied_role=job.title if job else "N/A",
                 overall_score=report_data["overall_score"],
-                technical_skills_score=report_data.get("technical_skills_score", report_data["overall_score"]),
-                communication_score=report_data.get("communication_score", report_data["overall_score"]),
-                problem_solving_score=report_data.get("problem_solving_score", report_data["overall_score"]),
+                technical_skills_score=report_data.get("technical_skills_score"),  # None if AI did not return it
+                communication_score=report_data.get("communication_score"),        # None if AI did not return it
+                problem_solving_score=report_data.get("problem_solving_score"),    # None if AI did not return it
                 strengths=str(report_data.get("strengths", "[]")),
                 weaknesses=str(report_data.get("weaknesses", "[]")),
                 summary=str(report_data.get("summary", "")),

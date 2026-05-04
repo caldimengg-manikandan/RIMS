@@ -461,15 +461,24 @@ async def send_interview_invitation_email(application: Any, raw_access_key: str 
     support_url = f"{frontend_url}/support?{urlencode({'email': application.candidate_email, 'access_key': raw_access_key})}"
     
     body = f"""
-    <html><body style="font-family:sans-serif; color:#333;">
-      <h2>Interview Invitation</h2>
+    <html><body style="font-family:sans-serif; color:#333; line-height:1.6;">
+      <h2 style="color:#2563eb;">Interview Invitation</h2>
       <p>Your application for <strong>{application.job.title}</strong> has been approved!</p>
-      <p>Please use the secure link below to access the interview portal.</p>
+      <p>Please use the secure link below to access the interview portal. This link is unique to you.</p>
       <div style="margin: 20px 0; text-align: center;">
-        <a href="{access_url}" style="background-color: #2563eb; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Begin Interview</a>
+        <a href="{access_url}" style="background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Begin Interview</a>
       </div>
-      <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"/>
-      <p>Link: <a href="{access_url}">{access_url}</a></p>
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p><a href="{access_url}" style="color:#2563eb; word-break:break-all;">{access_url}</a></p>
+      <hr style="border:none; border-top:1px solid #eee; margin: 24px 0;"/>
+      <div style="background:#f8fafc; border-left:4px solid #f59e0b; padding:16px; border-radius:4px; margin-bottom:16px;">
+        <p style="margin:0 0 8px 0; font-weight:700; color:#92400e;">&#128197; Need to Reschedule?</p>
+        <p style="margin:0 0 8px 0; color:#555;">If you are unable to attend the interview at this time or encountered a technical issue, please contact us via the Support Portal below.</p>
+        <p style="margin:0;">
+          👉 <a href="{support_url}" style="color:#2563eb; font-weight:700;">Support Portal &amp; Reschedule Request</a>
+        </p>
+      </div>
+      <p style="font-size:0.9em; color:#888;">If you did not apply for this role, please disregard this email.</p>
     </body></html>
     """
     

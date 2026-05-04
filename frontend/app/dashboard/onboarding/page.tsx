@@ -172,7 +172,7 @@ export default function OnboardingPage() {
                     <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
                         Onboarding Pipeline
                         <Badge variant="outline" className="h-6 bg-primary/5 text-primary border-primary/20">
-                            {totalCount} Candidates
+                            {totalCount} {totalCount === 1 ? 'Candidate' : 'Candidates'}
                         </Badge>
                     </h1>
                     <p className="text-muted-foreground mt-1">Track and manage newly hired candidates</p>
@@ -477,7 +477,6 @@ export default function OnboardingPage() {
                                     win?.document.close();
                                 }}
                             >
-                                <Download className="h-3.5 w-3.5" />
                                 Open in New Tab
                             </Button>
                         </div>

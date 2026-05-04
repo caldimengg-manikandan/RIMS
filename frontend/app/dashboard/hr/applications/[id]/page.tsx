@@ -591,16 +591,16 @@ export default function HRApplicationDetailPage() {
                                                     </Tooltip>
                                                 </TooltipProvider>
                                             </div>
-                                            <div className="text-center p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                                                <p className="text-2xl font-black text-purple-700">{report.aptitude_score?.toFixed(1) || '0.0'}</p>
+                                             <div className="text-center p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                                                <p className="text-2xl font-black text-purple-700">{report.aptitude_score != null ? report.aptitude_score.toFixed(1) : 'N/A'}</p>
                                                 <p className="text-[10px] uppercase font-bold text-purple-500 tracking-wider">Aptitude</p>
                                             </div>
                                             <div className="text-center p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                                                <p className="text-2xl font-black text-blue-700">{report.technical_skills_score?.toFixed(1) || '0.0'}</p>
+                                                <p className="text-2xl font-black text-blue-700">{report.technical_skills_score != null ? report.technical_skills_score.toFixed(1) : 'N/A'}</p>
                                                 <p className="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Technical</p>
                                             </div>
                                             <div className="text-center p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                                                <p className="text-2xl font-black text-emerald-700">{report.communication_score?.toFixed(1) || '0.0'}</p>
+                                                <p className="text-2xl font-black text-emerald-700">{report.communication_score != null ? report.communication_score.toFixed(1) : 'N/A'}</p>
                                                 <p className="text-[10px] uppercase font-bold text-emerald-500 tracking-wider">Communication</p>
                                             </div>
                                         </div>

@@ -571,8 +571,12 @@ export default function InterviewPage() {
                         setShowIssueDialog(true)
                     } catch (error) {
                         console.log("Failed to terminate interview", error)
-                        interviewStatusRef.current = 'active'
-                        finishingInterviewRef.current = false
+                        // Do NOT reset finishingInterviewRef when at max violations —
+                        // keeps the session locked so retries can re-attempt termination
+                        // instead of cycling back to 'active'
+                        interviewStatusRef.current = 'finishing'
+                        // Retry termination after a short delay
+                        setTimeout(() => { finishingInterviewRef.current = false }, 5000)
                     }
                 }
             } else {
@@ -1050,6 +1054,10 @@ export default function InterviewPage() {
             const firstUnanswered = qsToUse.findIndex(q => !q.is_answered)
             if (firstUnanswered !== -1) {
                 setCurrentIndex(firstUnanswered)
+                toast.message(`You have ${unansweredCount} unanswered question(s). Please answer all questions before submitting.`, {
+                    duration: 4000,
+                    position: 'top-center',
+                })
             }
             return
         }
@@ -1362,12 +1370,15 @@ export default function InterviewPage() {
                                 <button
                                     key={q.id}
                                     type="button"
-                                    title={q.is_answered && q.evaluation_pending ? 'Evaluating…' : undefined}
+                                    title={q.is_answered && q.evaluation_pending ? 'Evaluating…' : q.is_answered ? 'Answered' : undefined}
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        setAnswer('')
-                                        answerRef.current = ''
+                                        // Only clear answer draft if the question is NOT already answered
+                                        if (!q.is_answered) {
+                                            setAnswer('')
+                                            answerRef.current = ''
+                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1397,8 +1408,10 @@ export default function InterviewPage() {
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        setAnswer('')
-                                        answerRef.current = ''
+                                        if (!q.is_answered) {
+                                            setAnswer('')
+                                            answerRef.current = ''
+                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1424,12 +1437,14 @@ export default function InterviewPage() {
                                 <button
                                     key={q.id}
                                     type="button"
-                                    title={q.is_answered && q.evaluation_pending ? 'Evaluating…' : undefined}
+                                    title={q.is_answered && q.evaluation_pending ? 'Evaluating…' : q.is_answered ? 'Answered' : undefined}
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        setAnswer('')
-                                        answerRef.current = ''
+                                        if (!q.is_answered) {
+                                            setAnswer('')
+                                            answerRef.current = ''
+                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1674,6 +1689,16 @@ export default function InterviewPage() {
                                         </button>
                                     ))}
                                 </div>
+                            ) : currentQuestion?.is_answered ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-4">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center border border-green-200">
+                                        <CheckCircle2 className="w-8 h-8 text-green-600" />
+                                    </div>
+                                    <p className="text-slate-700 font-bold text-lg">Answer Submitted</p>
+                                    <p className="text-slate-500 text-sm text-center max-w-sm">
+                                        Your answer for this question has been recorded. Navigate to another question or end the interview.
+                                    </p>
+                                </div>
                             ) : (
                                 <div className="space-y-4">
                                     <textarea
@@ -1684,8 +1709,14 @@ export default function InterviewPage() {
                                     />
                                     <div className="flex justify-between items-center px-4">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full animate-pulse ${isSubmitting ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-                                            <span className="text-xs font-bold text-slate-400">AI Analysis Active</span>
+                                            {(isSubmitting || isTranscribing) ? (
+                                                <>
+                                                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                                                    <span className="text-xs font-bold text-amber-500">{isTranscribing ? 'Converting voice...' : 'Submitting...'}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs font-bold text-slate-300">{answer.length > 0 ? `${answer.length} characters` : 'Type or use voice'}</span>
+                                            )}
                                         </div>
                                         <Button
                                             variant="ghost"
@@ -1722,7 +1753,8 @@ export default function InterviewPage() {
                                         variant="ghost"
                                         className="h-12 px-6 rounded-2xl text-slate-900 font-bold hover:bg-slate-50"
                                         onClick={() => currentIndex < totalQuestions - 1 && setCurrentIndex(currentIndex + 1)}
-                                        disabled={currentIndex === totalQuestions - 1}
+                                        disabled={currentIndex === totalQuestions - 1 || (!currentQuestion?.is_answered && !isSubmitting)}
+                                        title={!currentQuestion?.is_answered ? 'Please answer this question before moving to the next' : undefined}
                                     >
                                         Next
                                         <ChevronRight className="w-5 h-5 ml-2" />
@@ -1741,12 +1773,16 @@ export default function InterviewPage() {
                                         {questions.some(q => !q.is_answered) ? 'End Early' : 'End Interview'}
                                     </Button>
                                     <Button
-                                        disabled={!answer.trim() || isSubmitting || currentQuestion?.is_answered}
+                                        disabled={(!answer.trim() && !isListening && !isTranscribing) || isSubmitting || currentQuestion?.is_answered}
                                         onClick={handleSubmit}
                                         className="h-16 px-10 rounded-[1.25rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-lg shadow-2xl shadow-blue-500/30 transition-all hover:-translate-y-1 active:scale-[0.98] disabled:opacity-30"
                                     >
                                         {isSubmitting ? (
                                             <Loader2 className="w-6 h-6 animate-spin" />
+                                        ) : isListening ? (
+                                            <><MicOff className="w-5 h-5 mr-2" />Stop & Submit</>
+                                        ) : isTranscribing ? (
+                                            <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Converting...</>
                                         ) : (
                                             <>
                                                 Submit Answer
