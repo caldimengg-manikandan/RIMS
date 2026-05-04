@@ -53,8 +53,36 @@ export default function SettingsPage() {
             setLoading(false)
         }
     }
-
     const handleSave = async () => {
+        if (!settings.company_name.trim() || !settings.hr_name.trim() || !settings.hr_email.trim() || !settings.hr_phone.trim() || !settings.company_address.trim()) {
+            toast.error("Please fill in all required fields (Company Name, Address, HR Name, Email, Phone)");
+            return;
+        }
+
+    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(settings.hr_email);
+    if (!isEmailValid) {
+        toast.error("Please enter a valid email address");
+        return;
+    }
+
+    const isPhoneValid = /^\+?[0-9\s]{7,15}$/.test(settings.hr_phone);
+    if (!isPhoneValid) {
+        toast.error("Please enter a valid phone number (7-15 digits)");
+        return;
+    }
+
+    const isCompanyNameValid = /^[A-Za-z\s&.,'-]{2,100}$/.test(settings.company_name);
+    if (!isCompanyNameValid) {
+        toast.error("Please enter a valid company name");
+        return;
+    }
+
+    const isNameValid = /^[A-Za-z\s'-]{2,50}$/.test(settings.hr_name);
+    if (!isNameValid) {
+        toast.error("Please enter a valid name");
+        return;
+    }
+
         setSaving(true)
         try {
             await APIClient.post('/api/settings', settings)
@@ -174,6 +202,8 @@ export default function SettingsPage() {
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input 
                                     id="hr_email" 
+                                    type="email"
+                                    required
                                     className="pl-10"
                                     value={settings.hr_email} 
                                     onChange={(e) => setSettings({...settings, hr_email: e.target.value})}
@@ -189,8 +219,14 @@ export default function SettingsPage() {
                                     id="hr_phone" 
                                     className="pl-10"
                                     value={settings.hr_phone} 
-                                    onChange={(e) => setSettings({...settings, hr_phone: e.target.value})}
-                                    placeholder="+1 (555) 000-0000"
+                                    maxLength={15}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '' || /^[0-9+]+$/.test(val)) {
+                                            setSettings({...settings, hr_phone: val});
+                                        }
+                                    }}
+                                    placeholder="+91 9876543210"
                                 />
                             </div>
                         </div>
@@ -216,7 +252,7 @@ export default function SettingsPage() {
                                 onClick={() => {
                                     const input = document.createElement('input');
                                     input.type = 'file';
-                                    input.accept = '.html,.txt';
+                                    input.accept = '.html';
                                     input.onchange = (e: any) => {
                                         const file = e.target.files[0];
                                         if (file) {

@@ -5,18 +5,23 @@ import { useParams, useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users } from 'lucide-react'
 import { PipelineBoard } from '@/components/pipeline-board'
+import useSWR from 'swr'
+import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 
 export default function PipelinePage() {
     const router = useRouter()
     const params = useParams()
     const jobId = params.id as string
 
+    // Fetch job details to get the job name
+    const { data: job } = useSWR<any>(jobId ? `/api/jobs/${jobId}` : null, fetcher)
+
     return (
         <div className="flex flex-col h-[calc(100vh-80px)] space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 px-4 pt-4">
                 <div className="space-y-4">
-                    <Button 
-                        variant="ghost" 
+                    <Button
+                        variant="ghost"
                         onClick={() => router.push('/dashboard/hr/pipeline')} 
                         className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group"
                     >
@@ -25,11 +30,9 @@ export default function PipelinePage() {
                     </Button>
                     <div>
                         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none">
-                            Job Specific Pipeline
+                            Job Specific Pipeline for {job?.title || `JOB #${jobId}`}
                         </h1>
-                        <p className="text-sm font-bold text-muted-foreground mt-2 uppercase tracking-widest opacity-60">
-                            Managing candidates for JOB #{jobId}
-                        </p>
+
                     </div>
                 </div>
                 <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-2xl border border-primary/20 shrink-0">

@@ -143,7 +143,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let errorMessage = 'Registration failed'
         try {
           const errorData = await response.json()
-          if (typeof errorData.detail === 'string') {
+          if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error
+          } else if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
           } else if (errorData.error) {
             errorMessage = errorData.error
@@ -184,7 +186,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let errorMessage = 'Verification failed'
         try {
           const errorData = await response.json()
-          if (typeof errorData.detail === 'string') {
+          if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error
+          } else if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
           } else if (errorData.error) {
             errorMessage = errorData.error
@@ -230,7 +234,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let errorMessage = 'Login failed'
         try {
           const errorData = await response.json()
-          if (typeof errorData.detail === 'string') {
+          if (typeof errorData.error === 'string') {
+            errorMessage = errorData.error
+          } else if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail
           } else if (errorData.error) {
             errorMessage = errorData.error

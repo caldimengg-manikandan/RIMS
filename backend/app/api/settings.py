@@ -13,7 +13,7 @@ def ensure_global_settings_table(db: Session) -> None:
     GlobalSettings.__table__.create(bind=db.get_bind(), checkfirst=True)
 
 
-@router.get("/", response_model=GlobalSettingsResponse)
+@router.get("", response_model=GlobalSettingsResponse)
 def get_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -33,7 +33,7 @@ def get_settings(
         "offer_letter_template": settings_dict.get("offer_letter_template", "")
     }
 
-@router.post("/", response_model=GlobalSettingsResponse)
+@router.post("", response_model=GlobalSettingsResponse)
 def update_settings(
     settings_data: GlobalSettingsUpdate,
     current_user: User = Depends(get_current_hr),
