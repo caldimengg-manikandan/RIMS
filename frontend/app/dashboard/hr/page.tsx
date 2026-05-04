@@ -82,8 +82,22 @@ interface DashboardData {
 export default function HRDashboard() {
   const router = useRouter()
   const { user, isLoading: authLoading } = useAuth()
+  
+  const [filters, setFilters] = useState<any>({
+    search: '',
+    date: '',
+    status: 'all'
+  })
+  
+  const [jobFilter, setJobFilter] = useState('all')
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
+
   const { data: dashboardData, error: dashboardError, isLoading: dashboardLoading } = useSWR<DashboardData>(
-    '/api/analytics/dashboard', 
+    `/api/analytics/dashboard?${new URLSearchParams({
+      ...(jobFilter !== 'all' ? { job_id: jobFilter } : {}),
+      ...(filters.status !== 'all' ? { status: filters.status } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {})
+    }).toString()}`, 
     (url: string) => fetcher<DashboardData>(url),
     { keepPreviousData: true }
   )
@@ -100,14 +114,6 @@ export default function HRDashboard() {
     }
   }, [user, authLoading, router])
 
-  // Filter States
-  const [filters, setFilters] = useState<any>({
-    search: '',
-    date: '',
-    status: 'all'
-  })
-  
-  const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
@@ -203,6 +209,7 @@ export default function HRDashboard() {
       date: '',
       status: 'all'
     })
+    setJobFilter('all')
     setCurrentPage(1)
     setPageSize(10)
   }
@@ -355,6 +362,27 @@ export default function HRDashboard() {
               {isFiltering && (
                 <RotateCw className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
               )}
+            </div>
+
+            {/* Job Filter Addition */}
+            <div className="w-full md:w-48">
+              <Select
+                value={jobFilter}
+                onValueChange={setJobFilter}
+              >
+                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                   <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
+                   <SelectValue placeholder="All Jobs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Jobs</SelectItem>
+                  {(jobs || []).map((job) => (
+                    <SelectItem key={job.id} value={job.id.toString()}>
+                      {job.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="w-full md:w-48">

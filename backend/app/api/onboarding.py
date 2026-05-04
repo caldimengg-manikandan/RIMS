@@ -120,7 +120,7 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
     settings = get_settings()
     # Call the Next.js API route we created
     # Note: Using localhost:3000 assuming frontend is running there during dev
-    pdf_service_url = f"{settings.frontend_base_url.rstrip('/')}/api/generate-pdf/"
+    pdf_service_url = f"{settings.frontend_base_url.rstrip('/')}/api/generate-pdf"
     
     start_time = time.time()
     logger.info(f"Starting Puppeteer PDF generation request to {pdf_service_url} for {filename}...")
@@ -146,15 +146,22 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
                 )
             
             pdf_bytes = response.content
+            if len(pdf_bytes) < 1000: # Safety check: too small for a PDF
+                 logger.error(f"Generated PDF too small ({len(pdf_bytes)} bytes). Content: {pdf_bytes.decode('utf-8', errors='ignore')[:500]}")
+                 raise Exception("Generated PDF is invalid or too small. Check template.")
+
             storage_path = f"onboarding/{filename}"
             
             # Upload to Supabase
             upload_start = time.time()
             result_url = upload_file(bucket, storage_path, pdf_bytes, content_type="application/pdf")
+            if not result_url:
+                 raise Exception(f"Failed to upload PDF to Supabase bucket '{bucket}'. Check storage permissions.")
+                 
             logger.info(f"Uploaded PDF to Supabase in {time.time() - upload_start:.2f} seconds. Path: {result_url}")
             return result_url
         except Exception as e:
-            logger.error(f"Puppeteer transition failed after {time.time() - start_time:.2f} seconds: {e}")
+            logger.error(f"PDF generation or upload failed: {str(e)}")
             raise e
 
 @router.get("/applications/{application_id}/offer-preview")
@@ -204,7 +211,7 @@ def get_onboarding_candidates(
     
     query = db.query(Application).filter(
         Application.status.in_(["hired", "pending_approval", "offer_sent", "accepted", "onboarded"])
-    )
+    ).order_by(Application.updated_at.desc())
     
     # Apply visibility isolation
     if current_user.role.lower() in ["hr", "staff"]:
@@ -312,16 +319,17 @@ async def request_offer_approval(
             application.offer_email_status = "pending"
             
             db.add(application)
-            db.commit()
+            db.commit() # Commit status change before background task
+            logger.info(f"Offer released and status committed for App {application_id}")
             
             background_tasks.add_task(process_offer_email, application.id, application.offer_pdf_path, gs.get("company_name", "Our Company"))
-            return {"status": "success", "message": "Offer released directly to candidate."}
+            return {"status": "success", "message": "Offer letter sent successfully."}
             
         except Exception as e:
             import traceback
             logger.error(f"OFFER_RELEASE_CRITICAL_FAILURE: {str(e)}\n{traceback.format_exc()}")
             db.rollback()
-            raise HTTPException(status_code=400, detail=f"Direct release failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Offer letter could not be sent: {str(e)}")
     else:
         # Staging path
         try:
@@ -816,15 +824,14 @@ def complete_onboarding(
     
     check_hr_permission(current_user, application, db)
         
-    # Guard: Onboarding only allowed on or after joining date (Point 2)
+    # Relaxed Guard: Onboarding allowed even if before joining date, with a log warning.
     if application.joining_date:
         today = datetime.now(timezone.utc).date()
         joining_date = application.joining_date.date()
         if joining_date > today:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Candidate's joining date ({joining_date.strftime('%d %b %Y')}) has not arrived yet. Cannot onboard early."
-            )
+            days_remaining = (joining_date - today).days
+            logger.warning(f"Early Onboarding: App {application.id} onboarded {days_remaining} days before joining date.")
+
 
     from app.services.state_machine import CandidateStateMachine, TransitionAction
     fsm = CandidateStateMachine(db)

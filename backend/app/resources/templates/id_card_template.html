@@ -11,7 +11,7 @@
             --accent: #10b981;
             --text-main: #1e293b;
             --text-muted: #64748b;
-            --bg: #f8fafc;
+            --bg: #ffffff;
         }
 
         @page {
@@ -25,6 +25,7 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: white;
             -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
         }
 
         .id-card {
@@ -35,113 +36,125 @@
             background: var(--bg);
             display: flex;
             color: var(--text-main);
+            border: 1px solid #e2e8f0;
+            box-sizing: border-box;
         }
 
-        /* Decorative Background */
-        .id-card::before {
-            content: '';
+        /* Side Strip for Branding */
+        .side-strip {
             position: absolute;
-            top: -20%;
-            right: -10%;
-            width: 60%;
-            height: 140%;
+            top: 0;
+            left: 0;
+            width: 6mm;
+            height: 100%;
             background: var(--primary);
-            transform: skew(-15deg);
-            z-index: 1;
+            z-index: 5;
         }
 
-        .left-content {
+        .main-content {
             flex: 1;
-            padding: 15px;
-            z-index: 2;
+            margin-left: 6mm;
+            padding: 12px 15px;
+            z-index: 10;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .left-info {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            flex: 1;
+            padding-right: 10px;
         }
 
-        .right-content {
-            width: 35%;
-            z-index: 2;
+        .right-photo {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding-right: 10px;
+            width: 32mm;
+            gap: 6px;
         }
 
         .header {
             display: flex;
             align-items: center;
             gap: 8px;
+            margin-bottom: 5px;
         }
 
         .logo {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             object-fit: contain;
         }
 
         .company-name {
             font-weight: 800;
-            font-size: 10pt;
-            letter-spacing: -0.5px;
+            font-size: 9pt;
+            letter-spacing: -0.3px;
             color: var(--primary);
             text-transform: uppercase;
         }
 
         .user-details {
-            margin-top: 10px;
+            margin-top: 5px;
         }
 
         .user-name {
-            font-size: 14pt;
+            font-size: 13pt;
             font-weight: 800;
-            margin: 0;
+            margin: 2px 0;
             color: var(--primary);
             line-height: 1.1;
+            letter-spacing: -0.5px;
         }
 
         .user-role {
-            font-size: 8pt;
+            font-size: 7.5pt;
             font-weight: 600;
             color: var(--secondary);
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
 
         .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 5px;
-            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 6px;
         }
 
         .info-item {
             display: flex;
-            flex-direction: column;
+            gap: 8px;
+            align-items: baseline;
         }
 
         .info-label {
-            font-size: 5pt;
+            font-size: 5.5pt;
             font-weight: 700;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            min-width: 45px;
         }
 
         .info-value {
             font-size: 7pt;
             font-weight: 600;
+            color: var(--text-main);
         }
 
         .photo-container {
-            width: 28mm;
-            height: 35mm;
-            background: white;
-            border: 2px solid white;
+            width: 25mm;
+            height: 32mm;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
             border-radius: 4px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -154,80 +167,85 @@
             object-fit: cover;
         }
 
-        .employee-id {
+        .employee-id-box {
             background: var(--primary);
             color: white;
             font-size: 7pt;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 10px;
-            margin-top: 8px;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 3px;
             text-align: center;
+            min-width: 70px;
         }
 
-        .status-badge {
+        .status-line {
             position: absolute;
             bottom: 0;
-            left: 0;
+            right: 0;
             width: 100%;
             height: 4px;
             background: var(--accent);
         }
 
-        /* Back side simulation overlay (optional) */
         .watermark {
-            position: absolute;
-            bottom: 10px;
-            left: 15px;
-            font-size: 4pt;
+            font-size: 4.5pt;
             color: var(--text-muted);
-            font-weight: 500;
+            font-weight: 600;
+            text-transform: uppercase;
+            opacity: 0.6;
         }
     </style>
 </head>
 <body>
     <div class="id-card">
-        <div class="left-content">
-            <div class="header">
-                {% if logo_url %}
-                <img src="{{ logo_url }}" class="logo" alt="Logo">
-                {% endif %}
-                <span class="company-name">{{ company_name }}</span>
-            </div>
-            
-            <div class="user-details">
-                <div class="user-role">{{ job_role }}</div>
-                <h1 class="user-name">{{ candidate_name }}</h1>
+        <div class="side-strip"></div>
+        <div class="main-content">
+            <div class="left-info">
+                <div class="header">
+                    {% if logo_url %}
+                    <img src="{{ logo_url }}" class="logo" alt="Logo">
+                    {% endif %}
+                    <span class="company-name">{{ company_name }}</span>
+                </div>
                 
-                <div class="info-grid">
-                    <div class="info-item">
-                        <span class="info-label">Department</span>
-                        <span class="info-value">{{ department }}</span>
+                <div class="user-details">
+                    <div class="user-role">{{ job_role }}</div>
+                    <h1 class="user-name">{{ candidate_name }}</h1>
+                    
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Dept</span>
+                            <span class="info-value">{{ department }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Joined</span>
+                            <span class="info-value">{{ joining_date }}</span>
+                        </div>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label">Joining Date</span>
-                        <span class="info-value">{{ joining_date }}</span>
-                    </div>
+                </div>
+
+                <div class="watermark">
+                    VALID EMPLOYEE IDENTITY CARD
                 </div>
             </div>
 
-            <div class="watermark">
-                ELECTRONIC IDENTITY CARD | SYSTEM GENERATED
+            <div class="right-photo">
+                <div class="photo-container">
+                    {% if photo_url %}
+                    <img src="{{ photo_url }}" class="photo" alt="Candidate">
+                    {% else %}
+                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-center; background: #f1f5f9;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="width: 50%; height: 50%;">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="employee-id-box">{{ employee_id }}</div>
             </div>
         </div>
-
-        <div class="right-content">
-            <div class="photo-container">
-                {% if photo_url %}
-                <img src="{{ photo_url }}" class="photo" alt="Candidate">
-                {% else %}
-                <div style="font-size: 6pt; color: #ccc;">PHOTO MISSING</div>
-                {% endif %}
-            </div>
-            <div class="employee-id">{{ employee_id }}</div>
-        </div>
-
-        <div class="status-badge"></div>
+        <div class="status-line"></div>
     </div>
 </body>
 </html>

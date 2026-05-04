@@ -58,7 +58,7 @@ supabase==2.13.0
 # Data
 pandas==2.3.3
 numpy==2.4.2
-orjson==3.10.15
+orjson==3.11.8
 
 # Email and Notifications
 email-validator==2.3.0

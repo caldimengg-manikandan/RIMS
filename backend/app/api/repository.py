@@ -253,6 +253,17 @@ def create_question_set(
 
     _ensure_question_sets_table(db)
 
+    # Check for duplicate title (Global Uniqueness - R017)
+    existing = db.query(QuestionSet).filter(
+        QuestionSet.title == payload.title.strip()
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"A question set with title '{payload.title.strip()}' already exists (as {existing.round_type} set)."
+        )
+
+
     s = QuestionSet(
         title=payload.title.strip(),
         round_type=payload.round_type,
@@ -288,6 +299,18 @@ def update_question_set(
         raise HTTPException(status_code=400, detail="round_type must be aptitude, technical, or behavioural.")
 
     _ensure_question_sets_table(db)
+    
+    # Check for duplicate title (Global Uniqueness - R017)
+    existing = db.query(QuestionSet).filter(
+        QuestionSet.title == payload.title.strip(),
+        QuestionSet.id != set_id
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Another question set with title '{payload.title.strip()}' already exists (as {existing.round_type} set)."
+        )
+
     s.title = payload.title.strip()
     s.round_type = payload.round_type
     s.job_roles = json.dumps(payload.job_roles)

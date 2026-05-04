@@ -284,16 +284,18 @@ def resolve_ticket(
     
     # Removal of strict filtering: HR can now resolve any ticket.
 
-    # Status update logic
+    # Status update logic – accept both canonical forms (e.g. 'resolve'/'resolved', 'dismiss'/'dismissed')
     if resolution.action == 'reissue_key':
         ticket.status = 'resolved'
-    elif resolution.action in ['resolved', 'dismissed']:
-        ticket.status = resolution.action
+    elif resolution.action in ['resolve', 'resolved']:
+        ticket.status = 'resolved'
+    elif resolution.action in ['dismiss', 'dismissed']:
+        ticket.status = 'dismissed'
     elif resolution.action == 'reply':
         # Just update response and send email, keep status as pending
         ticket.status = 'pending'
     
-    ticket.hr_response = resolution.hr_response
+    ticket.hr_response = resolution.hr_response or ticket.hr_response or ""
     ticket.resolved_at = datetime.now() if ticket.status != 'pending' else None
     
     app = ticket.application or (ticket.interview.application if ticket.interview else None)
@@ -328,8 +330,8 @@ def resolve_ticket(
             )
             logger.info(f"RE-ISSUED KEY queued for {ticket.candidate_email}")
     else:
-        # Send resolution/dismissal email if requested
-        if resolution.send_email:
+        # Send resolution/dismissal email if requested (and if hr_response is set)
+        if resolution.send_email and resolution.hr_response:
             background_tasks.add_task(
                 send_ticket_resolved_email,
                 to_email=ticket.candidate_email,

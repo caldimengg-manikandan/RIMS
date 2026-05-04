@@ -169,19 +169,55 @@ function getRecommendationColor(score: number) {
 }
 
 export default function ReportsPage() {
-  const { data: rawReportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], count: number, failed?: number }>('/api/analytics/reports', (url: string) => fetcher<{ reports: Report[], count: number, failed?: number }>(url))
-  const rawReports = Array.isArray(rawReportsResponse)
-    ? rawReportsResponse
-    : (rawReportsResponse?.reports || []);
   const searchParams = useSearchParams()
   const urlReportId = searchParams.get('reportId')
   const urlSearch = searchParams.get('search')
+
+  // Pagination & Filter State
+  const [reportsPage, setReportsPage] = useState(1);
+  const REPORTS_PER_PAGE = 25;
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [jobFilter, setJobFilter] = useState('All')
+
+  const [skillFilter, setSkillFilter] = useState('All')
+  const [experienceFilter, setExperienceFilter] = useState('All')
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined })
+
+  const [scoreRange, setScoreRange] = useState([0, 10])
+  const [searchQuery, setSearchQuery] = useState(urlSearch || '')
+
+  // Construct API URL with server-side filters
+  const reportsApiUrl = useMemo(() => {
+    const q = new URLSearchParams();
+    q.set("limit", String(REPORTS_PER_PAGE));
+    q.set("skip", String((reportsPage - 1) * REPORTS_PER_PAGE));
+    if (statusFilter !== "All") q.set("status", statusFilter);
+    if (jobFilter !== "All") q.set("job_id", jobFilter);
+    if (skillFilter !== "All") q.set("skill", skillFilter);
+
+    if (experienceFilter !== "All") q.set("experience", experienceFilter);
+    if (searchQuery) q.set("search", searchQuery);
+    if (dateRange.from) {
+      q.set("from_date", dateRange.from.toLocaleDateString('en-CA'));
+    }
+    if (dateRange.to) {
+      q.set("to_date", dateRange.to.toLocaleDateString('en-CA'));
+    }
+
+    return `/api/analytics/reports?${q.toString()}`;
+  }, [reportsPage, statusFilter, skillFilter, experienceFilter, searchQuery, dateRange]);
+
+  const { data: reportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], total: number, count: number, failed?: number, pages: number }>(reportsApiUrl, fetcher)
+
+  const rawReports = reportsResponse?.reports || [];
+  const totalCount = reportsResponse?.total || 0;
+  const totalPages = reportsResponse?.pages || 0;
 
   const reports = useMemo(() => {
     const processed = rawReports.map(report => {
       let techSum = 0, behSum = 0, commSum = 0;
       let techCount = 0, behCount = 0, commCount = 0;
-      
+
       const allQ = [...(report?.question_evaluations || []), ...(report?.aptitude_question_evaluations || [])];
 
       allQ.forEach(q => {
@@ -215,7 +251,7 @@ export default function ReportsPage() {
         comm_score: commCount > 0 ? commSum / commCount : report?.comm_score,
       };
     });
-    
+
     // Developer Contract Validation Log
     if (process.env.NODE_ENV === 'development') {
       console.log(`[REPORTS] Pipeline: API(${rawReports.length}) -> Processed(${processed.length})`);
@@ -226,10 +262,10 @@ export default function ReportsPage() {
 
   // Contract Validation Warning
   React.useEffect(() => {
-    if (rawReportsResponse && !Array.isArray(rawReportsResponse) && !rawReportsResponse.reports) {
-      console.warn("[REPORTS] API Contract Violation: Response missing 'reports' array.", rawReportsResponse);
+    if (reportsResponse && !Array.isArray(reportsResponse) && !reportsResponse.reports) {
+      console.warn("[REPORTS] API Contract Violation: Response missing 'reports' array.", reportsResponse);
     }
-  }, [rawReportsResponse]);
+  }, [reportsResponse]);
 
 
   const getStatusColor = (status: string) => {
@@ -255,20 +291,18 @@ export default function ReportsPage() {
   const [viewingReport, setViewingReport] = useState<Report | null>(null)
   const [reportView, setReportView] = useState<'technical' | 'aptitude' | 'behavioral'>('technical');
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('All')
-  const [skillFilter, setSkillFilter] = useState('All') // Fixed: missing state
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined)
-  const [scoreRange, setScoreRange] = useState([0, 10])
-  const [experienceFilter, setExperienceFilter] = useState('All')
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([])
-  const [searchQuery, setSearchQuery] = useState(urlSearch || '')
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setReportsPage(1);
+  }, [statusFilter, jobFilter, skillFilter, experienceFilter, searchQuery, dateRange]);
+
+
 
   // Effect to auto-open report if reportId is in URL
   React.useEffect(() => {
     if (urlReportId && reports.length > 0) {
-      const reportToView = reports.find(r => 
-        String(r.id) === String(urlReportId) || 
+      const reportToView = reports.find(r =>
+        String(r.id) === String(urlReportId) ||
         r.filename.includes(String(urlReportId))
       );
       if (reportToView) {
@@ -277,8 +311,9 @@ export default function ReportsPage() {
     }
   }, [urlReportId, reports]);
 
-  // Derived Data for Filters
-  const uniqueExperiences = useMemo(() => Array.from(new Set(reports.map(r => r.candidate_profile.experience_level || 'N/A'))).sort(), [reports])
+  // Derived Data for Filters (Fetch from all reports for heatmap if needed, but for now we use what we have)
+  const { data: allJobsData } = useSWR<any[]>('/api/jobs?limit=500', fetcher);
+  const uniqueExperiences = useMemo(() => ["intern", "junior", "mid", "senior", "lead", "architect"], [])
 
   // Derived Interview Counts for Calendar Heatmap
   const interviewCounts = useMemo(() => {
@@ -293,50 +328,20 @@ export default function ReportsPage() {
     return counts
   }, [reports])
 
-  // Filter Logic
-  const filteredReports = useMemo(() => {
-    return reports.filter(report => {
-      // Derive display suggestion bucket, ensuring "Not Completed" is its own group
-      const score = Number(report?.overall_score || 0);
-      const suggestion = isInterviewNotCompleted(report)
-        ? 'Not Completed'
-        : getRecommendationLabel(score)
-      
-      const matchesStatus = statusFilter === 'All' || suggestion === statusFilter
-      const matchesScore = score >= scoreRange[0] && score <= scoreRange[1]
-      const matchesExp = experienceFilter === 'All' || (report?.candidate_profile?.experience_level || 'N/A') === experienceFilter
-      
-      const skillFilterLower = skillFilter.toLowerCase()
-      const matchesSkillFilter = skillFilter === 'All' ||
-        (report?.candidate_profile?.primary_skill?.toLowerCase() || '').includes(skillFilterLower) ||
-        (report?.candidate_profile?.skills?.some((s: string) => s.toLowerCase().includes(skillFilterLower)) || false)
-
-      const reportDateStr = report?.timestamp ? new Date(report.timestamp).toLocaleDateString('en-CA') : "";
-      const filterDateStr = dateFilter?.toLocaleDateString('en-CA');
-      const matchesDate = !dateFilter || reportDateStr === filterDateStr;
-
-      const searchLower = searchQuery.toLowerCase()
-      const matchesSearch = searchQuery === '' ||
-        String(report?.filename || "").toLowerCase().includes(searchLower) ||
-        String(report?.candidate_profile?.primary_skill || "").toLowerCase().includes(searchLower) ||
-        String(report?.candidate_profile?.candidate_name || "").toLowerCase().includes(searchLower) ||
-        String(report?.candidate_profile?.candidate_email || "").toLowerCase().includes(searchLower)
-
-      return matchesStatus && matchesScore && matchesExp && matchesSearch && matchesDate && matchesSkillFilter
-    });
-  }, [reports, statusFilter, skillFilter, scoreRange, experienceFilter, dateFilter, searchQuery])
+  // Since filtering is now server-side, filteredReports is just reports
+  const filteredReports = reports;
 
   // Metrics
   const metrics = useMemo(() => {
-    const total = filteredReports.length
+    const total = reportsResponse?.total || reports.length;
     const selectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Select').length
     const holdCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Consider').length
     const rejectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Reject').length
-    const avgScore = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + Number(r?.overall_score || 0), 0) / total).toFixed(2) : '0.00'
-    const avgQuestions = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + (r?.total_questions_answered || 0), 0) / total).toFixed(1) : '0.0'
+    const avgScore = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + Number(r?.overall_score || 0), 0) / (filteredReports.length || 1)).toFixed(2) : '0.00'
+    const avgQuestions = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + (r?.total_questions_answered || 0), 0) / (filteredReports.length || 1)).toFixed(1) : '0.0'
 
     return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
-  }, [filteredReports])
+  }, [filteredReports, reportsResponse])
 
   // Chart Data for Report Modal
   const radarData = useMemo(() => {
@@ -447,12 +452,15 @@ export default function ReportsPage() {
 
   const clearAllFilters = () => {
     setStatusFilter('All')
+    setJobFilter('All')
     setSkillFilter('All')
+
     setExperienceFilter('All')
     setScoreRange([0, 10])
     setSearchQuery('')
-    setDateFilter(undefined)
-    setSelectedSkills([])
+    setDateRange({ from: undefined, to: undefined })
+
+    setReportsPage(1)
   }
 
   if (isLoading) {
@@ -469,7 +477,7 @@ export default function ReportsPage() {
         <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">
           <h3 className="font-bold">Error Loading Reports</h3>
           <p>{fetchError.message || 'An error occurred while fetching reports.'}</p>
-          <Button onClick={() => mutate('/api/analytics/reports')} variant="outline" className="mt-2">Retry</Button>
+          <Button onClick={() => mutate(reportsApiUrl)} variant="outline" className="mt-2">Retry</Button>
         </div>
       </div>
     )
@@ -492,7 +500,7 @@ export default function ReportsPage() {
             Interview Reports
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Analytics and detailed reports for {reports.length} candidates
+            Analytics and detailed reports for {totalCount} candidates
           </p>
         </div>
       </div>
@@ -605,7 +613,8 @@ export default function ReportsPage() {
               - On desktop (lg), it's a 4-column grid.
               - On mobile, it stacks naturally.
             */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
+
 
         {/*
                   LEFT COMPONENT (Filter Panel)
@@ -614,7 +623,8 @@ export default function ReportsPage() {
                   - It stays "sticky"/fixed effectively because the container doesn't scroll,
                     only the content inside this Card (if needed) and the Right Component.
                 */}
-        <div className="lg:col-span-1 max-h-full lg:max-h-[calc(100vh-10rem)] animate-in fade-in slide-in-from-left-8 duration-700 ease-out fill-mode-both">
+        <div className="lg:col-span-1 md:col-span-1 max-h-full lg:max-h-[calc(100vh-10rem)] animate-in fade-in slide-in-from-left-8 duration-700 ease-out fill-mode-both">
+
           <Card className="h-full flex flex-col shadow-md border-slate-200 !py-0 !gap-0">
             <CardHeader className="p-3 !pb-0 shrink-0">
               <div className="flex items-center justify-between">
@@ -633,7 +643,7 @@ export default function ReportsPage() {
               </div>
             </CardHeader>
             <Separator />
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <CardContent className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
               {/* Search */}
               <div className="grid w-full items-center gap-1.5">
                 <Label htmlFor="search">Search</Label>
@@ -647,6 +657,22 @@ export default function ReportsPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
+              </div>
+
+              {/* Job Filter */}
+              <div className="space-y-1.5">
+                <Label className="text-sm">Filter by Job</Label>
+                <Select value={jobFilter} onValueChange={setJobFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="All Jobs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Jobs</SelectItem>
+                    {allJobsData?.map((job: any) => (
+                      <SelectItem key={job.id} value={String(job.id)}>{job.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Grouped Status/Exp/Skill Filters */}
@@ -701,7 +727,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              
+
 
               {/* Score Range */}
               <div className="space-y-2">
@@ -726,16 +752,18 @@ export default function ReportsPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label>Interview Dates</Label>
-                  {dateFilter && (
-                    <Button variant="ghost" size="sm" onClick={() => setDateFilter(undefined)} className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2">Clear Date</Button>
+                  {(dateRange.from || dateRange.to) && (
+                    <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })} className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2">Clear Dates</Button>
                   )}
+
                 </div>
                 <div className="flex justify-center bg-primary/5 rounded-xl p-2 border border-primary/10">
                   <Calendar
-                    mode="single"
-                    selected={dateFilter}
-                    onSelect={setDateFilter}
+                    mode="range"
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
                     className="rounded-md border-none shadow-none w-full"
+
                     modifiers={{
                       low: (date) => {
                         const c = interviewCounts[date.toDateString()] || 0
@@ -768,7 +796,8 @@ export default function ReportsPage() {
                   - The Main Layout/Body will NOT scroll; this div scrolls instead.
                   - Added padding-right/bottom for scrollbar comfort.
                 */}
-        <div className="lg:col-span-3 h-full overflow-y-auto pr-2 pb-2 space-y-4">
+        <div className="lg:col-span-3 md:col-span-2 h-full overflow-y-auto pr-2 pb-2 space-y-4">
+
 
           {/* Metrics Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-8 duration-700 ease-out fill-mode-both delay-100">
@@ -828,13 +857,8 @@ export default function ReportsPage() {
             </div>
 
             <TabsContent value="detailed" className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both delay-300">
-              {filteredReports.length === 0 ? (
-                <div className="text-center py-12 bg-card rounded-lg border">
-                  <p className="text-slate-500 dark:text-slate-400">No reports match your filters.</p>
-                  <Button variant="link" onClick={clearAllFilters}>Clear Filters</Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
                   {filteredReports.map((report: Report, idx: number) => (
                     <ReportCard
                       key={idx}
@@ -843,7 +867,34 @@ export default function ReportsPage() {
                     />
                   ))}
                 </div>
-              )}
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between bg-card p-4 rounded-xl border border-border/50 shadow-sm mt-6">
+                    <div className="text-sm text-muted-foreground">
+                      Page <span className="font-bold text-foreground">{reportsPage}</span> of {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={reportsPage <= 1}
+                        onClick={() => setReportsPage(prev => prev - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={reportsPage >= totalPages}
+                        onClick={() => setReportsPage(prev => prev + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="table" className="animate-in fade-in zoom-in-95 duration-300">
@@ -979,11 +1030,10 @@ export default function ReportsPage() {
                     {interviewNotCompleted && (
                       <div
                         role="status"
-                        className={`mt-3 w-full rounded-lg border px-4 py-3 text-sm shadow-sm flex items-center gap-3 ${
-                          viewingReport.termination_reason 
-                            ? 'border-red-500/40 bg-red-500/10 text-red-950 dark:text-red-100' 
+                        className={`mt-3 w-full rounded-lg border px-4 py-3 text-sm shadow-sm flex items-center gap-3 ${viewingReport.termination_reason
+                            ? 'border-red-500/40 bg-red-500/10 text-red-950 dark:text-red-100'
                             : 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
-                        }`}
+                          }`}
                       >
                         <AlertCircle className="h-5 w-5 shrink-0" />
                         <div>
@@ -991,8 +1041,8 @@ export default function ReportsPage() {
                             {viewingReport.termination_reason ? 'Interview Terminated' : 'Interview Incomplete'}
                           </p>
                           <p className="mt-0.5 opacity-90">
-                            {viewingReport.termination_reason 
-                              ? `Reason: ${viewingReport.termination_reason}` 
+                            {viewingReport.termination_reason
+                              ? `Reason: ${viewingReport.termination_reason}`
                               : 'The candidate exited or terminated the session before answering questions.'}
                           </p>
                         </div>

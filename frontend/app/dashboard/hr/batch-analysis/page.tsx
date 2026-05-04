@@ -132,9 +132,19 @@ export default function BatchAnalysisPage() {
       if (fromDate) params.append('from_date', fromDate)
       if (toDate) params.append('to_date', toDate)
       if (timeRange !== 'all') params.append('time_range', timeRange)
+      params.append('limit', '1000')
 
       const qs = params.toString()
       const url = `/api/applications${qs ? '?' + qs : ''}`
+
+      // BA_033: Warn if no filters are applied
+      if (!hasFilters) {
+        const confirmAll = window.confirm('You are about to export ALL candidates without any filters. This may take a moment. Continue?')
+        if (!confirmAll) {
+          setIsExporting(false)
+          return
+        }
+      }
 
       const response = await APIClient.get(url) as any
       const data = Array.isArray(response) ? response : (response?.items || [])
@@ -204,7 +214,7 @@ export default function BatchAnalysisPage() {
               Bulk Processing Engine
             </CardTitle>
             <CardDescription>
-              Supported inputs: PDF/DOCX files, nested folders, or ZIP archives (max 50 per batch).
+              Supported inputs: PDF/DOCX files, nested folders, or ZIP archives (max 25 per batch).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -236,7 +246,7 @@ export default function BatchAnalysisPage() {
               Export Filtered Data
             </CardTitle>
             <CardDescription>
-              Download candidate data filtered by date, role, or time-of-day directly as Excel.
+              Download candidate data filtered by date, role, or time-of-day directly as Excel (Max 1000 per export).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">

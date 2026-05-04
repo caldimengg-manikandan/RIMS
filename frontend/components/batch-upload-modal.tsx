@@ -24,6 +24,7 @@ import { APIClient } from '@/app/dashboard/lib/api-client'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
+import { toast } from 'sonner'
 
 interface Job {
   id: number
@@ -46,7 +47,7 @@ interface BatchUploadModalProps {
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const MAX_FILES = 50
+const MAX_FILES = 25
 
 const normalizePhone = (rawPhone: string, countryCode?: string | null): string => {
   if (!rawPhone || typeof rawPhone !== 'string') return 'N/A'
@@ -96,6 +97,18 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
   const isCancelling = useRef(false)
 
   const { data: jobs, isLoading: jobsLoading } = useSWR<Job[]>('/api/jobs', (url: string) => fetcher<Job[]>(url))
+
+  // Prevent accidental navigation during processing
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isProcessing) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isProcessing])
 
   // Reset state when modal opens
   useEffect(() => {
@@ -178,7 +191,13 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
         skippedReason = 'Over 5MB limit'
       }
 
-      // Rule 3: Duplicate detection (name + size)
+      // Rule 3: Empty File Detection (BA_007)
+      if (f.size === 0) {
+        status = 'skipped'
+        skippedReason = 'Empty file (0 bytes)'
+      }
+
+      // Rule 4: Duplicate detection (name + size)
       const isDuplicate = allFilesSoFar.some(
         existing => existing.file.name === f.name && existing.file.size === f.size
       )
@@ -201,11 +220,15 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
             if (!zipEntry.dir) {
               const lowerName = zipEntry.name.toLowerCase()
               if (lowerName.endsWith('.pdf') || lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) {
-                const blob = await zipEntry.async('blob')
-                const extractedFile = new File([blob], zipEntry.name.split('/').pop() || 'resume', {
-                  type: lowerName.endsWith('.pdf') ? 'application/pdf' : 'application/docx'
-                })
-                addFileWithValidation(extractedFile)
+                try {
+                  const blob = await zipEntry.async('blob')
+                  const extractedFile = new File([blob], zipEntry.name.split('/').pop() || 'resume', {
+                    type: lowerName.endsWith('.pdf') ? 'application/pdf' : 'application/docx'
+                  })
+                  addFileWithValidation(extractedFile)
+                } catch (err) {
+                  console.error(`Error extracting ${zipEntry.name}:`, err)
+                }
               }
             }
           }
@@ -217,14 +240,21 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
       }
     }
 
-    // Rule 4: Total files cap (max 50)
-    // We apply this by checking total active files vs the limit
+    // Rule 5: Total files cap (max 50) - BA_004, BA_017
     setFiles((prev) => {
       const combined = [...prev, ...newProcessedFiles]
+      
+      if (combined.length > MAX_FILES) {
+        toast.warning(`File limit reached`, {
+          description: `Only the first ${MAX_FILES} valid files will be processed per batch. Extra files have been marked as skipped.`,
+          duration: 5000,
+        })
+      }
+
       // Enforce max 50: Mark anything beyond 50 as skipped
       return combined.map((f, idx) => {
         if (idx >= MAX_FILES && f.status === 'pending') {
-          return { ...f, status: 'skipped', skippedReason: '50 files limit exceeded' }
+          return { ...f, status: 'skipped', skippedReason: `${MAX_FILES} files limit exceeded` }
         }
         return f
       })
@@ -308,6 +338,18 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
           
           setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'success' } : f))
         } catch (error: any) {
+          const isRateLimit = error.message?.toLowerCase().includes('rate limit')
+          if (isRateLimit) {
+            // Rate limit hit: wait 15s and re-queue for retry (up to 2 retries)
+            const retryCount = (currentItem as any)._retryCount || 0
+            if (retryCount < 2) {
+              ;(currentItem as any)._retryCount = retryCount + 1
+              queue.unshift(currentItem) // put back at front
+              setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'pending', errorMessage: '' } : f))
+              await new Promise(resolve => setTimeout(resolve, 15000)) // wait 15s
+              continue
+            }
+          }
           console.error(`Failed to process ${currentItem.file.name}:`, error)
           failedCount++
           setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'failed', errorMessage: error.message || 'API Error' } : f))
@@ -315,16 +357,32 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
 
         // Live stats update
         setStats(prev => ({ ...prev, success: successCount, failed: failedCount, applicationIds: successfulAppIds }))
+
+        // Throttle: 13s gap = max ~4.5 uploads/min, safely under Supabase free-tier limit (5/min)
+        if (queue.length > 0 && !isCancelling.current) {
+          await new Promise(resolve => setTimeout(resolve, 13000))
+        }
       }
     }
 
-    // Launch Concurrency Pool (max 3 workers)
-    const CONCURRENCY = 3
-    const workers = Array(Math.min(CONCURRENCY, queue.length)).fill(null).map(() => worker())
+    // Launch Sequential Processing (1 worker with delay to respect backend/Supabase rate limits)
+    // Using a single worker prevents Supabase storage upload rate-limit errors (5/min on free tier)
+    const CONCURRENCY = 1
+    const workers = Array(Math.min(CONCURRENCY, queue.length)).fill(null).map((_, i) =>
+      new Promise<void>(resolve => setTimeout(resolve, i * 300)).then(() => worker())
+    )
     await Promise.all(workers)
 
     setIsProcessing(false)
     setShowSummary(true)
+
+    // Final stats adjustment: Any file still 'pending' should be considered 'skipped' (e.g. due to cancellation)
+    setFiles(prev => {
+        const finalFiles = prev.map(f => f.status === 'pending' ? { ...f, status: 'skipped' as const, skippedReason: 'Cancelled/Not processed' } : f)
+        const finalSkipped = finalFiles.filter(f => f.status === 'skipped').length
+        setStats(prevStats => ({ ...prevStats, skipped: finalSkipped }))
+        return finalFiles
+    })
   }
 
   const handleCancel = () => {

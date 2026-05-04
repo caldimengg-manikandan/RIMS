@@ -30,18 +30,26 @@ def get_skills_config():
 
 @router.get("/dashboard")
 def get_dashboard_analytics(
+    job_id: Optional[int] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
-    """Get enterprise analytics (100% Failure-Safe Hard Fallback)"""
+    """Get enterprise analytics with filtering support"""
     try:
         from app.services.analytics_service import AnalyticsService
         # Apply visibility isolation
-        # Apply visibility isolation: Any non-super_admin is restricted to their own data
         hr_id = current_user.id if current_user.role.lower() != "super_admin" else None
         
-        # Call service
-        metadata = AnalyticsService.get_dashboard(db, hr_id=hr_id)
+        # Call service with filters
+        metadata = AnalyticsService.get_dashboard(
+            db, 
+            hr_id=hr_id, 
+            job_id=job_id,
+            from_date=from_date,
+            to_date=to_date
+        )
 
         # Standard Success Format
         return {
@@ -68,6 +76,15 @@ def get_dashboard_analytics(
 
 @router.get("/reports")
 def get_interview_reports(
+    job_id: Optional[int] = None,
+    status: Optional[str] = None,
+    experience: Optional[str] = None,
+    skill: Optional[str] = None,
+    search: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
@@ -100,13 +117,70 @@ def get_interview_reports(
         # Apply visibility isolation
         if current_user.role.lower() != "super_admin":
             query = query.filter(Application.hr_id == current_user.id)
-        # Super Admin sees all.
+        
+        # Apply Filters
+        if job_id:
+            query = query.filter(Application.job_id == job_id)
+        
+        if status and status != "All":
+            # Map frontend labels back to internal statuses if needed
+            # For now, we'll try direct match or application status
+            if status == "Select":
+                query = query.filter(Interview.overall_score > 6)
+            elif status == "Consider":
+                query = query.filter(Interview.overall_score > 4, Interview.overall_score <= 6)
+            elif status == "Reject":
+                query = query.filter(Interview.overall_score <= 4)
+            elif status == "Not Completed":
+                query = query.filter(Interview.status != "completed")
+            else:
+                query = query.filter(Application.status == status)
+
+        if experience and experience != "All":
+            from app.domain.models import ResumeExtraction
+            exp_val = experience
+            if exp_val.lower() == "mid":
+                # Handle common variation
+                query = query.filter(Application.resume_extraction.has(or_(
+                    ResumeExtraction.experience_level.ilike("mid"),
+                    ResumeExtraction.experience_level.ilike("mid-level")
+                )))
+            else:
+                query = query.filter(Application.resume_extraction.has(ResumeExtraction.experience_level.ilike(exp_val)))
+
+        if skill and skill != "All":
+            from app.domain.models import ResumeExtraction
+            query = query.filter(Application.resume_extraction.has(ResumeExtraction.extracted_skills.ilike(f"%{skill}%")))
+
+
+        if search:
+            term = f"%{search}%"
+            query = query.filter(or_(
+                Application.candidate_name.ilike(term),
+                Application.candidate_email.ilike(term),
+                Job.title.ilike(term)
+            ))
+
+        if from_date:
+            try:
+                sd = datetime.strptime(from_date, "%Y-%m-%d").date()
+                query = query.filter(func.date(Application.created_at) >= sd)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                ed = datetime.strptime(to_date, "%Y-%m-%d").date()
+                query = query.filter(func.date(Application.created_at) <= ed)
+            except ValueError:
+                pass
+
+        total = query.count()
         interviews = query.options(
             joinedload(Interview.application).joinedload(Application.hiring_decision),
             joinedload(Interview.application).joinedload(Application.hr),
             joinedload(Interview.application).joinedload(Application.resume_extraction),
             joinedload(Interview.report)
-        ).order_by(Interview.created_at.desc()).all()
+        ).order_by(Interview.created_at.desc()).offset(skip).limit(limit).all()
 
         logger.info(f"[REPORTS] Found {len(interviews)} interviews for HR {current_user.id}")
         for i in interviews:
@@ -276,8 +350,8 @@ def get_interview_reports(
                     "status": app.status if app else interview.status,
                     "overall_score": report.overall_score if report else interview.overall_score or 0,
                     "final_score": report.combined_score if report else interview.overall_score or 0,
-                    "technical_score": float(sum(tech_s)/len(tech_s) if tech_s else (report.technical_skills_score if report else 0)),
-                    "behavioral_score": float(sum(beh_s)/len(beh_s) if beh_s else (report.behavioral_score if report else 0)),
+                    "technical_score": float(tech_avg if tech_s else (report.technical_skills_score if report else 0)),
+                    "behavioral_score": float(beh_avg if beh_s else (report.behavioral_score if report else 0)),
                     "aptitude_score": float(apt_score if apt_qty > 0 else (report.aptitude_score if report else 0)),
                     "total_questions_answered": len([e for e in question_evaluations if e["answer"]]),
                     "aptitude_questions_answered": apt_qty,
@@ -308,8 +382,10 @@ def get_interview_reports(
         
         return {
             "reports": reports,
+            "total": total,
             "count": len(reports),
-            "failed": failed_count
+            "failed": failed_count,
+            "pages": (total + limit - 1) // limit if limit > 0 else 1
         }
 
     except Exception as e:

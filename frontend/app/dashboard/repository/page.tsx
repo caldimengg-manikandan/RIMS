@@ -243,9 +243,10 @@ interface SetFormProps {
     onClose: () => void
     onSaved: () => void
     initial?: QuestionSetDetail | null
+    sets: QuestionSet[]
 }
 
-function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
+function SetFormModal({ open, onClose, onSaved, initial, sets }: SetFormProps) {
     const isEdit = Boolean(initial)
 
     const [title, setTitle] = useState('')
@@ -337,6 +338,7 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                     const existing = prev.filter(q => q.question.trim())
                     return [...existing, ...imported]
                 })
+                setError('') // Clear error when questions are added
                 toast.success(`Imported ${imported.length} question${imported.length !== 1 ? 's' : ''} from Excel`)
             } catch {
                 toast.error('Could not parse the Excel file. Use the template format.')
@@ -364,6 +366,18 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                 topic_tags: topicTags,
                 questions: validQs,
             }
+            
+            // Duplicate name check (R017)
+            const isDuplicate = sets.some((s: QuestionSet) => 
+                s.title.toLowerCase() === payload.title.toLowerCase() && 
+                (!isEdit || s.id !== initial?.id)
+            )
+            if (isDuplicate) {
+                setError('A question set with this name already exists. Please use a unique title.')
+                setSaving(false)
+                return
+            }
+
             if (isEdit && initial) {
                 await APIClient.put(`/api/repository/sets/${initial.id}`, payload)
                 toast.success('Question set updated')
@@ -476,6 +490,24 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                                     <FileSpreadsheet className="h-3.5 w-3.5" />
                                     Import Excel
                                 </Button>
+                                {questions.length > 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (window.confirm("Are you sure you want to clear all questions? This cannot be undone.")) {
+                                                setQuestions([]);
+                                                setError('Add at least one question.');
+                                                toast.error('All questions cleared');
+                                            }
+                                        }}
+                                        className="gap-1.5 h-7 text-xs text-destructive hover:bg-destructive/10"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Clear All
+                                    </Button>
+                                )}
                             </div>
                         </div>
 
@@ -505,7 +537,16 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => setQuestions(prev => prev.filter((_, idx) => idx !== i))}
+                                            onClick={() => {
+                                                if (window.confirm("Are you sure you want to delete this question?")) {
+                                                    const next = questions.filter((_, idx) => idx !== i);
+                                                    setQuestions(next);
+                                                    if (next.filter(q => q.question.trim()).length === 0) {
+                                                        setError('Add at least one question.');
+                                                    }
+                                                    toast.info('Question removed');
+                                                }
+                                            }}
                                             className="mt-0.5 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
                                         >
                                             <X className="h-3.5 w-3.5" />
@@ -515,6 +556,9 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-8 rounded-lg border border-dashed border-border bg-muted/10 gap-2 text-center">
+                                {error && error.includes('at least one question') && (
+                                    <div className="text-destructive text-xs mb-2 font-semibold">Validation: Add at least one question to proceed.</div>
+                                )}
                                 <FileSpreadsheet className="h-8 w-8 text-muted-foreground/30" />
                                 <p className="text-sm text-muted-foreground">No questions imported yet</p>
                                 <Button
@@ -535,7 +579,14 @@ function SetFormModal({ open, onClose, onSaved, initial }: SetFormProps) {
                                 {questions.filter(q => q.question.trim()).length} question{questions.filter(q => q.question.trim()).length !== 1 ? 's' : ''} imported
                                 <button
                                     type="button"
-                                    onClick={() => setQuestions([])}
+                                    onClick={() => {
+                                        if (window.confirm('Are you sure you want to clear all questions? This action cannot be undone.')) {
+                                            setQuestions([]);
+                                            const msg = 'All questions have been cleared. Please add at least one question to save.';
+                                            setError(msg);
+                                            toast.error(msg, { duration: 5000 });
+                                        }
+                                    }}
                                     className="ml-2 text-destructive/70 hover:text-destructive underline underline-offset-2"
                                 >
                                     Clear all
@@ -735,6 +786,7 @@ export default function RepositoryPage() {
                 onClose={() => { setFormOpen(false); setEditTarget(null) }}
                 onSaved={fetchSets}
                 initial={editTarget}
+                sets={sets}
             />
 
             {/* Delete confirm */}

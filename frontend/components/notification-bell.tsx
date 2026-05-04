@@ -58,7 +58,24 @@ export function NotificationBell() {
     }, [mutate])
 
     const notificationsArray = Array.isArray(notifications) ? notifications : []
-    const unreadCount = notificationsArray.filter(n => !n.is_read).length
+    const unreadCount = useMemo(() => notificationsArray.filter(n => !n.is_read).length, [notificationsArray])
+
+    const markAllAsRead = useCallback(async () => {
+        const unreadIds = notificationsArray.filter(n => !n.is_read).map(n => n.id)
+        if (unreadIds.length === 0) return
+
+        try {
+            // Optimistic update
+            mutate(prev => prev?.map(n => ({ ...n, is_read: true })), false)
+            
+            // Sequential API calls or a bulk endpoint if available
+            // Since we don't have a bulk endpoint, we'll do them in parallel with a cap or just trigger the API
+            await Promise.all(unreadIds.map(id => APIClient.put(`/api/notifications/${id}/read`, {})))
+            mutate() // Final sync
+        } catch {
+            mutate() // Rollback on error
+        }
+    }, [notificationsArray, mutate])
 
     // Sort: unread first, then by date desc
     const sortedNotifications = [...notificationsArray].sort((a, b) => {
@@ -76,9 +93,10 @@ export function NotificationBell() {
                     {unreadCount > 0 && (
                         <span 
                             key={unreadCount} 
-                            className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground ring-2 ring-background animate-in zoom-in duration-300 pointer-events-none"
+                            className="absolute -top-1 -right-1 flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-destructive text-[9px] font-black text-destructive-foreground ring-2 ring-background animate-in zoom-in duration-300 pointer-events-none shadow-sm"
                         >
-                            {unreadCount > 9 ? '9+' : unreadCount}
+                            {unreadCount}
+
                         </span>
                     )}
                 </Button>
@@ -90,6 +108,16 @@ export function NotificationBell() {
                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-md">
                             {unreadCount} new
                         </span>
+                    )}
+                    {unreadCount > 0 && (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={markAllAsRead}
+                            className="text-[10px] h-7 font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 px-2"
+                        >
+                            Mark all as read
+                        </Button>
                     )}
                 </div>
                 <ScrollArea className="max-h-[500px]">

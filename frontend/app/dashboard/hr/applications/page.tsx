@@ -79,6 +79,7 @@ export default function HRApplicationsPage() {
   /** Server-side search; debounced to avoid refetching on every keystroke. */
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [jobIdFilter, setJobIdFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
@@ -94,15 +95,16 @@ export default function HRApplicationsPage() {
     q.set("limit", String(APPLICATIONS_PAGE_SIZE));
     q.set("skip", String((applicationsPage - 1) * APPLICATIONS_PAGE_SIZE));
     if (statusFilter !== "all") q.set("status", statusFilter);
+    if (jobIdFilter !== "all") q.set("job_id", jobIdFilter);
     if (dateFrom) q.set("from_date", dateFrom);
     if (dateTo) q.set("to_date", dateTo);
     if (debouncedSearch) q.set("search", debouncedSearch);
     return `/api/applications?${q.toString()}`;
-  }, [applicationsPage, statusFilter, dateFrom, dateTo, debouncedSearch]);
+  }, [applicationsPage, statusFilter, jobIdFilter, dateFrom, dateTo, debouncedSearch]);
 
   useEffect(() => {
     setApplicationsPage(1);
-  }, [statusFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
+  }, [statusFilter, jobIdFilter, dateFrom, dateTo, debouncedSearch, searchTerm]);
 
   const {
     data: paginatedData,
@@ -121,6 +123,9 @@ export default function HRApplicationsPage() {
 
   const totalPages = paginatedData?.pages || 0;
   const hasMoreApplications = applicationsPage < totalPages;
+
+  // Fetch jobs for filter
+  const { data: jobs } = useSWR<any[]>("/api/jobs", fetcher);
 
 
   const handleDecision = useCallback(async (
@@ -260,12 +265,22 @@ export default function HRApplicationsPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-4xl font-black text-foreground mb-2 tracking-tight">
-        Applications
-      </h1>
-      <p className="text-muted-foreground mb-8">
-        Review and manage candidate applications.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-4xl font-black text-foreground mb-2 tracking-tight">
+            Applications
+          </h1>
+          <p className="text-muted-foreground">
+            Review and manage candidate applications.
+          </p>
+        </div>
+        <div className="bg-primary/5 border border-primary/10 rounded-2xl px-6 py-4 flex flex-col items-end shadow-sm">
+          <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Total Records Found</span>
+          <span className="text-3xl font-black text-primary tabular-nums">
+            {isLoading ? "..." : totalCount}
+          </span>
+        </div>
+      </div>
 
       {/* Filters Toolbar */}
       <div className="bg-card p-2 rounded-2xl border border-border/50 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
@@ -346,8 +361,25 @@ export default function HRApplicationsPage() {
             </select>
           </div>
 
+          {/* Job Filter */}
+          <div className="w-[200px]">
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Filter by Job</label>
+            <select
+              className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
+              value={jobIdFilter}
+              onChange={(e) => setJobIdFilter(e.target.value)}
+            >
+              <option value="all">All Jobs</option>
+              {jobs?.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.title} ({job.job_id})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Clear Filters */}
-          {(searchTerm || dateFrom || dateTo || statusFilter !== "all") && (
+          {(searchTerm || dateFrom || dateTo || statusFilter !== "all" || jobIdFilter !== "all") && (
             <Button 
                 variant="ghost" 
                 size="sm"
@@ -356,6 +388,7 @@ export default function HRApplicationsPage() {
                     setDateFrom("");
                     setDateTo("");
                     setStatusFilter("all");
+                    setJobIdFilter("all");
                     setApplicationsPage(1);
                 }}
                 className="h-11 px-4 text-muted-foreground hover:text-foreground transition-colors"

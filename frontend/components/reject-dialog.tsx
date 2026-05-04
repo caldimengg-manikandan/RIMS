@@ -19,6 +19,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface RejectDialogProps {
     candidateName: string;
@@ -43,7 +44,7 @@ export function RejectDialog({ candidateName, onConfirm, trigger }: RejectDialog
 
     const handleConfirm = async () => {
         if (!reason) {
-            alert("Please select a reason for rejection.");
+            toast.error("Please select a reason for rejection.");
             return;
         }
 
@@ -56,7 +57,7 @@ export function RejectDialog({ candidateName, onConfirm, trigger }: RejectDialog
             setNotes("");
         } catch (error) {
             console.error("Failed to reject candidate:", error);
-            alert("Failed to reject candidate. Please try again.");
+            toast.error("Failed to reject candidate. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
