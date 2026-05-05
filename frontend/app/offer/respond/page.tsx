@@ -119,7 +119,9 @@ export default function OfferRespondPage() {
                                         <div className="space-y-1">
                                             <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider">Joining Date</p>
                                             <p className="text-lg font-black text-slate-800">
-                                                {new Date(offerData.joining_date).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                                                {offerData.joining_date 
+                                                    ? new Date(offerData.joining_date).toLocaleDateString(undefined, { dateStyle: 'long' }) 
+                                                    : 'TBD'}
                                             </p>
                                         </div>
                                     </div>

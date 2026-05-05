@@ -37,7 +37,7 @@ export default function RootLayout({
       <body className="app-shell font-sans" suppressHydrationWarning>
         <SWRProvider>
           {/* Stable container to mitigate hydration issues from browser extensions */}
-          <div className="relative flex flex-col min-h-screen">
+          <div className="relative flex flex-col h-screen overflow-hidden">
             {/* Global grid background for all pages */}
             <div className="app-shell-grid" />
             <div className="app-shell-watermark" />
@@ -49,7 +49,7 @@ export default function RootLayout({
                 enableSystem
                 disableTransitionOnChange
               >
-                <div className="app-shell-content flex flex-col min-h-screen flex-1" suppressHydrationWarning>
+                <div className="app-shell-content flex flex-col h-full flex-1" suppressHydrationWarning>
                   <TooltipProvider delayDuration={300}>
                     <Suspense fallback={null}>
                       <NavigationProgress />
@@ -57,9 +57,11 @@ export default function RootLayout({
                     <header className="shrink-0 flex flex-col sticky top-0 z-[100]">
                       <GlobalNavbar />
                     </header>
-                    <main className="flex-1 w-full flex flex-col">
+                    <main className="flex-1 min-h-0 overflow-y-auto w-full flex flex-col">
                       <ErrorBoundary>
-                        {children}
+                        <div className="h-full flex flex-col">
+                          {children}
+                        </div>
                       </ErrorBoundary>
                     </main>
                     <Toaster richColors position="top-right" />

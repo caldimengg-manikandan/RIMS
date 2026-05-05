@@ -486,7 +486,7 @@ export default function PublicJobDetailPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#f0f9ff] dark:bg-slate-950 font-sans relative">
+        <div className="min-h-screen bg-background font-sans relative">
             <div className="pointer-events-none absolute inset-0 z-0 flex justify-center">
                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080801a_1px,transparent_1px),linear-gradient(to_bottom,#8080801a_1px,transparent_1px)] bg-[size:40px_40px] dark:bg-[linear-gradient(to_right,#ffffff15_1px,transparent_1px),linear-gradient(to_bottom,#ffffff15_1px,transparent_1px)]" />
             </div>

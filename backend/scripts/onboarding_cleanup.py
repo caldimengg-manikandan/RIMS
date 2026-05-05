@@ -21,7 +21,7 @@ def run_retention_cleanup():
         print(f"Cleaning up records older than {cutoff_date} ({days} days)...")
 
         # 2. Anonymize/Cleanup old offer data in Applications
-        old_apps = db.query(Application).filter(Application.created_at < cutoff_date).all()
+        old_apps = db.query(Application).filter(Application.applied_at < cutoff_date).all()
         for app in old_apps:
             # Anonymize PII
             app.offer_accepted_ip = "[ANONYMIZED]"

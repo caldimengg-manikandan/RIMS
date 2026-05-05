@@ -200,86 +200,82 @@ export default function HRTicketsPage() {
                     </CardContent>
                 </Card>
             ) : filter === 'feedback' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {feedbacks.map((fb) => (
-                        <Card key={fb.id} className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 overflow-hidden flex flex-col">
-                            <div className="h-1.5 w-full bg-gradient-to-r from-primary/50 to-primary group-hover:from-primary group-hover:to-accent transition-all"></div>
-                            <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex gap-0.5">
-                                        {[1, 2, 3, 4, 5].map(star => (
-                                            <Star key={star} className={`h-4 w-4 ${star <= fb.ui_ux_rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
-                                        ))}
-                                    </div>
-                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
-                                        <Clock className="h-3 w-3" />
-                                        {fb.created_at ? new Date(fb.created_at).toLocaleDateString() : 'N/A'}
-                                    </span>
+                <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+                    {/* List Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-xs uppercase tracking-widest font-black text-muted-foreground">
+                        <div className="col-span-2">Rating</div>
+                        <div className="col-span-3">Candidate</div>
+                        <div className="col-span-3">Position</div>
+                        <div className="col-span-3">Feedback</div>
+                        <div className="col-span-1 text-right">Date</div>
+                    </div>
+                    <div className="divide-y divide-border/50">
+                        {feedbacks.map((fb) => (
+                            <div key={fb.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group">
+                                <div className="col-span-2 flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(star => (
+                                        <Star key={star} className={`h-4 w-4 ${star <= fb.ui_ux_rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/20'}`} />
+                                    ))}
                                 </div>
-                                <CardTitle className="text-xl mt-3 line-clamp-1">{fb.candidate_name}</CardTitle>
-                                <CardDescription className="flex flex-col gap-1 mt-1">
-                                    <span className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> {fb.candidate_email}</span>
-                                    <span className="text-xs font-semibold text-primary/80 line-clamp-1">{fb.job_title}</span>
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1 bg-muted/20 m-4 mt-0 rounded-lg p-4 border border-border/50">
-                                {fb.feedback_text ? (
-                                    <p className="text-sm text-foreground italic">"{fb.feedback_text}"</p>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground italic tracking-tight">No specific comments provided.</p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
+                                <div className="col-span-3 min-w-0">
+                                    <div className="font-bold text-base truncate">{fb.candidate_name}</div>
+                                    <div className="text-sm text-muted-foreground truncate">{fb.candidate_email}</div>
+                                </div>
+                                <div className="col-span-3 text-sm font-semibold text-primary/80 truncate">
+                                    {fb.job_title}
+                                </div>
+                                <div className="col-span-3">
+                                    <p className="text-sm text-muted-foreground italic line-clamp-1">
+                                        {fb.feedback_text ? `"${fb.feedback_text}"` : "No specific comments"}
+                                    </p>
+                                </div>
+                                <div className="col-span-1 text-right text-xs font-medium text-muted-foreground">
+                                    {fb.created_at ? new Date(fb.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'N/A'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {tickets.map((ticket) => (
-                        <Card
-                            key={ticket.id}
-                            className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 cursor-pointer overflow-hidden flex flex-col"
-                            onClick={() => setSelectedTicket(ticket)}
-                        >
-                            <div className="h-1.5 w-full bg-gradient-to-r from-primary/50 to-primary group-hover:from-primary group-hover:to-accent transition-all"></div>
-                            <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start">
-                                    <Badge variant="outline" className={`capitalize font-bold ${getIssueTypeBadge(ticket.issue_type)}`}>
+                <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+                    {/* List Header */}
+                    <div className="grid grid-cols-12 gap-4 px-0 py-3 bg-muted/50 border-b border-border text-xs uppercase tracking-widest font-black text-muted-foreground">
+                        <div className="col-span-1 text-center">ID</div>
+                        <div className="col-span-2">Type</div>
+                        <div className="col-span-3">Candidate</div>
+                        <div className="col-span-4">Issue Description</div>
+                        <div className="col-span-1 text-center">Date</div>
+                    </div>
+                    <div className="divide-y divide-border/50">
+                        {tickets.map((ticket) => (
+                            <div 
+                                key={ticket.id} 
+                                onClick={() => setSelectedTicket(ticket)}
+                                className="grid grid-cols-12 gap-4 px-0 py-4 items-center hover:bg-muted/30 transition-all cursor-pointer group"
+                            >
+                                <div className="col-span-1 flex justify-center">
+                                    {ticket.id}
+                                </div>
+                                <div className="col-span-2">
+                                    <Badge variant="outline" className={`text-xs font-black uppercase px-2 py-0 border-none ${getIssueTypeBadge(ticket.issue_type)}`}>
                                         {ticket.issue_type.replace('_', ' ')}
                                     </Badge>
-                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
-                                        <Clock className="h-3 w-3" />
-                                        {new Date(ticket.created_at).toLocaleDateString()}
-                                    </span>
                                 </div>
-                                <CardTitle className="text-xl mt-3 line-clamp-1">{ticket.candidate_name}</CardTitle>
-                                <CardDescription className="flex items-center gap-1.5">
-                                    <Mail className="h-3 w-3" />
-                                    {ticket.candidate_email}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1">
-                                <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-                                    "{ticket.description}"
-                                </p>
-                            </CardContent>
-                            <Separator />
-
-
-
-                            <div className="p-4 bg-muted/30 flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    {ticket.status === 'pending' ? (
-                                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 animate-pulse border-amber-200">Pending</Badge>
-                                    ) : (
-                                        <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">Resolved</Badge>
-                                    )}
+                                <div className="col-span-3 min-w-0">
+                                    <div className="font-bold text-base truncate">{ticket.candidate_name}</div>
+                                    <div className="text-sm text-muted-foreground truncate">{ticket.candidate_email}</div>
                                 </div>
-                                <Button variant="ghost" size="sm" className="text-xs font-bold hover:text-primary transition-colors">
-                                    VIEW DETAILS →
-                                </Button>
+                                <div className="col-span-4">
+                                    <p className="text-sm text-muted-foreground line-clamp-1 pr-4">
+                                        "{ticket.description}"
+                                    </p>
+                                </div>
+                                <div className="col-span-1 text-center text-xs font-medium text-muted-foreground">
+                                    {new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </div>
                             </div>
-                        </Card>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -305,47 +301,47 @@ export default function HRTicketsPage() {
                             <div className="space-y-6 px-6 py-4 max-h-[70vh] overflow-y-auto min-w-0">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/50 p-6 rounded-2xl border border-border/50">
                                     <div className="space-y-1 min-w-0">
-                                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Candidate</Label>
-                                        <div className="flex items-center gap-2 font-bold text-lg truncate">
-                                            <User className="h-5 w-5 text-primary flex-shrink-0" />
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Candidate</Label>
+                                        <div className="flex items-center gap-2 font-bold text-xl truncate">
+                                            <User className="h-6 w-6 text-primary flex-shrink-0" />
                                             <span className="truncate">{selectedTicket.candidate_name}</span>
                                         </div>
-                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1 overflow-hidden">
-                                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-bold flex-shrink-0">CANDIDATE ID: {selectedTicket.test_id || 'N/A'}</Badge>
-                                            <span className="flex items-center gap-1 truncate">
-                                                <Mail className="h-3 w-3 flex-shrink-0" />
+                                        <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1 overflow-hidden">
+                                            <Badge variant="secondary" className="px-2 py-0.5 text-xs font-bold flex-shrink-0">CANDIDATE ID: {selectedTicket.test_id || 'N/A'}</Badge>
+                                            <span className="flex items-center gap-1.5 truncate">
+                                                <Mail className="h-4 w-4 flex-shrink-0" />
                                                 <span className="truncate">{selectedTicket.candidate_email}</span>
                                             </span>
                                         </div>
                                     </div>
                                     <div className="space-y-1 min-w-0">
-                                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Position & Timing</Label>
-                                        <div className="flex items-center gap-2 font-bold text-lg text-foreground truncate">
+                                        <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Position & Timing</Label>
+                                        <div className="flex items-center gap-2 font-bold text-xl text-foreground truncate">
                                             {selectedTicket.job_id ? (
                                                 <Link href={`/dashboard/hr/jobs/${selectedTicket.job_id}`}>
-                                                    <Badge variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 transition-colors cursor-pointer font-black px-2 py-0.5 truncate max-w-full">
+                                                    <Badge variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 transition-colors cursor-pointer font-black px-3 py-1 truncate max-w-full text-sm">
                                                         JOB ID: {selectedTicket.job_identifier || selectedTicket.job_id}
                                                     </Badge>
                                                 </Link>
                                             ) : (
-                                                <Badge variant="outline" className="border-muted text-muted-foreground font-black px-2 py-0.5">
+                                                <Badge variant="outline" className="border-muted text-muted-foreground font-black px-3 py-1 text-sm">
                                                     JOB ID: N/A
                                                 </Badge>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mt-1 truncate">
-                                            <Clock className="h-3.5 w-3.5 text-primary/70 flex-shrink-0" />
+                                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground font-medium mt-1 truncate">
+                                            <Clock className="h-4 w-4 text-primary/70 flex-shrink-0" />
                                             {new Date(selectedTicket.created_at).toLocaleString()}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-3 min-w-0">
-                                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black flex items-center gap-2">
-                                        <AlertCircle className="h-3 w-3 text-destructive" />
+                                    <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 text-destructive" />
                                         Issue Description
                                     </Label>
-                                    <div className="p-5 bg-card rounded-2xl border-2 border-border/50 italic text-foreground leading-relaxed shadow-sm max-w-full overflow-hidden break-words">
+                                    <div className="p-6 bg-card rounded-2xl border-2 border-border/50 italic text-foreground text-base leading-relaxed shadow-sm max-w-full overflow-hidden break-words">
                                         "{selectedTicket.description}"
                                     </div>
                                 </div>
@@ -354,17 +350,17 @@ export default function HRTicketsPage() {
                                     <div className="space-y-4 min-w-0">
                                         <Separator />
                                         <div className="space-y-2">
-                                            <Label className="text-sm font-bold flex items-center gap-2">
-                                                <MessageSquare className="h-4 w-4 text-primary" />
+                                            <Label className="text-base font-bold flex items-center gap-2">
+                                                <MessageSquare className="h-5 w-5 text-primary" />
                                                 Your Response
                                             </Label>
                                             <Textarea
                                                 placeholder="Explain the resolution or why the appeal was rejected..."
-                                                className="min-h-[120px] rounded-xl border-2 focus:ring-primary/20 transition-all font-medium w-full"
+                                                className="min-h-[140px] rounded-xl border-2 focus:ring-primary/20 transition-all font-medium w-full text-base"
                                                 value={hrResponse}
                                                 onChange={(e) => setHrResponse(e.target.value)}
                                             />
-                                            <p className="text-[10px] text-muted-foreground italic">This response will be sent to the candidate's email.</p>
+                                            <p className="text-xs text-muted-foreground italic">This response will be sent to the candidate's email.</p>
                                         </div>
 
                                         <div className="flex items-center space-x-2 bg-primary/5 p-3 rounded-xl border border-primary/10">
@@ -373,7 +369,7 @@ export default function HRTicketsPage() {
                                                 checked={sendEmail}
                                                 onCheckedChange={setSendEmail}
                                             />
-                                            <Label htmlFor="send-email" className="text-xs font-bold text-primary cursor-pointer leading-none">
+                                            <Label htmlFor="send-email" className="text-sm font-bold text-primary cursor-pointer leading-none">
                                                 Send email notification to candidate
                                             </Label>
                                         </div>
@@ -382,17 +378,17 @@ export default function HRTicketsPage() {
                                     <div className="space-y-4 min-w-0">
                                         <Separator />
                                         <div className="space-y-2">
-                                            <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">HR Response</Label>
-                                            <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 text-primary font-medium break-words">
+                                            <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">HR Response</Label>
+                                            <div className="p-5 bg-primary/5 rounded-xl border border-primary/20 text-primary text-base font-medium break-words">
                                                 {selectedTicket.hr_response}
                                             </div>
                                             <div className="flex flex-wrap justify-between items-center gap-2 mt-2">
-                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                                <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
                                                     Resolved {selectedTicket.resolved_at ? new Date(selectedTicket.resolved_at).toLocaleDateString() : ''}
                                                 </span>
                                                 {selectedTicket.is_reissue_granted && (
-                                                    <Badge className="bg-primary text-primary-foreground font-bold">Key Re-issued</Badge>
+                                                    <Badge className="bg-primary text-primary-foreground font-bold px-3 py-1">Key Re-issued</Badge>
                                                 )}
                                             </div>
                                         </div>

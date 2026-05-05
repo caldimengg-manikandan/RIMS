@@ -57,33 +57,7 @@ function InterviewAccessForm() {
   useEffect(() => {
     if (e) setEmail(e)
     if (k) setAccessKey(k)
-
-    // Clear pending auto-submit on every effect re-run and on unmount
-    if (autoAccessStartedRef.current !== null) {
-      clearTimeout(autoAccessStartedRef.current)
-      autoAccessStartedRef.current = null
-    }
-
-    const paramHash = `${e}-${k}`
-    if (e && k && hasAttemptedRef.current !== paramHash) {
-      hasAttemptedRef.current = paramHash
-      
-      // Auto-trigger security check
-      if (!loading) setLoading(true)
-      
-      autoAccessStartedRef.current = setTimeout(() => {
-        autoAccessStartedRef.current = null
-        void handleSubmit(e, k)
-      }, 600)
-    }
-
-    return () => {
-      if (autoAccessStartedRef.current !== null) {
-        clearTimeout(autoAccessStartedRef.current)
-        autoAccessStartedRef.current = null
-      }
-    }
-  }, [e, k, router])
+  }, [e, k])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">

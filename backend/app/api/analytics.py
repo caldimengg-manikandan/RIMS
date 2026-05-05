@@ -80,9 +80,11 @@ def get_interview_reports(
     status: Optional[str] = None,
     experience: Optional[str] = None,
     skill: Optional[str] = None,
-    search: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    score_min: Optional[float] = None,
+    score_max: Optional[float] = None,
+    search: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
     current_user: User = Depends(get_current_hr),
@@ -95,14 +97,13 @@ def get_interview_reports(
     """
     try:
         from sqlalchemy import or_
-        # Source of truth is now the Interview/Application pair
-        query = db.query(Interview)\
+        # Source of truth is Application, joined with Interview
+        query = db.query(Application)\
+            .outerjoin(Interview, Application.id == Interview.application_id)\
             .outerjoin(InterviewReport, Interview.id == InterviewReport.interview_id)\
-            .outerjoin(Application, Interview.application_id == Application.id)\
             .outerjoin(Job, Application.job_id == Job.id)
         
         # Filter for "Work that should be reported"
-        # We now include ALL interviews that have been completed, terminated, or are in a review/hired/rejected state.
         REPORTABLE_APPLICATION_STATUSES = [
             "interview_completed", "review_later", "hired", "rejected", 
             "offer_sent", "pending_approval", "accepted", "onboarded",
@@ -123,8 +124,6 @@ def get_interview_reports(
             query = query.filter(Application.job_id == job_id)
         
         if status and status != "All":
-            # Map frontend labels back to internal statuses if needed
-            # For now, we'll try direct match or application status
             if status == "Select":
                 query = query.filter(Interview.overall_score > 6)
             elif status == "Consider":
@@ -132,7 +131,7 @@ def get_interview_reports(
             elif status == "Reject":
                 query = query.filter(Interview.overall_score <= 4)
             elif status == "Not Completed":
-                query = query.filter(Interview.status != "completed")
+                query = query.filter(or_(Interview.id == None, Interview.status != "completed"))
             else:
                 query = query.filter(Application.status == status)
 
@@ -140,7 +139,6 @@ def get_interview_reports(
             from app.domain.models import ResumeExtraction
             exp_val = experience
             if exp_val.lower() == "mid":
-                # Handle common variation
                 query = query.filter(Application.resume_extraction.has(or_(
                     ResumeExtraction.experience_level.ilike("mid"),
                     ResumeExtraction.experience_level.ilike("mid-level")
@@ -151,7 +149,6 @@ def get_interview_reports(
         if skill and skill != "All":
             from app.domain.models import ResumeExtraction
             query = query.filter(Application.resume_extraction.has(ResumeExtraction.extracted_skills.ilike(f"%{skill}%")))
-
 
         if search:
             term = f"%{search}%"
@@ -164,33 +161,43 @@ def get_interview_reports(
         if from_date:
             try:
                 sd = datetime.strptime(from_date, "%Y-%m-%d").date()
-                query = query.filter(func.date(Application.created_at) >= sd)
+                query = query.filter(or_(
+                    func.date(Interview.created_at) >= sd,
+                    func.date(Application.applied_at) >= sd
+                ))
             except ValueError:
                 pass
         if to_date:
             try:
                 ed = datetime.strptime(to_date, "%Y-%m-%d").date()
-                query = query.filter(func.date(Application.created_at) <= ed)
+                query = query.filter(or_(
+                    func.date(Interview.created_at) <= ed,
+                    func.date(Application.applied_at) <= ed
+                ))
             except ValueError:
                 pass
 
+        if score_min is not None:
+            query = query.filter(Interview.overall_score >= score_min)
+        if score_max is not None:
+            query = query.filter(Interview.overall_score <= score_max)
+
         total = query.count()
-        interviews = query.options(
-            joinedload(Interview.application).joinedload(Application.hiring_decision),
-            joinedload(Interview.application).joinedload(Application.hr),
-            joinedload(Interview.application).joinedload(Application.resume_extraction),
-            joinedload(Interview.report)
-        ).order_by(Interview.created_at.desc()).offset(skip).limit(limit).all()
+        applications = query.options(
+            joinedload(Application.interview).joinedload(Interview.report),
+            joinedload(Application.hiring_decision),
+            joinedload(Application.hr),
+            joinedload(Application.resume_extraction),
+            joinedload(Application.job)
+        ).order_by(Application.applied_at.desc()).offset(skip).limit(limit).all()
 
-        logger.info(f"[REPORTS] Found {len(interviews)} interviews for HR {current_user.id}")
-        for i in interviews:
-            logger.info(f"[REPORTS] ID: {i.id}, Status: {i.status}, App Status: {i.application.status if i.application else 'N/A'}")
-
+        logger.info(f"[REPORTS] Found {len(applications)} applications for HR {current_user.id}")
+        
         reports = []
         failed_count = 0
         
         # Pre-fetch all questions/answers for everything in the list
-        interview_ids = [i.id for i in interviews]
+        interview_ids = [app.interview.id for app in applications if app.interview]
         all_questions_map = {}
         all_answers_map = {}
         
@@ -207,11 +214,11 @@ def get_interview_reports(
                 for a in answers:
                     all_answers_map[a.question_id] = a
 
-        for interview in interviews:
+        for app in applications:
             try:
-                report = interview.report
-                app = interview.application
-                job = app.job if app else None
+                interview = app.interview
+                report = interview.report if interview else None
+                job = app.job
                 
                 # 1. Build Profile
                 candidate_profile = {
@@ -348,11 +355,11 @@ def get_interview_reports(
                     "display_date": created.strftime("%Y-%m-%d %H:%M:%S") if created else "",
                     "display_date_short": created.strftime("%b %d, %Y") if created else "",
                     "status": app.status if app else interview.status,
-                    "overall_score": report.overall_score if report else interview.overall_score or 0,
-                    "final_score": report.combined_score if report else interview.overall_score or 0,
-                    "technical_score": float(tech_avg if tech_s else (report.technical_skills_score if report else 0)),
-                    "behavioral_score": float(beh_avg if beh_s else (report.behavioral_score if report else 0)),
-                    "aptitude_score": float(apt_score if apt_qty > 0 else (report.aptitude_score if report else 0)),
+                    "overall_score": report.overall_score if (report and report.overall_score is not None) else (interview.overall_score or 0),
+                    "final_score": report.combined_score if (report and report.combined_score is not None) else (interview.overall_score or 0),
+                    "technical_score": float(tech_avg if tech_s else (report.technical_skills_score if (report and report.technical_skills_score is not None) else 0)),
+                    "behavioral_score": float(beh_avg if beh_s else (report.behavioral_score if (report and report.behavioral_score is not None) else 0)),
+                    "aptitude_score": float(apt_score if apt_qty > 0 else (report.aptitude_score if (report and report.aptitude_score is not None) else 0)),
                     "total_questions_answered": len([e for e in question_evaluations if e["answer"]]),
                     "aptitude_questions_answered": apt_qty,
                     "question_evaluations": question_evaluations,

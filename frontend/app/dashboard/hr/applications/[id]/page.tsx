@@ -485,15 +485,15 @@ export default function HRApplicationDetailPage() {
                                                                         <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Experience</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="bg-slate-50 p-4 rounded-xl border whitespace-pre-wrap max-h-[40vh] overflow-y-auto text-sm text-slate-700">
+                                                                <div className="bg-slate-50 p-4 rounded-xl border whitespace-pre-wrap text-sm text-slate-700 overflow-y-auto" style={{ maxHeight: '60vh' }}>
                                                                     {resumeExtraction.summary || resumeExtraction.extracted_text}
                                                                 </div>
                                                             </div>
                                                         </DialogContent>
                                                     </Dialog>
                                                 </div>
-                                                <p className="text-sm text-slate-600 leading-relaxed font-medium italic line-clamp-4">
-                                                    "{resumeExtraction.summary || resumeExtraction.extracted_text?.slice(0, 200)}"
+                                                <p className="text-sm text-slate-600 leading-relaxed font-medium italic line-clamp-6">
+                                                    "{resumeExtraction.summary || resumeExtraction.extracted_text}"
                                                 </p>
                                             </div>
                                         )}

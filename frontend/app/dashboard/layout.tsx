@@ -106,7 +106,7 @@ export default function DashboardLayout({
       }}
     >
       <SidebarProvider>
-        <div className="flex h-[calc(100vh-64px)] w-full bg-transparent relative overflow-hidden">
+        <div className="flex h-full w-full bg-transparent relative overflow-hidden">
           {/* subtle inner background for dashboard content */}
           <div className="pointer-events-none absolute inset-0 z-0 opacity-80">
             <div className="absolute inset-0 bg-gradient-to-br from-background/90 via-background/80 to-background/95" />

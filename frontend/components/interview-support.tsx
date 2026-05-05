@@ -169,6 +169,7 @@ export function FeedbackDialog({ open, onOpenChange, interviewId }: FeedbackDial
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="sm:max-w-[400px] text-center py-12 bg-card border-border">
+                    <DialogTitle className="sr-only">Feedback Received</DialogTitle>
                     <div className="flex flex-col items-center gap-4">
                         <div className="h-20 w-20 rounded-full bg-green-100 flex items-center justify-center text-green-600 mb-2">
                             <CheckCircle2 className="h-10 w-10" />

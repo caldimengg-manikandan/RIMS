@@ -138,6 +138,7 @@ def build_application_summary_response(application: Application, current_user_id
         job=job_summary,
         candidate_name=application.candidate_name,
         candidate_email=application.candidate_email,
+        candidate_phone=application.candidate_phone,
         status=application.status,
         file_status=application.file_status,
         applied_at=application.applied_at or datetime.now(timezone.utc),
@@ -766,21 +767,36 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         email_is_placeholder = application.candidate_email and "@batch." in application.candidate_email
         name_is_placeholder = not application.candidate_name or len(application.candidate_name.split()) < 2
         
-        # 1. Duplicate Detection via Extracted Email
+        # 1. Duplicate Detection via Extracted Email (Point 1: Prevent Clashes)
         if extracted_email:
             norm_email = extracted_email.lower().strip()
-            existing_match = db.query(Application).filter(
-                Application.job_id == job_id,
-                Application.candidate_email == norm_email,
+            # Heuristic: Check if this email exists anywhere in the system (global check)
+            # OR if it was already extracted for this job in a concurrent batch task.
+            existing_match = db.query(Application).outerjoin(ResumeExtraction).filter(
+                or_(
+                    Application.candidate_email == norm_email,
+                    ResumeExtraction.email == norm_email
+                ),
                 Application.id != application_id
             ).first()
             
             if existing_match:
-                is_duplicate = True
-                duplicate_app_id = existing_match.id
-                logger.info(f"[IDENTITY SYNC] App #{application_id} Conflict: '{norm_email}' already applied to job {job_id}")
-                # Internal-only signal: mark HR notes and pipeline stage as possible duplicate.
-                application.hr_notes = (application.hr_notes or "") + f"\nNotice: AI detected this as a duplicate of App ID: {duplicate_app_id} (matched on email in resume)."
+                logger.info(f"[IDENTITY SYNC] App #{application_id} Conflict: '{norm_email}' already exists in system. Deleting duplicate.")
+                
+                # Clean up cloud files before deleting DB record
+                from app.core.storage import delete_file
+                try:
+                    if application.resume_file_path:
+                        delete_file(settings.supabase_bucket_resumes, application.resume_file_path)
+                    if application.candidate_photo_path:
+                        delete_file(settings.supabase_bucket_id_photos, application.candidate_photo_path)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up files for duplicate application #{application_id}: {e}")
+
+                db.delete(application)
+                db.commit()
+                db.close()
+                return
             else:
                 # Safe to update email if it was missing or obviously wrong (placeholder)
                 if not application.candidate_email or email_is_placeholder:

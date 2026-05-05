@@ -181,7 +181,7 @@ export default function ReportsPage() {
 
   const [skillFilter, setSkillFilter] = useState('All')
   const [experienceFilter, setExperienceFilter] = useState('All')
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined, to: Date | undefined }>({ from: undefined, to: undefined })
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined)
 
   const [scoreRange, setScoreRange] = useState([0, 10])
   const [searchQuery, setSearchQuery] = useState(urlSearch || '')
@@ -197,19 +197,33 @@ export default function ReportsPage() {
 
     if (experienceFilter !== "All") q.set("experience", experienceFilter);
     if (searchQuery) q.set("search", searchQuery);
-    if (dateRange.from) {
-      q.set("from_date", dateRange.from.toLocaleDateString('en-CA'));
-    }
-    if (dateRange.to) {
-      q.set("to_date", dateRange.to.toLocaleDateString('en-CA'));
+    if (scoreRange[0] > 0) q.set("score_min", String(scoreRange[0]));
+    if (scoreRange[1] < 10) q.set("score_max", String(scoreRange[1]));
+    
+    if (dateFilter) {
+      const year = dateFilter.getFullYear();
+      const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
+      const day = String(dateFilter.getDate()).padStart(2, '0');
+      const d = `${year}-${month}-${day}`;
+      q.set("from_date", d);
+      q.set("to_date", d);
     }
 
     return `/api/analytics/reports?${q.toString()}`;
-  }, [reportsPage, statusFilter, skillFilter, experienceFilter, searchQuery, dateRange]);
+  }, [reportsPage, statusFilter, skillFilter, experienceFilter, searchQuery, dateFilter, scoreRange]);
+
+  // Dedicated Heatmap Data (Unfiltered by date/score to keep heatmap consistent)
+  const heatmapApiUrl = useMemo(() => {
+    const q = new URLSearchParams();
+    q.set("limit", "1000"); // Get a large enough sample for the heatmap
+    return `/api/analytics/reports?${q.toString()}`;
+  }, []);
 
   const { data: reportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], total: number, count: number, failed?: number, pages: number }>(reportsApiUrl, fetcher)
+  const { data: heatmapResponse } = useSWR<any>(heatmapApiUrl, fetcher)
 
   const rawReports = reportsResponse?.reports || [];
+  const heatmapReports = heatmapResponse?.reports || [];
   const totalCount = reportsResponse?.total || 0;
   const totalPages = reportsResponse?.pages || 0;
 
@@ -294,7 +308,7 @@ export default function ReportsPage() {
   // Reset to first page when filters change
   React.useEffect(() => {
     setReportsPage(1);
-  }, [statusFilter, jobFilter, skillFilter, experienceFilter, searchQuery, dateRange]);
+  }, [statusFilter, jobFilter, skillFilter, experienceFilter, searchQuery, dateFilter]);
 
 
 
@@ -318,7 +332,7 @@ export default function ReportsPage() {
   // Derived Interview Counts for Calendar Heatmap
   const interviewCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    reports.forEach(r => {
+    heatmapReports.forEach((r: Report) => {
       const date = new Date(r.timestamp)
       if (!isNaN(date.getTime())) {
         const dateStr = date.toDateString()
@@ -326,7 +340,7 @@ export default function ReportsPage() {
       }
     })
     return counts
-  }, [reports])
+  }, [heatmapReports])
 
   // Since filtering is now server-side, filteredReports is just reports
   const filteredReports = reports;
@@ -458,7 +472,7 @@ export default function ReportsPage() {
     setExperienceFilter('All')
     setScoreRange([0, 10])
     setSearchQuery('')
-    setDateRange({ from: undefined, to: undefined })
+    setDateFilter(undefined)
 
     setReportsPage(1)
   }
@@ -752,16 +766,16 @@ export default function ReportsPage() {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label>Interview Dates</Label>
-                  {(dateRange.from || dateRange.to) && (
-                    <Button variant="ghost" size="sm" onClick={() => setDateRange({ from: undefined, to: undefined })} className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2">Clear Dates</Button>
+                  {(dateFilter) && (
+                    <Button variant="ghost" size="sm" onClick={() => setDateFilter(undefined)} className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2">Clear Date</Button>
                   )}
 
                 </div>
                 <div className="flex justify-center bg-primary/5 rounded-xl p-2 border border-primary/10">
                   <Calendar
-                    mode="range"
-                    selected={{ from: dateRange.from, to: dateRange.to }}
-                    onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
+                    mode="single"
+                    selected={dateFilter}
+                    onSelect={setDateFilter}
                     className="rounded-md border-none shadow-none w-full"
 
                     modifiers={{
@@ -779,9 +793,9 @@ export default function ReportsPage() {
                       }
                     }}
                     modifiersClassNames={{
-                      low: "bg-primary/10 text-primary font-semibold hover:bg-primary/20",
-                      medium: "bg-secondary/10 text-secondary font-semibold hover:bg-secondary/20",
-                      high: "bg-destructive/10 text-destructive font-semibold hover:bg-destructive/20"
+                      low: "after:content-['•'] after:block after:text-[10px] after:leading-[0] after:text-primary/40 after:mt-1",
+                      medium: "after:content-['••'] after:block after:text-[10px] after:leading-[0] after:text-amber-500/60 after:mt-1",
+                      high: "after:content-['•••'] after:block after:text-[10px] after:leading-[0] after:text-destructive/60 after:mt-1"
                     }}
                   />
                 </div>

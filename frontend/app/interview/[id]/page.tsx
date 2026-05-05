@@ -1284,15 +1284,13 @@ export default function InterviewPage() {
                         >
                             Back to Jobs Page
                         </Button>
-                        <Button
-                            variant="outline"
-                            className="font-bold h-14 rounded-2xl border-2"
-                            onClick={() => setShowFeedbackDialog(true)}
-                        >
-                            Give Feedback
-                        </Button>
                     </div>
                 </div>
+                <FeedbackDialog
+                    open={showFeedbackDialog}
+                    onOpenChange={setShowFeedbackDialog}
+                    interviewId={interviewId}
+                />
             </div>
         )
     }

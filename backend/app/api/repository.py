@@ -253,9 +253,11 @@ def create_question_set(
 
     _ensure_question_sets_table(db)
 
-    # Check for duplicate title (Global Uniqueness - R017)
+    from sqlalchemy import func
+    
+    # Check for duplicate title (Global Uniqueness - R017) case-insensitive
     existing = db.query(QuestionSet).filter(
-        QuestionSet.title == payload.title.strip()
+        func.lower(QuestionSet.title) == payload.title.strip().lower()
     ).first()
     if existing:
         raise HTTPException(
@@ -300,9 +302,11 @@ def update_question_set(
 
     _ensure_question_sets_table(db)
     
-    # Check for duplicate title (Global Uniqueness - R017)
+    from sqlalchemy import func
+
+    # Check for duplicate title (Global Uniqueness - R017) case-insensitive
     existing = db.query(QuestionSet).filter(
-        QuestionSet.title == payload.title.strip(),
+        func.lower(QuestionSet.title) == payload.title.strip().lower(),
         QuestionSet.id != set_id
     ).first()
     if existing:

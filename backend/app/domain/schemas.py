@@ -417,6 +417,7 @@ class ApplicationSummaryResponse(BaseModel):
     job: Optional[JobSummary] = None
     candidate_name: str
     candidate_email: str
+    candidate_phone: Optional[str] = None
     status: str
     file_status: Optional[str] = 'active'
     

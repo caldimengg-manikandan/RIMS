@@ -120,7 +120,7 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
     settings = get_settings()
     # Call the Next.js API route we created
     # Note: Using localhost:3000 assuming frontend is running there during dev
-    pdf_service_url = f"{settings.frontend_base_url.rstrip('/')}/api/generate-pdf"
+    pdf_service_url = f"{settings.frontend_base_url.rstrip('/')}/api/generate-pdf/"
     
     start_time = time.time()
     logger.info(f"Starting Puppeteer PDF generation request to {pdf_service_url} for {filename}...")
@@ -494,14 +494,19 @@ async def get_offer_preview(request: Request, token: str, db: Session = Depends(
     if application.offer_token_used:
         raise HTTPException(status_code=400, detail="Offer already responded to.")
     
-    if application.offer_token_expiry and application.offer_token_expiry < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Offer expired.")
+    if application.offer_token_expiry:
+        expiry = application.offer_token_expiry
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Offer expired.")
 
+    company_name_setting = db.query(GlobalSettings).filter(GlobalSettings.key == "company_name").first()
     return {
         "candidate_name": application.candidate_name,
-        "job_title": application.job.title,
-        "joining_date": application.joining_date.isoformat(),
-        "company_name": db.query(GlobalSettings).filter(GlobalSettings.key == "company_name").first().value or "Our Company"
+        "job_title": application.job.title if application.job else "Unknown Role",
+        "joining_date": application.joining_date.isoformat() if application.joining_date else None,
+        "company_name": company_name_setting.value if company_name_setting and company_name_setting.value else "Our Company"
     }
 
 def generate_employee_id(db: Session):

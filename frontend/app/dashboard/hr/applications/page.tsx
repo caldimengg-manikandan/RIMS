@@ -8,6 +8,9 @@ import {
   FileCheck,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
+  XCircle,
+  User,
 } from "lucide-react";
 import {
   Card,
@@ -416,276 +419,202 @@ export default function HRApplicationsPage() {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {applications.map((app, index) => (
-            <Card
-              key={app.id}
-              onClick={() =>
-                router.push(`/dashboard/hr/applications/${app.id}`)
-              }
-              style={{ animationDelay: `${index * 50}ms` }}
-              className="hover:shadow-md transition-all duration-300 bg-card border border-border hover:border-border/80 cursor-pointer group animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out fill-mode-both"
-            >
-              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="relative shrink-0">
-                    <Avatar className="h-14 w-14 border-2 border-border/50 shadow-sm shrink-0">
-                      <AvatarImage 
-                        src={app.photo_url 
-                          || (app.candidate_photo_path ? (app.candidate_photo_path.startsWith('http') ? app.candidate_photo_path : `${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`) : undefined)}
-                        alt={app.candidate_name || 'Candidate'}
-                        className="object-cover"
-                      />
-                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-lg">
-                        {(app.candidate_name || 'U').charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </div>
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {/* List Header */}
+          <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-xs uppercase tracking-widest font-black text-muted-foreground">
+            <div className="col-span-2">Candidate</div>
+            <div className="col-span-2">Position & IDs</div>
+            <div className="col-span-2">Skills Match</div>
+            <div className="col-span-2">Performance Scores</div>
+            <div className="col-span-2 text-center">Status & Date</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
 
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
-                        {app.candidate_name}
-                      </h3>
-                      {app.job.job_id && (
-                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border">
-                          {app.job.job_id}
-                        </span>
-                      )}
-                      {app.interview?.test_id && (
-                        <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border">
-                          {app.interview.test_id}
-                        </span>
-                      )}
+          <div className="divide-y divide-border/50">
+            {applications.map((app, index) => (
+              <div
+                key={app.id}
+                className="grid grid-cols-12 gap-6 px-8 py-5 items-center hover:bg-muted/30 transition-all cursor-pointer group"
+                onClick={() => router.push(`/dashboard/hr/applications/${app.id}`)}
+              >
+                {/* Candidate Info */}
+                <div className="col-span-2 flex items-center gap-4 min-w-0">
+                  <Avatar className="h-12 w-12 border border-border/50 shadow-sm shrink-0">
+                    <AvatarImage 
+                      src={app.photo_url 
+                        || (app.candidate_photo_path ? (app.candidate_photo_path.startsWith('http') ? app.candidate_photo_path : `${API_BASE_URL}/${app.candidate_photo_path.replace(/\\/g, "/")}`) : undefined)}
+                      alt={app.candidate_name || 'Candidate'}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-base">
+                      {(app.candidate_name || 'U').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="font-bold text-base text-foreground group-hover:text-primary transition-colors truncate">
+                      {app.candidate_name}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      Applied for{" "}
-                      <span className="font-medium text-foreground">
-                        {app.job.title}
+                    <div className="text-sm text-muted-foreground truncate">{app.candidate_email}</div>
+                  </div>
+                </div>
+
+                {/* Position & IDs */}
+                <div className="col-span-2 min-w-0">
+                  <div className="text-base font-semibold text-foreground truncate">{app.job.title}</div>
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    {app.job.job_id && (
+                      <span className="text-[11px] bg-muted px-2 py-0.5 rounded text-muted-foreground border border-border font-bold">
+                        {app.job.job_id}
                       </span>
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-0.5 mb-1">
-                      {(() => {
-                        try {
-                          const skills = JSON.parse(app.resume_extraction?.extracted_skills || '[]');
-                          if (Array.isArray(skills) && skills.length > 0) {
-                            return skills.slice(0, 6).map((skill: string, idx: number) => (
-                              <Badge key={idx} variant="secondary" className="bg-primary/5 text-primary border-primary/10 text-[8px] py-0 px-1 h-4">
-                                {skill}
-                              </Badge>
-                            ));
-                          }
-                        } catch (e) {
-                          // Invalid JSON in extracted_skills, show no skills
+                    )}
+                    {app.interview?.test_id && (
+                      <span className="text-[11px] bg-primary/5 px-2 py-0.5 rounded text-primary border border-primary/10 font-bold">
+                        {app.interview.test_id}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skills Match */}
+                <div className="col-span-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(() => {
+                      try {
+                        const skills = JSON.parse(app.resume_extraction?.extracted_skills || '[]');
+                        if (Array.isArray(skills) && skills.length > 0) {
+                          return skills.slice(0, 3).map((skill: string, idx: number) => (
+                            <Badge key={idx} variant="secondary" className="bg-muted/50 text-muted-foreground border-none text-[10px] py-0 px-2 h-5 font-bold">
+                              {skill}
+                            </Badge>
+                          ));
                         }
-                        return null;
-                      })()}
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-muted-foreground items-center">
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        {new Date(app.applied_at).toLocaleDateString()}
-                      </span>
-                      {(app.composite_score! > 0 || app.resume_extraction) && (
-                        <span className="text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-sm border border-primary/20 whitespace-nowrap">
-                          Composite Score:{" "}
-                          {(app.composite_score! > 0 
-                            ? Number(app.composite_score) 
-                            : Number(app.resume_extraction?.resume_score || 0)
-                          ).toFixed(1)}
-                          /100
-                        </span>
-                      )}
-                      {app.interview?.report && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {app.interview.report.aptitude_score !== null && (
-                            <span className="text-purple-600 font-medium bg-purple-100 px-2 py-0.5 rounded-sm border border-purple-200 whitespace-nowrap">
-                              Aptitude:{" "}
-                              {Number(
-                                app.interview.report.aptitude_score,
-                              ).toFixed(2)}
-                              /10
-                            </span>
-                          )}
-                          {app.interview.report.technical_skills_score !==
-                            null && (
-                            <span className="text-blue-600 font-medium bg-blue-100 px-2 py-0.5 rounded-sm border border-blue-200 whitespace-nowrap">
-                              Tech:{" "}
-                              {Number(
-                                app.interview.report.technical_skills_score,
-                              ).toFixed(2)}
-                              /10
-                            </span>
-                          )}
-                          {app.interview.report.behavioral_score !== null && (
-                            <span className="text-green-600 font-medium bg-green-100 px-2 py-0.5 rounded-sm border border-green-200 whitespace-nowrap">
-                              Behav:{" "}
-                              {Number(
-                                app.interview.report.behavioral_score,
-                              ).toFixed(2)}
-                              /10
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      className="flex flex-wrap gap-2 mt-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* APPROVE: only from applied */}
-                      {app.status === "applied" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={processingIds.has(app.id)}
-                          className="border-primary text-primary hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleTransition(app.id, "approve_for_interview");
-                          }}
-                        >
-                          {processingIds.has(app.id) ? (
-                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                          ) : null}
-                          APPROVE FOR INTERVIEW
-                        </Button>
-                      )}
-
-                      {/* CALL FOR INTERVIEW: from interview_completed or review_later */}
-                      {['interview_completed', 'review_later'].includes(app.status) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={processingIds.has(app.id)}
-                          className="border-teal-500 text-teal-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleTransition(app.id, "call_for_interview");
-                          }}
-                        >
-                          {processingIds.has(app.id) ? (
-                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                          ) : null}
-                          CALL FOR INTERVIEW
-                        </Button>
-                      )}
-
-                      {/* REVIEW LATER: from interview_completed */}
-                      {app.status === 'interview_completed' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={processingIds.has(app.id)}
-                          className="border-amber-500 text-amber-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleTransition(app.id, "review_later");
-                          }}
-                        >
-                          {processingIds.has(app.id) ? (
-                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                          ) : null}
-                          REVIEW LATER
-                        </Button>
-                      )}
-
-                      {/* HIRE: from physical_interview */}
-                      {app.status === 'physical_interview' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={processingIds.has(app.id)}
-                          className="border-emerald-500 text-emerald-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleTransition(app.id, "hire");
-                          }}
-                        >
-                          {processingIds.has(app.id) ? (
-                            <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                          ) : null}
-                          HIRE
-                        </Button>
-                      )}
-
-                      {/* REJECT: from any non-terminal state */}
-                      {!['hired', 'rejected'].includes(app.status) && (
-                        <RejectDialog
-                          candidateName={app.candidate_name}
-                          onConfirm={(reason, notes) =>
-                            handleTransition(app.id, "reject", `Reason: ${reason}${notes ? `\nNotes: ${notes}` : ''}`)
-                          }
-                          trigger={
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={processingIds.has(app.id)}
-                              className="border-red-500 text-red-600 hover:bg-slate-600 hover:text-white hover:scale-105 text-[10px] font-black px-4 py-1 h-8 rounded uppercase tracking-wider transition-all duration-300"
-                            >
-                              {processingIds.has(app.id) ? (
-                                <div className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full mr-2" />
-                              ) : null}
-                              REJECT
-                            </Button>
-                          }
-                        />
-                      )}
-                    </div>
+                      } catch (e) {}
+                      return <span className="text-sm text-muted-foreground italic font-medium">No skills data</span>;
+                    })()}
+                    {app.resume_extraction && JSON.parse(app.resume_extraction.extracted_skills || '[]').length > 3 && (
+                      <span className="text-[10px] text-muted-foreground font-bold pt-1">+{JSON.parse(app.resume_extraction.extracted_skills || '[]').length - 3} more</span>
+                    )}
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  {/* Status Badge */}
-                  <span
-                    className={`capsule-badge text-[10px] px-2 py-0.5 ${getStatusColor(app.status)}`}
-                  >
-                    {app.status.replace(/_/g, " ").toUpperCase()}
-                  </span>
 
-                  {/* Missing File Indicator */}
-                  {app.file_status === 'missing' && (
-                    <span className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 text-[9px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      FILE MISSING
-                    </span>
+                {/* Scores */}
+                <div className="col-span-2">
+                  {(app.composite_score! > 0 || app.resume_extraction) && (
+                    <div className="inline-flex items-center gap-2 bg-primary/5 px-2.5 py-1 rounded border border-primary/10 mb-2">
+                      <span className="text-[11px] font-black text-primary uppercase tracking-tight">Score</span>
+                      <span className="text-base font-black text-primary tabular-nums">
+                        {((app.composite_score ?? 0) > 0 ? (app.composite_score ?? 0) : (app.resume_extraction?.resume_score ?? 0)).toFixed(1)}
+                      </span>
+                    </div>
                   )}
-
-                  <span className="text-primary text-xs font-medium group-hover:underline flex items-center gap-1">
-                    View Details
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </span>
+                  <div className="flex gap-1.5">
+                    {app.interview?.report?.aptitude_score != null && (
+                      <div className="h-2 w-8 bg-purple-100 rounded-full overflow-hidden" title={`Aptitude: ${app.interview?.report?.aptitude_score}/10`}>
+                        <div className="h-full bg-purple-500" style={{ width: `${(app.interview?.report?.aptitude_score || 0) * 10}%` }} />
+                      </div>
+                    )}
+                    {app.interview?.report?.technical_skills_score != null && (
+                      <div className="h-2 w-8 bg-blue-100 rounded-full overflow-hidden" title={`Tech: ${app.interview?.report?.technical_skills_score}/10`}>
+                        <div className="h-full bg-blue-500" style={{ width: `${(app.interview?.report?.technical_skills_score || 0) * 10}%` }} />
+                      </div>
+                    )}
+                    {app.interview?.report?.behavioral_score != null && (
+                      <div className="h-2 w-8 bg-green-100 rounded-full overflow-hidden" title={`Behav: ${app.interview?.report?.behavioral_score}/10`}>
+                        <div className="h-full bg-green-500" style={{ width: `${(app.interview?.report?.behavioral_score || 0) * 10}%` }} />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                {/* Status & Date */}
+                <div className="col-span-2 text-center min-w-0">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className={`capsule-badge text-[10px] px-3 py-1 font-bold ${getStatusColor(app.status)}`}>
+                      {app.status.replace(/_/g, " ").toUpperCase()}
+                    </span>
+                    {app.file_status === 'missing' && (
+                      <span className="text-red-500 text-[9px] font-black tracking-tighter uppercase">File Missing</span>
+                    )}
+                    <span className="text-xs font-bold text-muted-foreground">
+                      {new Date(app.applied_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="col-span-2 text-right" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-end gap-3">
+                    {/* Primary Actions based on status */}
+                    {app.status === "applied" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={processingIds.has(app.id)}
+                        className="h-10 w-10 p-0 text-primary hover:bg-primary/10 rounded-xl transition-colors shadow-none"
+                        title="Approve for Interview"
+                        onClick={() => handleTransition(app.id, "approve_for_interview")}
+                      >
+                        <FileCheck className="h-5 w-5" />
+                      </Button>
+                    )}
+                    {['interview_completed', 'review_later'].includes(app.status) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10 w-10 p-0 text-teal-600 hover:bg-teal-50 rounded-xl transition-colors shadow-none"
+                        title="Call for Interview"
+                        onClick={() => handleTransition(app.id, "call_for_interview")}
+                      >
+                        <User className="h-5 w-5" />
+                      </Button>
+                    )}
+                    {app.status === 'physical_interview' && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10 w-10 p-0 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors shadow-none"
+                        title="Hire Candidate"
+                        onClick={() => handleTransition(app.id, "hire")}
+                      >
+                        <CheckCircle2 className="h-5 w-5" />
+                      </Button>
+                    )}
+                    
+                    {/* Reject Button (Always available if not terminal) */}
+                    {!['hired', 'rejected'].includes(app.status) && (
+                      <RejectDialog
+                        candidateName={app.candidate_name}
+                        onConfirm={(reason, notes) =>
+                          handleTransition(app.id, "reject", `Reason: ${reason}${notes ? `\nNotes: ${notes}` : ''}`)
+                        }
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 w-10 p-0 text-red-500 hover:bg-red-50 rounded-xl transition-colors shadow-none"
+                            title="Reject"
+                          >
+                            <XCircle className="h-5 w-5" />
+                          </Button>
+                        }
+                      />
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-10 px-3 text-xs font-black text-muted-foreground hover:text-primary transition-colors uppercase tracking-widest"
+                      onClick={() => router.push(`/dashboard/hr/applications/${app.id}`)}
+                    >
+                      VIEW
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
             <div className="flex items-center gap-3">
                 <Button
@@ -721,8 +650,6 @@ export default function HRApplicationsPage() {
                 </Button>
               </div>
           </div>
-        </div>
-      )}
     </div>
   );
 }

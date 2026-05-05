@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  // basePath: '/calrims',
+  basePath: '/calrims',
   trailingSlash: true,
   devIndicators: {
     appIsrStatus: false,
@@ -21,6 +21,12 @@ const nextConfig = {
       {
         source: '/',
         destination: '/calrims/',
+        permanent: false,
+        basePath: false,
+      },
+      {
+        source: '/interview/:path*',
+        destination: '/calrims/interview/:path*',
         permanent: false,
         basePath: false,
       },

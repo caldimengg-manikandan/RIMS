@@ -2396,6 +2396,7 @@ async def get_interview_report(
 @router.get("/{interview_id}/video-stream")
 async def get_video_stream(
     interview_id: int,
+    request: Request,
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
