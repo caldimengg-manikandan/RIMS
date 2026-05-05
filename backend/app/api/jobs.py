@@ -237,10 +237,13 @@ async def upload_aptitude_questions(
     ALLOWED_EXCEL_MIMES = {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
         "application/vnd.ms-excel",
-        "application/wps-office.xlsx"
+        "application/wps-office.xlsx",
+        "application/octet-stream"
     }
     if file.content_type not in ALLOWED_EXCEL_MIMES:
-        raise HTTPException(status_code=400, detail=f"Invalid MIME type '{file.content_type}'. File is not a valid Excel document.")
+        # Extra check: if it's octet-stream, we trust the extension we already validated
+        if file.content_type != "application/octet-stream":
+             raise HTTPException(status_code=400, detail=f"Invalid MIME type '{file.content_type}'. File is not a valid Excel document.")
     
     content = await file.read()
     if len(content) > MAX_QUESTION_FILE_SIZE:
@@ -254,26 +257,29 @@ async def upload_aptitude_questions(
         
         df = pd.read_excel(io.BytesIO(content))
         
-        # Validate columns
-        required_cols = ['Question', 'Answer']
+        # Normalize columns to lowercase for robust matching
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        # Validate columns (case-insensitive)
+        required_cols = ['question', 'answer']
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
-             raise HTTPException(status_code=400, detail=f"Missing required columns: {', '.join(missing)}\nFound columns: {list(df.columns)}")
+             raise HTTPException(status_code=400, detail=f"Missing required columns (case-insensitive): {', '.join(missing)}\nFound columns: {list(df.columns)}")
         
         questions = []
         for index, row in df.iterrows():
-            q_text = str(row['Question']).strip()
-            answer = str(row['Answer']).strip()
+            q_text = str(row['question']).strip()
+            answer = str(row['answer']).strip()
             
-            if not q_text or q_text == 'nan':
+            if not q_text or q_text == 'nan' or q_text == '':
                  continue
                  
             q_dict = {
                 "question": q_text,
                 "answer": answer
             }
-            if 'Options' in df.columns and pd.notna(row['Options']):
-                 q_dict["options"] = [opt.strip() for opt in str(row['Options']).split(',') if opt.strip()]
+            if 'options' in df.columns and pd.notna(row['options']):
+                 q_dict["options"] = [opt.strip() for opt in str(row['options']).split(',') if opt.strip()]
                  
             questions.append(q_dict)
             
@@ -289,8 +295,6 @@ async def upload_aptitude_questions(
         )
 
     # Save as JSON for _generate_aptitude_questions to consume
-    safe_name = f"{uuid.uuid4().hex}.json"
-    # Save as JSON to Supabase
     safe_name = f"{uuid.uuid4().hex}.json"
     path = f"aptitude_questions/{safe_name}"
     

@@ -407,8 +407,8 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
         const file = e.target.files[0]
 
         const ext = file.name.split('.').pop()?.toLowerCase()
-        if (!ext || !['xlsx'].includes(ext)) {
-            setError('Invalid file type. Only Excel (.xlsx) files are allowed for aptitude questions.')
+        if (!ext || !['xlsx', 'xls'].includes(ext)) {
+            setError('Invalid file type. Only Excel (.xlsx, .xls) files are allowed for aptitude questions.')
             return
         }
         if (file.size > MAX_QUESTION_FILE_SIZE) {
