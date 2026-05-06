@@ -32,6 +32,13 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useApplicationsMutate } from "./hooks/use-applications-mutate";
 import { PageHeader } from "@/components/page-header";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Application {
   id: number;
@@ -65,20 +72,12 @@ interface Application {
   } | null;
 }
 
-// Backend caps `limit` to <50 for performance.
-interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  size: number;
-  pages: number;
-}
 
-const APPLICATIONS_PAGE_SIZE = 49;
 
 export default function HRApplicationsPage() {
   const router = useRouter();
   const { invalidateApplications } = useApplicationsMutate();
+  const [pageSize, setPageSize] = useState(10);
   const [applicationsPage, setApplicationsPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   /** Server-side search; debounced to avoid refetching on every keystroke. */
@@ -97,15 +96,15 @@ export default function HRApplicationsPage() {
 
   const applicationsListUrl = useMemo(() => {
     const q = new URLSearchParams();
-    q.set("limit", String(APPLICATIONS_PAGE_SIZE));
-    q.set("skip", String((applicationsPage - 1) * APPLICATIONS_PAGE_SIZE));
+    q.set("limit", String(pageSize));
+    q.set("skip", String((applicationsPage - 1) * pageSize));
     if (statusFilter !== "all") q.set("status", statusFilter);
     if (jobIdFilter !== "all") q.set("job_id", jobIdFilter);
     if (dateFrom) q.set("from_date", dateFrom);
     if (dateTo) q.set("to_date", dateTo);
     if (debouncedSearch) q.set("search", debouncedSearch);
     return `/api/applications?${q.toString()}`;
-  }, [applicationsPage, statusFilter, jobIdFilter, dateFrom, dateTo, debouncedSearch]);
+  }, [applicationsPage, pageSize, statusFilter, jobIdFilter, dateFrom, dateTo, debouncedSearch]);
 
   useEffect(() => {
     setApplicationsPage(1);
@@ -275,9 +274,9 @@ export default function HRApplicationsPage() {
         description="Review and manage candidate applications."
         icon={Users}
       >
-        <div className="bg-primary/5 border border-primary/10 rounded-2xl px-6 py-4 flex flex-col items-end shadow-sm">
-          <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Total Records Found</span>
-          <span className="text-3xl font-black text-primary tabular-nums">
+        <div className="bg-primary/10 dark:bg-white/5 border border-primary/20 dark:border-white/10 rounded-2xl px-6 py-4 flex flex-col items-end shadow-sm">
+          <span className="text-[10px] font-bold text-primary dark:text-slate-200 uppercase tracking-widest mb-1">Total Records Found</span>
+          <span className="text-xl font-black text-primary dark:text-white tabular-nums">
             {isLoading ? "..." : totalCount}
           </span>
         </div>
@@ -613,8 +612,9 @@ export default function HRApplicationsPage() {
           </div>
         </div>
       )}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
-            <div className="flex items-center gap-3">
+          <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+              <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
                   size="lg"
@@ -629,7 +629,7 @@ export default function HRApplicationsPage() {
                   <ChevronLeft className="mr-2 h-5 w-5" /> Previous
                 </Button>
                 
-                <div className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-bold text-slate-600 border border-slate-200">
+                <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                   Page {applicationsPage} {totalPages > 0 ? `of ${totalPages}` : ''}
                 </div>
 
@@ -647,6 +647,30 @@ export default function HRApplicationsPage() {
                   Next <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
               </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-muted-foreground">Show</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(val) => {
+                    setPageSize(Number(val));
+                    setApplicationsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                    <SelectValue placeholder="10" />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[70px]">
+                    {[5, 10, 20, 50, 100].map((size) => (
+                      <SelectItem key={size} value={String(size)} className="font-bold">
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm font-bold text-muted-foreground">per page</span>
+              </div>
+            </div>
           </div>
     </div>
   );

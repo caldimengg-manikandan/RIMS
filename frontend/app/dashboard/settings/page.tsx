@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from "sonner"
-import { Loader2, Save, Building2, User, Mail, Phone, FileText, ShieldAlert, Settings as SettingsIcon } from 'lucide-react'
+import { Loader2, Save, Building2, User, Mail, Phone, FileText, ShieldAlert, Settings, Image as ImageIcon } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
 import { ModeToggle } from '@/components/mode-toggle'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
 export default function SettingsPage() {
     const { user } = useAuth()
@@ -109,7 +110,7 @@ export default function SettingsPage() {
             <PageHeader
                 title="System Settings"
                 description="Configure company details and automation templates"
-                icon={SettingsIcon}
+                icon={Settings}
             >
                 <Button 
                     size="lg" 
@@ -143,21 +144,37 @@ export default function SettingsPage() {
                                 />
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label htmlFor="logo_url">Company Logo URL</Label>
-                                <Input 
-                                    id="logo_url" 
-                                    value={settings.company_logo_url} 
-                                    onChange={(e) => setSettings({...settings, company_logo_url: e.target.value})}
-                                    placeholder="https://example.com/logo.png"
-                                />
-                            </div>
-
-                            {settings.company_logo_url && (
-                                <div className="mt-4 p-4 border rounded-xl bg-muted/20 flex justify-center overflow-hidden">
-                                    <img src={settings.company_logo_url} alt="Logo preview" className="max-h-24 object-contain" />
+                            <div className="space-y-4">
+                                <Label htmlFor="logo_url">Company Logo</Label>
+                                <div className="flex items-center gap-4">
+                                    <div className="h-20 w-20 rounded-2xl bg-muted/30 border-2 border-dashed border-border/50 flex items-center justify-center overflow-hidden group relative">
+                                        {settings.company_logo_url ? (
+                                            <img 
+                                                src={settings.company_logo_url} 
+                                                alt="Logo" 
+                                                className="h-full w-full object-contain p-2"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(settings.company_name || 'C')
+                                                }}
+                                            />
+                                        ) : (
+                                            <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 space-y-2">
+                                        <div className="flex gap-2 w-full">
+                                            <Input 
+                                                id="logo_url" 
+                                                value={settings.company_logo_url} 
+                                                onChange={(e) => setSettings({...settings, company_logo_url: e.target.value})}
+                                                placeholder="https://example.com/logo.png"
+                                                className="flex-1 h-12"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground italic">Paste a transparent PNG/SVG link for best results in PDFs.</p>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="company_address">Office Address</Label>
@@ -280,6 +297,13 @@ export default function SettingsPage() {
                                     input.onchange = (e: any) => {
                                         const file = e.target.files[0];
                                         if (file) {
+                                            // Validate file type
+                                            const fileName = file.name.toLowerCase();
+                                            if (!fileName.endsWith('.html') && !fileName.endsWith('.htm')) {
+                                                toast.error("Invalid file type. Only HTML files are supported.");
+                                                return;
+                                            }
+
                                             const reader = new FileReader();
                                             reader.onload = (re) => {
                                                 setSettings({...settings, offer_letter_template: re.target?.result as string});

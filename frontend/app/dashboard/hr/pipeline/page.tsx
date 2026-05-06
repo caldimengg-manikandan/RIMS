@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,6 +17,14 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Job {
     id: number
@@ -29,6 +37,16 @@ interface Job {
 
 export default function PipelineIndexPage() {
     const { data: jobs, isLoading } = useSWR<Job[]>('/api/jobs?limit=500', fetcher)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
+
+    const paginatedJobs = useMemo(() => {
+        if (!jobs) return []
+        const start = (currentPage - 1) * pageSize
+        return jobs.slice(start, start + pageSize)
+    }, [jobs, currentPage, pageSize])
+
+    const totalPages = Math.ceil((jobs?.length || 0) / pageSize)
 
     if (isLoading) return (
         <div className="p-8 flex justify-center items-center h-64">
@@ -43,9 +61,9 @@ export default function PipelineIndexPage() {
                 description="Manage candidate flow for each active position"
                 icon={UserCheck}
             >
-                <div className="flex items-center gap-2 bg-primary/5 px-6 py-4 rounded-2xl border border-primary/10 shadow-sm">
-                    <Layers className="h-5 w-5 text-primary" />
-                    <span className="text-xl font-black text-primary tabular-nums">{jobs?.length || 0} Active Roles</span>
+                <div className="flex items-center gap-2 bg-primary/10 dark:bg-white/5 px-6 py-4 rounded-2xl border border-primary/20 dark:border-white/10 shadow-sm">
+                    <Layers className="h-5 w-5 text-primary dark:text-slate-200" />
+                    <span className="text-l font-black text-primary dark:text-white tabular-nums">{jobs?.length || 0} Active Roles</span>
                 </div>
             </PageHeader>
 
@@ -60,7 +78,7 @@ export default function PipelineIndexPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {jobs?.map((job) => (
+                        {paginatedJobs.map((job) => (
                             <TableRow key={job.id} className="hover:bg-primary/5 transition-colors group">
                                 <TableCell className="py-4">
                                     <div className="flex items-center gap-3">
@@ -99,6 +117,8 @@ export default function PipelineIndexPage() {
                     </TableBody>
                 </Table>
 
+
+
                 {jobs?.length === 0 && (
                     <div className="text-center py-20">
                         <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-4" />
@@ -110,6 +130,62 @@ export default function PipelineIndexPage() {
                     </div>
                 )}
             </Card>
+
+            {totalPages > 1 && (
+                <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+                        <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                            Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, jobs?.length || 0)} of {jobs?.length || 0}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                            </Button>
+                            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Page {currentPage} of {totalPages}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                disabled={currentPage >= totalPages}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                Next <ChevronRight className="ml-2 h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-muted-foreground">Show</span>
+                            <Select
+                                value={String(pageSize)}
+                                onValueChange={(val) => {
+                                    setPageSize(Number(val));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                                    <SelectValue placeholder="10" />
+                                </SelectTrigger>
+                                <SelectContent className="min-w-[70px]">
+                                    {[5, 10, 20, 50, 100].map((size) => (
+                                        <SelectItem key={size} value={String(size)} className="font-bold">
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-sm font-bold text-muted-foreground">per page</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

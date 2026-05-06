@@ -41,6 +41,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Ticket {
     id: number
@@ -79,8 +87,12 @@ export default function HRTicketsPage() {
     const [isResolving, setIsResolving] = useState(false)
     const [filter, setFilter] = useState<'pending' | 'all' | 'feedback'>('pending')
     const [sendEmail, setSendEmail] = useState(true)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
 
-    const endpoint = filter === 'feedback' ? '/api/tickets/feedback' : `/api/tickets?status=${filter}`
+    const endpoint = filter === 'feedback' 
+        ? `/api/tickets/feedback?limit=${pageSize}&skip=${(currentPage - 1) * pageSize}` 
+        : `/api/tickets?status=${filter}&limit=${pageSize}&skip=${(currentPage - 1) * pageSize}`
     const { data: resp, isLoading, mutate } = useSWR<any>(endpoint)
     
     const tickets = (filter === 'feedback' ? [] : (resp?.items || [])) as Ticket[]
@@ -291,6 +303,62 @@ export default function HRTicketsPage() {
                                 </TooltipContent>
                             </Tooltip>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {resp?.total > 0 && (
+                <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+                        <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                            Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, resp.total)} of {resp.total}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1 || isLoading}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                            </Button>
+                            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Page {currentPage} of {Math.ceil(resp.total / pageSize)}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                disabled={currentPage >= Math.ceil(resp.total / pageSize) || isLoading}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                Next <ChevronRight className="ml-2 h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-muted-foreground">Show</span>
+                            <Select
+                                value={String(pageSize)}
+                                onValueChange={(val) => {
+                                    setPageSize(Number(val));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                                    <SelectValue placeholder="10" />
+                                </SelectTrigger>
+                                <SelectContent className="min-w-[70px]">
+                                    {[5, 10, 20, 50, 100].map((size) => (
+                                        <SelectItem key={size} value={String(size)} className="font-bold">
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-sm font-bold text-muted-foreground">per page</span>
+                        </div>
                     </div>
                 </div>
             )}

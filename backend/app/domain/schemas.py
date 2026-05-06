@@ -69,6 +69,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     approval_status: str
+    profile_image_url: Optional[str] = None
     created_at: datetime
     
     # Pydantic v2 compatibility for naive vs aware datetimes

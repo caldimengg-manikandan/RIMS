@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Zap, Mail, Lock, ArrowRight, Loader2, Sparkles, Brain, Cpu, Globe, ShieldCheck, CheckCircle2, Eye, EyeOff, LucideIcon } from 'lucide-react'
 import { cn } from '@/app/dashboard/lib/utils'
 import { getSessionData } from '@/lib/session-store'
+import useSWR from 'swr'
+import { APIClient } from '@/app/dashboard/lib/api-client'
 
 function LoginContent() {
   const router = useRouter()
@@ -20,6 +22,10 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+  const companyLogo = settings?.company_logo_url || "/calrims/logo-dark.png"
+  const companyName = settings?.company_name || "RIMS"
 
   useEffect(() => {
     // If already authenticated and not loading, redirect to appropriate home
@@ -103,7 +109,7 @@ function LoginContent() {
             </h2>
             <div className="inline-flex w-max items-center justify-center rounded-lg border border-white/10 bg-slate-950/40 px-4 py-2 backdrop-blur-md">
               <span className="text-xs font-bold tracking-[0.2em] uppercase text-white/90">
-                BY CALDIM
+                BY {companyName.toUpperCase()}
               </span>
             </div>
           </div>
@@ -171,10 +177,8 @@ function LoginContent() {
           >
             {/* Logo for mobile only (desktop has the massive image) */}
             <div className="flex items-center gap-3 lg:hidden mb-12">
-               <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-                 <Zap className="w-6 h-6 text-primary" />
-               </div>
-               <span className="text-xl font-bold tracking-tight">Virtual HR</span>
+               <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[120px]" />
+               <span className="text-xl font-bold tracking-tight">{companyName}</span>
             </div>
 
             <div className="space-y-2 mb-10">
@@ -210,6 +214,7 @@ function LoginContent() {
                 placeholder="name@company.com" value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 icon={Mail} disabled={isSubmitting}
+                autoComplete="email"
               />
             </motion.div>
 
@@ -303,7 +308,7 @@ function LoginContent() {
   )
 }
 
-function InputField({ id, label, type, placeholder, value, onChange, icon: Icon, disabled }: {
+function InputField({ id, label, type, placeholder, value, onChange, icon: Icon, disabled, autoComplete }: {
   id: string,
   label: string,
   type: string,
@@ -311,7 +316,8 @@ function InputField({ id, label, type, placeholder, value, onChange, icon: Icon,
   value: string,
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
   icon: LucideIcon,
-  disabled: boolean
+  disabled: boolean,
+  autoComplete?: string,
 }) {
   return (
     <div className="group space-y-1.5">
@@ -324,11 +330,13 @@ function InputField({ id, label, type, placeholder, value, onChange, icon: Icon,
         </div>
         <input
           id={id}
+          name={id}
           type={type}
           value={value}
           onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
+          autoComplete={autoComplete ?? id}
           required
           className={cn(
             "w-full h-12 pl-12 pr-4 bg-muted/30 border border-border/50 rounded-xl outline-none transition-all duration-300",

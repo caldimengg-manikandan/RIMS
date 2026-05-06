@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,14 @@ import {
 import * as XLSX from 'xlsx'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -629,6 +637,8 @@ export default function RepositoryPage() {
     const [loading, setLoading] = useState(true)
     const [filterRound, setFilterRound] = useState<string>('all')
     const [search, setSearch] = useState('')
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
 
     const [formOpen, setFormOpen] = useState(false)
     const [editTarget, setEditTarget] = useState<QuestionSetDetail | null>(null)
@@ -698,7 +708,7 @@ export default function RepositoryPage() {
     }
 
     // Filtered view
-    const filtered = sets.filter(s => {
+    const filteredSets = sets.filter(s => {
         const matchRound = filterRound === 'all' || s.round_type === filterRound
         const q = search.toLowerCase()
         const matchSearch = !q ||
@@ -707,6 +717,13 @@ export default function RepositoryPage() {
             s.topic_tags.some(t => t.toLowerCase().includes(q))
         return matchRound && matchSearch
     })
+
+    const paginatedSets = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filteredSets.slice(start, start + pageSize)
+    }, [filteredSets, currentPage, pageSize])
+
+    const totalPages = Math.ceil(filteredSets.length / pageSize)
 
     const counts = {
         all: sets.length,
@@ -733,7 +750,7 @@ export default function RepositoryPage() {
             <div className="flex flex-col sm:flex-row gap-3">
                 <Input
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
+                    onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
                     placeholder="Search by title, role, or tag…"
                     className="h-9 max-w-xs text-sm"
                 />
@@ -741,7 +758,7 @@ export default function RepositoryPage() {
                     {(['all', 'aptitude', 'technical', 'behavioural'] as const).map(rt => (
                         <button
                             key={rt}
-                            onClick={() => setFilterRound(rt)}
+                            onClick={() => { setFilterRound(rt); setCurrentPage(1) }}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                                 filterRound === rt
                                     ? 'bg-primary text-primary-foreground border-primary'
@@ -764,84 +781,122 @@ export default function RepositoryPage() {
                 </div>
             ) : sets.length === 0 ? (
                 <EmptyState onAdd={openCreate} />
-            ) : filtered.length === 0 ? (
+            ) : filteredSets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
                     <BookOpen className="h-10 w-10 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">No sets match your filter.</p>
-                    <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterRound('all') }}>
+                    <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterRound('all'); setCurrentPage(1) }}>
                         Clear filters
                     </Button>
                 </div>
             ) : (
-                <Card className="border-border/50 shadow-sm overflow-hidden">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="bg-muted/20 hover:bg-muted/20">
-                                <TableHead className="font-bold py-4">Title</TableHead>
-                                <TableHead className="font-bold">Round Type</TableHead>
-                                <TableHead className="font-bold">Metadata</TableHead>
-                                <TableHead className="font-bold text-right pr-6">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filtered.map(set => (
-                                <TableRow key={set.id} className="hover:bg-primary/5 transition-colors group">
-                                    <TableCell className="py-4">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="font-bold text-foreground">{set.title}</span>
-                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                {set.topic_tags.map((t, i) => (
-                                                    <Badge key={i} variant="outline" className="text-[10px] h-4 font-normal bg-primary/5 text-primary border-primary/20">
-                                                        {t}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className={`text-[10px] uppercase font-black px-2 py-0.5 border-none ${ROUND_TYPE_COLORS[set.round_type]}`}>
-                                            {set.round_type}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                                                <HelpCircle className="h-3.5 w-3.5" />
-                                                <span>{set.question_count} Questions</span>
-                                            </div>
-                                            {set.job_roles.length > 0 && (
-                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground opacity-70">
-                                                    <Users className="h-3 w-3" />
-                                                    <span className="truncate max-w-[200px]">{set.job_roles.join(', ')}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-right pr-6">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                onClick={() => openEdit(set)}
-                                            >
-                                                <Pencil className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                onClick={() => setDeleteTarget(set)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
+                <>
+                    <Card className="border-border/50 shadow-sm overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-muted/20 hover:bg-muted/20 border-b border-border/50">
+                                    <TableHead className="font-bold py-4">Set Title & Tags</TableHead>
+                                    <TableHead className="font-bold text-center">Round Type</TableHead>
+                                    <TableHead className="font-bold text-center">Questions</TableHead>
+                                    <TableHead className="font-bold text-right pr-6">Actions</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Card>
+                            </TableHeader>
+                            <TableBody>
+                                {paginatedSets.map((set) => (
+                                    <TableRow key={set.id} className="hover:bg-primary/5 transition-colors group border-b border-border/40">
+                                        <TableCell className="py-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="font-bold text-foreground uppercase tracking-tight">{set.title}</span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {set.topic_tags.map(t => (
+                                                        <Badge key={t} variant="outline" className="text-[9px] px-1.5 py-0 border-primary/20 text-primary/70">{t}</Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Badge variant="outline" className={`text-[10px] uppercase font-black px-2 py-0.5 border-none ${ROUND_TYPE_COLORS[set.round_type]}`}>
+                                                {set.round_type}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="font-black text-primary text-base">{set.question_count}</span>
+                                                <span className="text-[9px] text-muted-foreground uppercase font-bold opacity-50">Items</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right pr-6">
+                                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" onClick={() => openEdit(set)}>
+                                                    <Pencil className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget(set)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Card>
+
+                    {totalPages > 1 && (
+                        <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12_px_-4px_rgba(0,0,0,0.1)] mt-8">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+                                <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                                    Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredSets.length)} of {filteredSets.length}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        size="lg"
+                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                        disabled={currentPage === 1}
+                                        className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                    >
+                                        <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                                    </Button>
+                                    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                        Page {currentPage} of {totalPages}
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="lg"
+                                        onClick={() => setCurrentPage(prev => prev + 1)}
+                                        disabled={currentPage >= totalPages}
+                                        className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                    >
+                                        Next <ChevronRight className="ml-2 h-5 w-5" />
+                                    </Button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-muted-foreground">Show</span>
+                                    <Select
+                                        value={String(pageSize)}
+                                        onValueChange={(val) => {
+                                            setPageSize(Number(val));
+                                            setCurrentPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                                            <SelectValue placeholder="10" />
+                                        </SelectTrigger>
+                                        <SelectContent className="min-w-[70px]">
+                                            {[5, 10, 20, 50, 100].map((size) => (
+                                                <SelectItem key={size} value={String(size)} className="font-bold">
+                                                    {size}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <span className="text-sm font-bold text-muted-foreground">per page</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
 
             {/* Create / Edit modal */}

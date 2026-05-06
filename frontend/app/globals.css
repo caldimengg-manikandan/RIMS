@@ -78,7 +78,7 @@
 
 .dark {
   /* Dark mode neutrals - Significantly lightened for 'Soft Grey' visibility */
-  --background: oklch(0.35 0.01 250); /* Mid-grey background */
+  --background: oklch(0.45 0.01 250); /* Softer Mid-grey background */
   --foreground: oklch(0.95 0.01 250);
 
   --card: oklch(0.40 0.01 250); /* Lighter grey cards */
@@ -309,4 +309,22 @@
   100% {
     transform: translate(120px, 40px) scale(1.08);
   }
+}
+
+/* 
+  View Transition API Overrides
+  Disables default cross-fade so circle-spread is the only animation 
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+  mix-blend-mode: normal !important;
+  display: block !important;
+}
+/* Ensure the old view stays visible while the new one spreads */
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 9999;
 }

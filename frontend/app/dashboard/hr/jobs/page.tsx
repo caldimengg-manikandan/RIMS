@@ -15,6 +15,13 @@ import { fetcher } from "@/app/dashboard/lib/swr-fetcher"
 import { performMutation } from "@/app/dashboard/lib/swr-utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 
 interface Job {
     id: number
@@ -94,7 +101,7 @@ export default function HRJobsPage() {
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1)
-    const JOBS_PER_PAGE = 10
+    const [pageSize, setPageSize] = useState(10)
 
     const filteredJobs = useMemo(() => {
         return jobs.filter(job => {
@@ -116,11 +123,12 @@ export default function HRJobsPage() {
         setCurrentPage(1)
     }, [searchTerm, statusFilter, sortBy])
 
-    const totalPages = Math.ceil(filteredJobs.length / JOBS_PER_PAGE)
-    const paginatedJobs = filteredJobs.slice(
-        (currentPage - 1) * JOBS_PER_PAGE,
-        currentPage * JOBS_PER_PAGE
-    )
+    const paginatedJobs = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filteredJobs.slice(start, start + pageSize)
+    }, [filteredJobs, currentPage, pageSize])
+
+    const totalPages = Math.ceil(filteredJobs.length / pageSize)
 
     const getStatusStyle = (status: string) => {
         switch (status) {
@@ -141,9 +149,9 @@ export default function HRJobsPage() {
                 icon={Briefcase}
             >
                 <div className="flex items-center gap-4">
-                    <div className="bg-primary/5 border border-primary/10 rounded-2xl px-6 py-4 flex flex-col items-end shadow-sm">
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Total Jobs Found</span>
-                        <span className="text-3xl font-black text-primary tabular-nums">
+                    <div className="bg-primary/10 dark:bg-white/5 border border-primary/20 dark:border-white/10 rounded-2xl gap-2 px-6 py-4 flex  items-end shadow-sm">
+                        <span className="text-[14px] font-bold text-primary dark:text-slate-200 uppercase tracking-widest">Total Jobs </span>
+                        <span className="text-[14px] font-black text-primary dark:text-white tabular-nums">
                             {isLoading ? "..." : filteredJobs.length}
                         </span>
                     </div>
@@ -377,34 +385,59 @@ export default function HRJobsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
-                    <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
-                        Showing {((currentPage - 1) * JOBS_PER_PAGE) + 1} - {Math.min(currentPage * JOBS_PER_PAGE, filteredJobs.length)} of {filteredJobs.length}
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="outline"
-                            size="lg"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1 || isLoading}
-                            className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                        >
-                            <ChevronLeft className="mr-2 h-5 w-5" /> Previous
-                        </Button>
-                        
-                        <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                            Page {currentPage} of {totalPages}
+                <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+                        <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                            Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredJobs.length)} of {filteredJobs.length}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1 || isLoading}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                            </Button>
+                            
+                            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Page {currentPage} of {totalPages}
+                            </div>
+
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages || isLoading}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                Next <ChevronRight className="ml-2 h-5 w-5" />
+                            </Button>
                         </div>
 
-                        <Button
-                            variant="outline"
-                            size="lg"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages || isLoading}
-                            className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                        >
-                            Next <ChevronRight className="ml-2 h-5 w-5" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-muted-foreground">Show</span>
+                            <Select
+                                value={String(pageSize)}
+                                onValueChange={(val) => {
+                                    setPageSize(Number(val));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                                    <SelectValue placeholder="10" />
+                                </SelectTrigger>
+                                <SelectContent className="min-w-[70px]">
+                                    {[5, 10, 20, 50, 100].map((size) => (
+                                        <SelectItem key={size} value={String(size)} className="font-bold">
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-sm font-bold text-muted-foreground">per page</span>
+                        </div>
                     </div>
                 </div>
             )}

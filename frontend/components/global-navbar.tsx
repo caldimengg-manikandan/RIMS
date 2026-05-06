@@ -9,6 +9,9 @@ import { ChevronRight } from 'lucide-react'
 import { UserNav } from '@/components/user-nav'
 import { NotificationBell } from '@/components/notification-bell'
 import { ModeToggle } from '@/components/mode-toggle'
+import { ThemeTogglerButton } from '@/components/animate-ui/components/buttons/theme-toggler'
+import useSWR from 'swr'
+import { APIClient } from '@/app/dashboard/lib/api-client'
 
 export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const [mounted, setMounted] = useState(false)
@@ -19,6 +22,10 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
   const { isAuthenticated, user } = useAuth()
+
+  const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+  const companyLogo = settings?.company_logo_url || "/calrims/logo-dark.png"
+  const companyName = settings?.company_name || "CALRIMS"
 
   if (!mounted) return null
 
@@ -47,17 +54,21 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
     </div>
   )
 
+  const logoLink = isAuthenticated 
+    ? (user?.role === 'candidate' ? '/jobs' : '/dashboard/hr') 
+    : '/'
+
   return (
     <nav className="sticky top-0 w-full z-50 bg-sidebar/95 backdrop-blur-xl border-b border-border shadow-sm h-16 flex items-center shrink-0">
       <div className="w-full px-4 md:px-8 flex items-center justify-between">
 
         {/* Left: Logo and Title */}
-        <Link href="" className="flex items-center gap-2 group">
+        <Link href={logoLink} className="flex items-center gap-2 group">
           <div className="bg-primary/10 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
-            <img src="/logo-dark.png" alt="Logo" className="h-5 w-auto dark:invert" />
+            <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[150px] group-hover:scale-105 transition-transform" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-foreground hidden lg:block">
-            CALRIMS
+          <span className="text-xl font-bold tracking-tight text-foreground hidden lg:block uppercase">
+            {companyName}
           </span>
         </Link>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -24,14 +24,25 @@ import {
     CreditCard,
     AlertTriangle,
     Eye,
-    RefreshCw
+    RefreshCw,
+    BarChart3,
+    BarChart,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { SendOfferDialog } from '@/components/send-offer-dialog'
 import { CapturePhotoDialog } from '@/components/capture-photo-dialog'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
-import { BarChart3, EyeOff } from 'lucide-react'
+import { EyeOff } from 'lucide-react'
 import { 
     Dialog, 
     DialogContent, 
@@ -80,8 +91,25 @@ export default function OnboardingPage() {
     const { data: resp, isLoading, mutate } = useSWR<OnboardingResponse>('/api/onboarding/candidates', fetcher)
     const candidates = resp?.items || []
     const totalCount = resp?.total || 0
+    
     const [search, setSearch] = useState('')
+    const [currentPage, setCurrentPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     const [showStats, setShowStats] = useState(true)
+
+    const filteredCandidates = useMemo(() => {
+        return candidates?.filter(c => 
+            c.candidate_name.toLowerCase().includes(search.toLowerCase()) ||
+            c.candidate_email.toLowerCase().includes(search.toLowerCase())
+        ) || []
+    }, [candidates, search])
+
+    const totalPages = Math.ceil(filteredCandidates.length / pageSize)
+    
+    const paginatedCandidates = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filteredCandidates.slice(start, start + pageSize)
+    }, [filteredCandidates, currentPage, pageSize])
 
     if (user && user.role !== 'hr' && user.role !== 'super_admin') {
         return (
@@ -93,11 +121,6 @@ export default function OnboardingPage() {
             </div>
         )
     }
-
-    const filteredCandidates = candidates?.filter(c => 
-        c.candidate_name.toLowerCase().includes(search.toLowerCase()) ||
-        c.candidate_email.toLowerCase().includes(search.toLowerCase())
-    )
 
     const [approvingCandidate, setApprovingCandidate] = useState<OnboardingCandidate | null>(null)
     const [isApproveOpen, setIsApproveOpen] = useState(false)
@@ -122,12 +145,29 @@ export default function OnboardingPage() {
             await APIClient.post(`/api/onboarding/applications/${id}/onboard`, {})
             toast.success("Candidate marked as onboarded")
             mutate()
-            // After successful join, automatically open the capture photo dialog
             setActiveCaptureId(id)
             setIsCaptureOpen(true)
         } catch (error: unknown) {
             const err = error as { response?: { data?: { error?: string } } }
             toast.error(err?.response?.data?.error || "Failed to complete onboarding. Candidate's joining date may not have arrived yet.")
+        }
+    }
+
+    const handleResendOffer = async (candidate: OnboardingCandidate) => {
+        if (!candidate.joining_date) {
+            toast.error("Cannot resend: joining date is missing.")
+            return
+        }
+        try {
+            const joiningDateISO = new Date(candidate.joining_date).toISOString()
+            await APIClient.post(
+                `/api/onboarding/applications/${candidate.id}/send-offer?joining_date=${encodeURIComponent(joiningDateISO)}&auto_approve=true`,
+                {}
+            )
+            toast.success(`Offer letter resent to ${candidate.candidate_name}`)
+            mutate()
+        } catch (error: any) {
+            toast.error(error.message || "Failed to resend offer letter.")
         }
     }
 
@@ -176,7 +216,7 @@ export default function OnboardingPage() {
                 icon={CheckCircle2}
             >
                 <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="h-10 px-4 bg-primary/5 text-primary border-primary/20 flex items-center justify-center font-bold text-sm rounded-xl">
+                    <Badge variant="outline" className="h-10 px-4 bg-primary/10 dark:bg-white/5 text-primary dark:text-white border-primary/20 dark:border-white/10 flex items-center justify-center font-bold text-sm rounded-xl">
                         {totalCount} {totalCount === 1 ? 'Candidate' : 'Candidates'}
                     </Badge>
                     <Button variant="outline" className="gap-2 h-11 px-5 rounded-xl border-border font-bold" onClick={exportToCSV}>
@@ -256,7 +296,10 @@ export default function OnboardingPage() {
                                 placeholder="Search candidates..." 
                                 className="pl-10 h-9"
                                 value={search}
-                                onChange={(e) => setSearch(e.target.value)}
+                                onChange={(e) => {
+                                    setSearch(e.target.value)
+                                    setCurrentPage(1)
+                                }}
                             />
                         </div>
                     </div>
@@ -281,14 +324,14 @@ export default function OnboardingPage() {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : filteredCandidates?.length === 0 ? (
+                            ) : paginatedCandidates?.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                                         No candidates found in onboarding phase.
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredCandidates?.map((candidate) => (
+                                paginatedCandidates?.map((candidate) => (
                                     <TableRow key={candidate.id} className="hover:bg-primary/5 transition-colors group">
                                         <TableCell className="py-4">
                                             <div className="flex items-center gap-3">
@@ -323,7 +366,6 @@ export default function OnboardingPage() {
                                                     if (candidate.status === 'accepted' || candidate.offer_response_status === 'accept' || candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
                                                     if (candidate.status === 'rejected' || candidate.offer_response_status === 'reject' || candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
                                                     
-                                                    // Check DB status directly — offer_email_status is async and may lag
                                                     if (candidate.status === 'offer_sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
                                                     if (candidate.status === 'pending_approval') return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] uppercase animate-pulse">⏳ Approval Pending</Badge>;
                                                     if (candidate.status === 'hired') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">🎉 Hired</Badge>;
@@ -331,9 +373,18 @@ export default function OnboardingPage() {
                                                     return <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">📄 Staging</Badge>;
                                                 })()}
                                                 
-                                                {candidate.offer_token_expiry && new Date(candidate.offer_token_expiry) < new Date() && candidate.offer_response_status === 'pending' && (
-                                                    <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter">Link Expired</span>
-                                                )}
+                                                {(() => {
+                                                    const isExpired = candidate.offer_token_expiry &&
+                                                        new Date(candidate.offer_token_expiry) < new Date() &&
+                                                        candidate.offer_response_status === 'pending'
+                                                    return (
+                                                        <>
+                                                            {isExpired && (
+                                                                <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter">Link Expired</span>
+                                                            )}
+                                                        </>
+                                                    )
+                                                })()}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
@@ -358,6 +409,20 @@ export default function OnboardingPage() {
                                                             </Button>
                                                         }
                                                     />
+                                                )}
+                                                {candidate.status === 'offer_sent' &&
+                                                    candidate.offer_token_expiry &&
+                                                    new Date(candidate.offer_token_expiry) < new Date() &&
+                                                    candidate.offer_response_status === 'pending' && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-8 gap-1.5 text-xs text-destructive border-destructive/50 hover:bg-destructive/10"
+                                                        onClick={() => handleResendOffer(candidate)}
+                                                    >
+                                                        <RefreshCcw className="h-3.5 w-3.5" />
+                                                        Resend Offer
+                                                    </Button>
                                                 )}
                                                 {candidate.status === 'pending_approval' && (user?.role === 'super_admin' || user?.role === 'hr') && (
                                                     <Button 
@@ -430,6 +495,62 @@ export default function OnboardingPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {totalPages > 1 && (
+                <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
+                        <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                            Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredCandidates.length)} of {filteredCandidates.length}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                            </Button>
+                            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm font-bold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Page {currentPage} of {totalPages}
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setCurrentPage(prev => prev + 1)}
+                                disabled={currentPage >= totalPages}
+                                className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                                Next <ChevronRight className="ml-2 h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-muted-foreground">Show</span>
+                            <Select
+                                value={String(pageSize)}
+                                onValueChange={(val) => {
+                                    setPageSize(Number(val));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="h-10 w-[85px] rounded-xl border-border bg-background font-bold shadow-none focus:ring-0">
+                                    <SelectValue placeholder="10" />
+                                </SelectTrigger>
+                                <SelectContent className="min-w-[70px]">
+                                    {[5, 10, 20, 50, 100].map((size) => (
+                                        <SelectItem key={size} value={String(size)} className="font-bold">
+                                            {size}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-sm font-bold text-muted-foreground">per page</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {activeCaptureId && (
                 <CapturePhotoDialog 

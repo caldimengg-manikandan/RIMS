@@ -35,9 +35,9 @@ export default function PipelinePage() {
 
                     </div>
                 </div>
-                <div className="flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-2xl border border-primary/20 shrink-0">
-                    <Users className="h-5 w-5 text-primary" />
-                    <span className="text-sm font-black text-primary">LIVE PIPELINE</span>
+                <div className="flex items-center gap-2 bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-2xl border border-primary/20 shrink-0">
+                    <Users className="h-5 w-5 text-primary dark:text-blue-200" />
+                    <span className="text-sm font-black text-primary dark:text-blue-50">LIVE PIPELINE</span>
                 </div>
             </div>
 

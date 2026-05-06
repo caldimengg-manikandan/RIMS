@@ -11,6 +11,8 @@ import {
   Loader2, Brain, Cpu, Globe, LucideIcon
 } from 'lucide-react'
 import { cn } from '@/app/dashboard/lib/utils'
+import useSWR from 'swr'
+import { APIClient } from '@/app/dashboard/lib/api-client'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -23,6 +25,10 @@ export default function RegisterPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+  const companyLogo = settings?.company_logo_url || "/calrims/logo-dark.png"
+  const companyName = settings?.company_name || "RIMS"
 
   const passwordLength = password.length >= 8
   const passwordUppercase = /[A-Z]/.test(password)
@@ -100,7 +106,7 @@ export default function RegisterPage() {
             </h2>
             <div className="inline-flex w-max items-center justify-center rounded-lg border border-white/10 bg-slate-950/40 px-4 py-2 backdrop-blur-md">
               <span className="text-xs font-bold tracking-[0.2em] uppercase text-white/90">
-                BY CALDIM
+                BY {companyName.toUpperCase()}
               </span>
             </div>
           </div>
@@ -168,10 +174,8 @@ export default function RegisterPage() {
           >
             {/* Logo for mobile only */}
             <div className="flex items-center gap-3 lg:hidden mb-8">
-               <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-                 <Zap className="w-6 h-6 text-primary" />
-               </div>
-               <span className="text-xl font-bold tracking-tight">Virtual HR</span>
+               <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[120px]" />
+               <span className="text-xl font-bold tracking-tight">{companyName}</span>
             </div>
 
             <div className="space-y-2 mb-8">

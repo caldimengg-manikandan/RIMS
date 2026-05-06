@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { ModeToggle } from '@/components/mode-toggle'
+import { APIClient } from '@/app/dashboard/lib/api-client'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { user, logout } = useAuth()
@@ -72,6 +73,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const pendingCount = pendingApps?.count ?? 0
     const ticketCount = ticketData?.count || 0
+
+    const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+    const companyLogo = settings?.company_logo_url || null
 
 
 
@@ -112,11 +116,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <div className="flex items-center gap-3 overflow-hidden group-data-[collapsible=icon]:hidden">
                         <Avatar className="h-10 w-10 border-2 border-sidebar-primary/20 shadow-sm ring-2 ring-sidebar-ring/50">
                             <AvatarImage
-                                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.email || user?.role || 'default')}`}
+                                src={companyLogo || user?.profile_image_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user?.email || user?.role || 'default')}`}
                                 alt={user?.full_name || 'User avatar'}
+                                className="bg-background object-cover"
                             />
                             <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-bold">
-                                {initials}
+                                {companyLogo ? (
+                                    <img src={companyLogo} className="h-full w-full object-contain" alt="Logo Fallback" />
+                                ) : initials}
                             </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">

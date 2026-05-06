@@ -63,13 +63,11 @@ export default function Home() {
 
   return (
     <div
-      className="relative min-h-screen font-sans selection:bg-primary/10 selection:text-primary-foreground overflow-x-hidden"
-      style={{ background: "#dde9f8" }}
+      className="relative min-h-screen font-sans selection:bg-primary/10 selection:text-primary-foreground overflow-x-hidden bg-[#dde9f8]"
     >
       {/* Hero Section */}
       <div
-        className="relative min-h-screen flex items-center overflow-hidden"
-        style={{ background: "#dde9f8" }}
+        className="relative min-h-screen flex items-center overflow-hidden bg-[#dde9f8]"
       >
         {/* ── Background pattern at 50% opacity ── */}
         <div
@@ -337,15 +335,6 @@ export default function Home() {
             transform: perspective(800px) rotateY(8deg) rotateX(-5deg) translateX(-12px) translateY(-18px);
             box-shadow: 12px 12px 40px rgba(59,130,246,0.15);
           }
-          .hero-title-stroke {
-            -webkit-text-stroke: 0px transparent;
-            transition: -webkit-text-stroke 0.35s ease, color 0.35s ease;
-          }
-          .hero-text-block:hover .hero-title-stroke {
-            color: transparent !important;
-            -webkit-text-stroke: 2.5px #000000;
-          }
-          /* Feature card glass & 3D tilt */
           .glass-feature-card {
             background: rgba(255, 255, 255, 0.95);
             border: 1px solid rgba(255, 255, 255, 0.6);
@@ -367,6 +356,9 @@ export default function Home() {
           }
           .glass-feature-card.tilt-up:hover {
             transform: perspective(1000px) rotateX(8deg) rotateY(0deg) translateY(-10px) scale(1.02);
+          }
+          .hero-title-stroke {
+            transition: color 0.35s ease;
           }
           @keyframes globeSlowPan {
             0% { transform: scale(1) translate(0, 0); }
@@ -620,8 +612,7 @@ export default function Home() {
 
               <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-tight">
                 <span
-                  className="hero-title-stroke whitespace-nowrap"
-                  style={{ color: "#000000" }}
+                  className="hero-title-stroke whitespace-nowrap text-slate-950"
                 >
                   Hire with the same precision
                 </span>
@@ -629,7 +620,7 @@ export default function Home() {
                   you use to build products.
                 </span>
               </h1>
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-xl mx-auto">
+              <p className="text-xl md:text-2xl text-slate-600 max-w-xl mx-auto">
                 Our Product runs structured, bias-free interviews, scores
                 skills, and turns every conversation into decision-ready
                 analytics.
@@ -1022,7 +1013,7 @@ export default function Home() {
                 <Link href="/auth/login?role=hr">
                   <Button
                     size="lg"
-                    className="bg-background text-foreground hover:bg-muted rounded-full px-7"
+                    className="bg-slate-950 text-white hover:bg-slate-900 rounded-full px-7"
                   >
                     Open the HR dashboard
                   </Button>
@@ -1142,8 +1133,8 @@ function BinaryColumn({
           animation: `binaryFall ${duration} linear infinite ${delay}`,
         }}
       >
-        <div className="text-primary/70 dark:text-primary/40">{text}</div>
-        <div className="text-primary/70 dark:text-primary/40">{text}</div>
+        <div className="text-primary/70">{text}</div>
+        <div className="text-primary/70">{text}</div>
       </div>
     </div>
   );
@@ -1164,11 +1155,11 @@ function FeatureCard({
     <div
       className={`glass-feature-card p-7 rounded-3xl group ${className || ""}`}
     >
-      <div className="mb-5 inline-flex items-center justify-center rounded-2xl bg-background/80 shadow-sm px-3 py-2 group-hover:scale-105 transition-transform">
+      <div className="mb-5 inline-flex items-center justify-center rounded-2xl bg-white/80 shadow-sm px-3 py-2 group-hover:scale-105 transition-transform">
         {icon}
       </div>
-      <h3 className="text-2xl font-bold tracking-tight mb-5">{title}</h3>
-      <div className="text-base font-medium text-foreground/80 leading-relaxed space-y-1">
+      <h3 className="text-2xl font-bold tracking-tight mb-5 text-slate-900">{title}</h3>
+      <div className="text-base font-medium text-slate-700 leading-relaxed space-y-1">
         {desc}
       </div>
     </div>
@@ -1178,12 +1169,12 @@ function FeatureCard({
 function ListItem({ text, dark = false }: { text: string; dark?: boolean }) {
   return (
     <li
-      className={`flex gap-3 items-center text-sm ${dark ? "text-primary-foreground" : "text-foreground"}`}
+      className={`flex gap-3 items-center text-sm ${dark ? "text-white" : "text-slate-800"}`}
     >
       <div
         className={`p-1.5 rounded-full ${
           dark
-            ? "bg-background/20 text-primary-foreground"
+            ? "bg-white/20 text-white"
             : "bg-primary/10 text-primary"
         }`}
       >

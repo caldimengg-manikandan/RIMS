@@ -379,6 +379,26 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current authenticated user info"""
     return current_user
 
+@router.put("/me", response_model=UserResponse)
+def update_current_user_info(
+    data: dict, 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """Update current user profile info"""
+    if "full_name" in data:
+        current_user.full_name = data["full_name"]
+    if "profile_image_url" in data:
+        current_user.profile_image_url = data["profile_image_url"]
+    
+    try:
+        db.commit()
+        db.refresh(current_user)
+        return current_user
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update profile")
+
 @router.post("/forgot-password")
 @limiter.limit("5/minute")
 def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
