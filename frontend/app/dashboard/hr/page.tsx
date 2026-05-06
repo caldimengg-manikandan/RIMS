@@ -28,8 +28,12 @@ import {
   X,
   Award,
   RotateCw,
-  RotateCcw
+  RotateCcw,
+  LayoutDashboard,
+  FileText,
+  AlertCircle
 } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -229,23 +233,20 @@ export default function HRDashboard() {
   return (
     <div className="p-4 md:p-0 space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Recruitment Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">AI-Powered Hiring Intelligence</p>
-        </div>
-      </div>
+      <PageHeader 
+        title="Recruitment Dashboard"
+        description="AI-Powered Hiring Intelligence"
+        icon={LayoutDashboard}
+      />
 
 
 
       {isSuperAdmin && pendingApprovals.length > 0 && (
-        <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl p-6 animate-in fade-in duration-300">
+        <Card className="shadow-none border border-border dark:border-slate-800 bg-card dark:bg-slate-900 rounded-xl p-6 animate-in fade-in duration-300">
           <CardHeader>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-slate-800 dark:text-slate-200">Pending HR Approvals</CardTitle>
+                <CardTitle className="text-foreground/80 dark:text-slate-200">Pending HR Approvals</CardTitle>
                 <CardDescription className="text-muted-foreground">Review newly registered HR users before they can login.</CardDescription>
               </div>
               <Badge variant="secondary" className="bg-primary text-primary-foreground">
@@ -307,14 +308,14 @@ export default function HRDashboard() {
 
         {/* Chart Section */}
         <div className="lg:col-span-2 animate-in fade-in duration-500 delay-300">
-          <Card className="h-full shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
+          <Card className="h-full shadow-none border border-border dark:border-slate-800 bg-card dark:bg-slate-900 rounded-xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-slate-800 dark:text-slate-200">Application Pipeline</CardTitle>
+                  <CardTitle className="text-foreground/80 dark:text-slate-200">Application Pipeline</CardTitle>
                   <CardDescription className="text-muted-foreground">Distribution of candidates by status</CardDescription>
                 </div>
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <div className="p-2 bg-muted/20 text-blue-600 rounded-lg">
                   <TrendingUp className="h-5 w-5" />
                 </div>
               </div>
@@ -329,9 +330,9 @@ export default function HRDashboard() {
 
         {/* Recent Activity / Quick Actions */}
         <div className="space-y-6 animate-in fade-in duration-500 delay-500">
-          <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl">
+          <Card className="shadow-none border border-border dark:border-slate-800 bg-card dark:bg-slate-900 rounded-xl">
             <CardHeader>
-              <CardTitle className="text-slate-800 dark:text-slate-200">Quick Actions</CardTitle>
+              <CardTitle className="text-foreground/80 dark:text-slate-200">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <ActionButton href="/dashboard/hr/applications" label="Review Applications" />
@@ -344,11 +345,11 @@ export default function HRDashboard() {
       </div>
 
       {/* Recent Interviews Table */}
-      <Card className="shadow-none border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl animate-in fade-in duration-500 delay-700">
+      <Card className="shadow-none border border-border dark:border-slate-800 bg-card dark:bg-slate-900 rounded-xl animate-in fade-in duration-500 delay-700">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-slate-800 dark:text-slate-200">Recent Interviews</CardTitle>
+              <CardTitle className="text-foreground/80 dark:text-slate-200">Recent Interviews</CardTitle>
               <CardDescription>Upcoming and recently completed sessions</CardDescription>
             </div>
             <Clock className="h-5 w-5 text-muted-foreground" />
@@ -356,14 +357,14 @@ export default function HRDashboard() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Filter Bar */}
-          <div className="flex flex-col md:flex-row gap-4 p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 items-center">
+          <div className="flex flex-col md:flex-row gap-4 p-4 bg-muted/50 dark:bg-slate-900/50 rounded-xl border border-border dark:border-slate-800 items-center">
             <div className="flex-1 w-full relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search candidates, roles, or IDs..."
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="bg-white dark:bg-slate-950 h-10 pl-10 pr-10 border-slate-200 focus:ring-primary shadow-sm"
+                className="bg-card dark:bg-slate-950 h-10 pl-10 pr-10 border-border focus:ring-primary shadow-sm"
               />
               {isFiltering && (
                 <RotateCw className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
@@ -376,7 +377,7 @@ export default function HRDashboard() {
                 value={jobFilter}
                 onValueChange={setJobFilter}
               >
-                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                <SelectTrigger className="bg-card dark:bg-slate-950 h-10 border-border shadow-sm">
                    <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
                    <SelectValue placeholder="All Jobs" />
                 </SelectTrigger>
@@ -396,7 +397,7 @@ export default function HRDashboard() {
                 value={filters.status}
                 onValueChange={(value) => setFilters({ ...filters, status: value })}
               >
-                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                <SelectTrigger className="bg-card dark:bg-slate-950 h-10 border-border shadow-sm">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -415,7 +416,7 @@ export default function HRDashboard() {
                 value={String(pageSize)}
                 onValueChange={(value) => setPageSize(Number(value))}
               >
-                <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-slate-200 shadow-sm">
+                <SelectTrigger className="bg-card dark:bg-slate-950 h-10 border-border shadow-sm">
                   <span className="text-xs text-muted-foreground mr-2">Show:</span>
                   <SelectValue placeholder="10" />
                 </SelectTrigger>
@@ -432,7 +433,7 @@ export default function HRDashboard() {
               variant="outline"
               size="icon"
               onClick={handleReset}
-              className="h-10 w-10 shrink-0 border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-sm"
+              className="h-10 w-10 shrink-0 border-border hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-sm"
               title="Reset all filters"
             >
               <RotateCcw className="h-4 w-4 text-muted-foreground" />
@@ -493,7 +494,7 @@ export default function HRDashboard() {
               {/* Pagination Controls */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
                 <div className="text-sm text-muted-foreground">
-                  Showing <span className="font-semibold text-slate-800 dark:text-slate-200">{Math.min(pageSize, paginatedInterviews?.total || recentInterviews.length)}</span> of <span className="font-semibold text-slate-800 dark:text-slate-200">{paginatedInterviews?.total || recentInterviews.length}</span> candidates
+                  Showing <span className="font-semibold text-foreground/80 dark:text-slate-200">{Math.min(pageSize, paginatedInterviews?.total || recentInterviews.length)}</span> of <span className="font-semibold text-foreground/80 dark:text-slate-200">{paginatedInterviews?.total || recentInterviews.length}</span> candidates
                 </div>
                 <div className="flex items-center gap-4">
                    <div className="text-sm font-medium text-muted-foreground mr-2">
@@ -549,7 +550,7 @@ const StatsCard = React.memo(({ title, value, icon: Icon, color, bg }: any) => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{value}</div>
+        <div className="text-3xl font-bold text-foreground dark:text-white mt-1">{value}</div>
       </CardContent>
     </Card>
   )

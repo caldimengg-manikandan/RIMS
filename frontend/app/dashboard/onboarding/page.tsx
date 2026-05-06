@@ -31,6 +31,7 @@ import { CapturePhotoDialog } from '@/components/capture-photo-dialog'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
+import { BarChart3, EyeOff } from 'lucide-react'
 import { 
     Dialog, 
     DialogContent, 
@@ -42,6 +43,7 @@ import {
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PageHeader } from '@/components/page-header'
 
 interface OnboardingCandidate {
     id: number
@@ -79,6 +81,7 @@ export default function OnboardingPage() {
     const candidates = resp?.items || []
     const totalCount = resp?.total || 0
     const [search, setSearch] = useState('')
+    const [showStats, setShowStats] = useState(true)
 
     if (user && user.role !== 'hr' && user.role !== 'super_admin') {
         return (
@@ -167,81 +170,85 @@ export default function OnboardingPage() {
 
     return (
         <div className="p-6 space-y-8 animate-in fade-in duration-700">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                        Onboarding Pipeline
-                        <Badge variant="outline" className="h-6 bg-primary/5 text-primary border-primary/20">
-                            {totalCount} {totalCount === 1 ? 'Candidate' : 'Candidates'}
-                        </Badge>
-                    </h1>
-                    <p className="text-muted-foreground mt-1">Track and manage newly hired candidates</p>
-                </div>
+            <PageHeader
+                title="Onboarding Pipeline"
+                description="Track and manage newly hired candidates"
+                icon={CheckCircle2}
+            >
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="gap-2" onClick={exportToCSV}>
+                    <Badge variant="outline" className="h-10 px-4 bg-primary/5 text-primary border-primary/20 flex items-center justify-center font-bold text-sm rounded-xl">
+                        {totalCount} {totalCount === 1 ? 'Candidate' : 'Candidates'}
+                    </Badge>
+                    <Button variant="outline" className="gap-2 h-11 px-5 rounded-xl border-border font-bold" onClick={exportToCSV}>
                         <Download className="h-4 w-4" />
                         Export Data
                     </Button>
-                    <Button className="gap-2" onClick={() => mutate()}>
-                        <RefreshCcw className="h-4 w-4" />
-                        Refresh
+                    <Button 
+                        variant={showStats ? "default" : "outline"}
+                        className={`gap-2 h-11 px-5 rounded-xl font-bold shadow-sm transition-all ${showStats ? 'bg-primary text-white' : 'border-border'}`} 
+                        onClick={() => setShowStats(!showStats)}
+                    >
+                        {showStats ? <EyeOff className="h-4 w-4" /> : <BarChart3 className="h-4 w-4" />}
+                        {showStats ? "Hide Stats" : "Show Stats"}
                     </Button>
                 </div>
-            </div>
+            </PageHeader>
 
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-border/50 bg-gradient-to-br from-blue-500/5 to-primary/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-500" />
-                            Pending Offers
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Action required: send letters</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-border/50 bg-gradient-to-br from-amber-500/5 to-amber-600/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-amber-500" />
-                            Upcoming Joinings (7d)
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">
-                            {candidates?.filter(c => {
-                                if (!c.joining_date) return false
-                                const jDate = new Date(c.joining_date)
-                                const now = new Date()
-                                const diff = jDate.getTime() - now.getTime()
-                                return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000
-                            }).length || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Reminders sent automatically</p>
-                    </CardContent>
-                </Card>
-                <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            Onboarded This Month
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black">
-                            {candidates?.filter(c => c.status === 'onboarded').length || 0}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Successfully closed hires</p>
-                    </CardContent>
-                </Card>
-            </div>
+            {showStats && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-4 duration-500 ease-out">
+                    <Card className="border-border/50 bg-gradient-to-br from-blue-500/5 to-primary/5">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-blue-500" />
+                                Pending Offers
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
+                            <p className="text-xs text-muted-foreground">Action required: send letters</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border/50 bg-gradient-to-br from-amber-500/5 to-amber-600/5">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-amber-500" />
+                                Upcoming Joinings (7d)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-black">
+                                {candidates?.filter(c => {
+                                    if (!c.joining_date) return false
+                                    const jDate = new Date(c.joining_date)
+                                    const now = new Date()
+                                    const diff = jDate.getTime() - now.getTime()
+                                    return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000
+                                }).length || 0}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Reminders sent automatically</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                Onboarded This Month
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-black">
+                                {candidates?.filter(c => c.status === 'onboarded').length || 0}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Successfully closed hires</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
 
             <Card className="border-border/50 shadow-sm overflow-hidden">
-                <CardHeader className="bg-muted/30 border-b p-4">
+                <CardHeader className="bg-muted/30 border-b">
                     <div className="flex items-center gap-4">
                         <div className="relative flex-1 max-w-sm">
                             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -446,7 +453,7 @@ export default function OnboardingPage() {
                         <Button variant="outline" onClick={() => setIsApproveOpen(false)}>Cancel</Button>
                         <Button 
                             className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
-                            onClick={() => handleApprove(approvingCandidate)}
+                            onClick={() => approvingCandidate && handleApprove(approvingCandidate)}
                         >
                             Confirm & Send
                         </Button>

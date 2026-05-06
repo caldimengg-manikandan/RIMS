@@ -8,7 +8,7 @@ import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { ChevronRight } from 'lucide-react'
 import { UserNav } from '@/components/user-nav'
 import { NotificationBell } from '@/components/notification-bell'
-import { ThemeTogglerButton } from '@/components/animate-ui/components/buttons/theme-toggler'
+import { ModeToggle } from '@/components/mode-toggle'
 
 export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const [mounted, setMounted] = useState(false)
@@ -30,7 +30,7 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
 
   const NavContent = () => (
     <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 md:p-0">
-      <ThemeTogglerButton variant="ghost" className="rounded-full text-white/70 hover:text-white hover:bg-white/10 hidden md:flex" />
+      <ModeToggle className="text-muted-foreground hover:text-foreground hover:bg-accent hidden md:flex" />
 
       {isDashboard ? (
         <div className="flex items-center gap-2 md:gap-4">
@@ -48,15 +48,15 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
   )
 
   return (
-    <nav className="sticky top-0 w-full z-50 bg-[#0a1a3c]/90 backdrop-blur-xl border-b border-white/5 shadow-2xl h-16 flex items-center shrink-0">
+    <nav className="sticky top-0 w-full z-50 bg-sidebar/95 backdrop-blur-xl border-b border-border shadow-sm h-16 flex items-center shrink-0">
       <div className="w-full px-4 md:px-8 flex items-center justify-between">
 
         {/* Left: Logo and Title */}
         <Link href="" className="flex items-center gap-2 group">
-          <div className="bg-primary/20 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
-            <img src="/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
+          <div className="bg-primary/10 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
+            <img src="/logo-dark.png" alt="Logo" className="h-5 w-auto dark:invert" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white hidden lg:block">
+          <span className="text-xl font-bold tracking-tight text-foreground hidden lg:block">
             CALRIMS
           </span>
         </Link>
@@ -68,11 +68,11 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
 
         {/* Mobile Navigation Toggle */}
         <div className="flex items-center gap-2 md:hidden">
-          <ThemeTogglerButton variant="ghost" className="rounded-full text-white/70" />
+          <ModeToggle className="text-muted-foreground" />
           <Button
             variant="ghost"
             size="icon"
-            className="text-white"
+            className="text-foreground"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             {isMenuOpen ? (
@@ -86,7 +86,7 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
-        <div className="absolute top-16 left-0 w-full bg-[#0a1a3c] border-b border-white/10 md:hidden animate-in slide-in-from-top duration-300">
+        <div className="absolute top-16 left-0 w-full bg-background border-b border-border md:hidden animate-in slide-in-from-top duration-300">
           <NavContent />
         </div>
       )}

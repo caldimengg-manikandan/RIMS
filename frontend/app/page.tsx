@@ -1052,7 +1052,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <img
                 src="/calrims/caldim-logo-dark.png"
-                alt="Caldim.ai Logo"
+                alt="Calrims Logo"
                 className="h-9 w-auto"
               />
               <span className="text-md font-bold text-white/90">

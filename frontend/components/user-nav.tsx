@@ -78,10 +78,6 @@ export function UserNav() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="opacity-50" />
                 <DropdownMenuGroup>
-                    <DropdownMenuItem className="cursor-pointer py-2.5 focus:bg-accent/40" onClick={() => router.push('/dashboard/hr/profile')}>
-                        <UserIcon className="mr-3 h-4 w-4 text-muted-foreground" />
-                        <span>Profile</span>
-                    </DropdownMenuItem>
                     <DropdownMenuItem className="cursor-pointer py-2.5 focus:bg-accent/40" onClick={() => router.push('/dashboard/settings')}>
                         <Settings className="mr-3 h-4 w-4 text-muted-foreground" />
                         <span>Settings</span>

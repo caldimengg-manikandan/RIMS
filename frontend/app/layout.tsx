@@ -5,8 +5,10 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { SWRProvider } from '@/app/dashboard/lib/swr-provider';
-import { ErrorBoundary } from '@/components/error-boundary';
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { GlobalNavbar } from '@/components/global-navbar'
+import { NavigationProgress } from '@/components/navigation-progress'
+import { ScrollContainer } from '@/components/scroll-container'
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'),
@@ -23,9 +25,6 @@ export const metadata: Metadata = {
   },
   generator: 'Caldim Engineering',
 }
-
-import { GlobalNavbar } from '@/components/global-navbar'
-import { NavigationProgress } from '@/components/navigation-progress'
 
 export default function RootLayout({
   children,
@@ -57,13 +56,9 @@ export default function RootLayout({
                     <header className="shrink-0 flex flex-col sticky top-0 z-[100]">
                       <GlobalNavbar />
                     </header>
-                    <main className="flex-1 min-h-0 overflow-y-auto w-full flex flex-col">
-                      <ErrorBoundary>
-                        <div className="h-full flex flex-col">
-                          {children}
-                        </div>
-                      </ErrorBoundary>
-                    </main>
+                    <ScrollContainer>
+                      {children}
+                    </ScrollContainer>
                     <Toaster richColors position="top-right" />
                   </TooltipProvider>
                 </div>

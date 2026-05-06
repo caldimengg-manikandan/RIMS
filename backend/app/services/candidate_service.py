@@ -156,7 +156,7 @@ class CandidateService:
 
         raw_access_key = secrets.token_urlsafe(16)
         hashed_key = pwd_context.hash(raw_access_key)
-        expiration = datetime.now(timezone.utc) + timedelta(hours=24)
+        expiration = datetime.now(timezone.utc) + timedelta(days=10)
 
         existing_interview = self.db.query(Interview).filter(
             Interview.application_id == application.id

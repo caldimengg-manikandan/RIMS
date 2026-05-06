@@ -13,7 +13,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BatchUploadModal } from '@/components/batch-upload-modal'
-import { UploadCloud, Download, Loader2, SearchX, CalendarDays, Briefcase, Clock, Filter } from 'lucide-react'
+import { UploadCloud, Download, Loader2, SearchX, CalendarDays, Briefcase, Clock, Filter, FileText } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { APIClient } from '@/app/dashboard/lib/api-client'
@@ -196,14 +197,11 @@ export default function BatchAnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Batch Resume Analysis</h1>
-          <p className="text-muted-foreground mt-2">
-            Upload and process multiple resumes, or export filtered candidate data.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Batch Analysis"
+        description="Upload and process multiple resumes, or export filtered candidate data."
+        icon={FileText}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ─── Bulk Upload Card ──────────────────────────── */}

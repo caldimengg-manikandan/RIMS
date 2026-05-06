@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import useSWR from 'swr'
+import { performMutation } from '@/app/dashboard/lib/swr-utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,7 +19,8 @@ import {
     XCircle,
     RotateCcw,
     MessageSquare,
-    Send
+    Send,
+    Star
 } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import Link from 'next/link'
@@ -30,8 +33,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import { PageHeader } from '@/components/page-header'
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface Ticket {
     id: number
@@ -63,9 +72,6 @@ interface Feedback {
     created_at: string
 }
 
-import useSWR from 'swr'
-import { performMutation } from '@/app/dashboard/lib/swr-utils'
-import { Star } from 'lucide-react'
 
 export default function HRTicketsPage() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
@@ -147,14 +153,11 @@ export default function HRTicketsPage() {
 
     return (
         <div className="w-full max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-4xl font-black text-foreground tracking-tight flex items-center gap-3">
-                        <LifeBuoy className="h-10 w-10 text-primary" />
-                        Support Tickets
-                    </h1>
-                    <p className="text-muted-foreground mt-2">Manage candidate issues and interruption reports.</p>
-                </div>
+            <PageHeader
+                title="Support Tickets"
+                description="Manage candidate issues and interruption reports."
+                icon={LifeBuoy}
+            >
                 <div className="flex bg-muted p-1 rounded-xl border border-border/50">
                     <Button
                         variant={filter === 'pending' ? 'default' : 'ghost'}
@@ -181,7 +184,7 @@ export default function HRTicketsPage() {
                         Feedback
                     </Button>
                 </div>
-            </div>
+            </PageHeader>
 
             {isLoading ? (
                 <div className="flex justify-center py-20">
@@ -211,28 +214,35 @@ export default function HRTicketsPage() {
                     </div>
                     <div className="divide-y divide-border/50">
                         {feedbacks.map((fb) => (
-                            <div key={fb.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group">
-                                <div className="col-span-2 flex gap-0.5">
-                                    {[1, 2, 3, 4, 5].map(star => (
-                                        <Star key={star} className={`h-4 w-4 ${star <= fb.ui_ux_rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/20'}`} />
-                                    ))}
-                                </div>
-                                <div className="col-span-3 min-w-0">
-                                    <div className="font-bold text-base truncate">{fb.candidate_name}</div>
-                                    <div className="text-sm text-muted-foreground truncate">{fb.candidate_email}</div>
-                                </div>
-                                <div className="col-span-3 text-sm font-semibold text-primary/80 truncate">
-                                    {fb.job_title}
-                                </div>
-                                <div className="col-span-3">
-                                    <p className="text-sm text-muted-foreground italic line-clamp-1">
-                                        {fb.feedback_text ? `"${fb.feedback_text}"` : "No specific comments"}
-                                    </p>
-                                </div>
-                                <div className="col-span-1 text-right text-xs font-medium text-muted-foreground">
-                                    {fb.created_at ? new Date(fb.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'N/A'}
-                                </div>
-                            </div>
+                            <Tooltip key={fb.id}>
+                                <TooltipTrigger asChild>
+                                    <div className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/30 transition-colors group cursor-pointer relative">
+                                        <div className="col-span-2 flex gap-0.5">
+                                            {[1, 2, 3, 4, 5].map(star => (
+                                                <Star key={star} className={`h-4 w-4 ${star <= fb.ui_ux_rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/20'}`} />
+                                            ))}
+                                        </div>
+                                        <div className="col-span-3 min-w-0">
+                                            <div className="font-bold text-base truncate">{fb.candidate_name}</div>
+                                            <div className="text-sm text-muted-foreground truncate">{fb.candidate_email}</div>
+                                        </div>
+                                        <div className="col-span-3 text-sm font-semibold text-primary/80 truncate">
+                                            {fb.job_title}
+                                        </div>
+                                        <div className="col-span-3">
+                                            <p className="text-sm text-muted-foreground italic line-clamp-1">
+                                                {fb.feedback_text ? `"${fb.feedback_text}"` : "No specific comments"}
+                                            </p>
+                                        </div>
+                                        <div className="col-span-1 text-right text-xs font-medium text-muted-foreground">
+                                            {fb.created_at ? new Date(fb.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'N/A'}
+                                        </div>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    Click to expand feedback
+                                </TooltipContent>
+                            </Tooltip>
                         ))}
                     </div>
                 </div>
@@ -248,32 +258,38 @@ export default function HRTicketsPage() {
                     </div>
                     <div className="divide-y divide-border/50">
                         {tickets.map((ticket) => (
-                            <div 
-                                key={ticket.id} 
-                                onClick={() => setSelectedTicket(ticket)}
-                                className="grid grid-cols-12 gap-4 px-0 py-4 items-center hover:bg-muted/30 transition-all cursor-pointer group"
-                            >
-                                <div className="col-span-1 flex justify-center">
-                                    {ticket.id}
-                                </div>
-                                <div className="col-span-2">
-                                    <Badge variant="outline" className={`text-xs font-black uppercase px-2 py-0 border-none ${getIssueTypeBadge(ticket.issue_type)}`}>
-                                        {ticket.issue_type.replace('_', ' ')}
-                                    </Badge>
-                                </div>
-                                <div className="col-span-3 min-w-0">
-                                    <div className="font-bold text-base truncate">{ticket.candidate_name}</div>
-                                    <div className="text-sm text-muted-foreground truncate">{ticket.candidate_email}</div>
-                                </div>
-                                <div className="col-span-4">
-                                    <p className="text-sm text-muted-foreground line-clamp-1 pr-4">
-                                        "{ticket.description}"
-                                    </p>
-                                </div>
-                                <div className="col-span-1 text-center text-xs font-medium text-muted-foreground">
-                                    {new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                </div>
-                            </div>
+                            <Tooltip key={ticket.id}>
+                                <TooltipTrigger asChild>
+                                    <div 
+                                        onClick={() => setSelectedTicket(ticket)}
+                                        className="grid grid-cols-12 gap-4 px-0 py-4 items-center hover:bg-muted/30 transition-all cursor-pointer group"
+                                    >
+                                        <div className="col-span-1 flex justify-center">
+                                            {ticket.id}
+                                        </div>
+                                        <div className="col-span-2">
+                                            <Badge variant="outline" className={`text-xs font-black uppercase px-2 py-0 border-none ${getIssueTypeBadge(ticket.issue_type)}`}>
+                                                {ticket.issue_type.replace('_', ' ')}
+                                            </Badge>
+                                        </div>
+                                        <div className="col-span-3 min-w-0">
+                                            <div className="font-bold text-base truncate">{ticket.candidate_name}</div>
+                                            <div className="text-sm text-muted-foreground truncate">{ticket.candidate_email}</div>
+                                        </div>
+                                        <div className="col-span-4">
+                                            <p className="text-sm text-muted-foreground line-clamp-1 pr-4">
+                                                "{ticket.description}"
+                                            </p>
+                                        </div>
+                                        <div className="col-span-1 text-center text-xs font-medium text-muted-foreground">
+                                            {new Date(ticket.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        </div>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    Click to open ticket
+                                </TooltipContent>
+                            </Tooltip>
                         ))}
                     </div>
                 </div>

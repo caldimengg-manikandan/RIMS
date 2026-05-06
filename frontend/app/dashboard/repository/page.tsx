@@ -25,6 +25,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from 'sonner'
+import { PageHeader } from '@/components/page-header'
+import { Badge } from "@/components/ui/badge"
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
 import {
     Database,
     Plus,
@@ -708,21 +718,16 @@ export default function RepositoryPage() {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Page header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-2.5">
-                        <Database className="h-6 w-6 text-primary" />
-                        Question Repository
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Manage reusable question sets for aptitude, technical, and behavioural rounds.
-                    </p>
-                </div>
-                <Button onClick={openCreate} className="gap-2 shrink-0" disabled={loadingDetail}>
+            <PageHeader
+                title="Question Repository"
+                description="Manage reusable question sets for aptitude, technical, and behavioural rounds."
+                icon={Database}
+            >
+                <Button onClick={openCreate} className="gap-2 shrink-0 h-12 px-6 font-bold rounded-xl shadow-md" disabled={loadingDetail}>
                     {loadingDetail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     Create New Set
                 </Button>
-            </div>
+            </PageHeader>
 
             {/* Filter bar */}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -768,16 +773,75 @@ export default function RepositoryPage() {
                     </Button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filtered.map(set => (
-                        <SetCard
-                            key={set.id}
-                            set={set}
-                            onEdit={openEdit}
-                            onDelete={setDeleteTarget}
-                        />
-                    ))}
-                </div>
+                <Card className="border-border/50 shadow-sm overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/20 hover:bg-muted/20">
+                                <TableHead className="font-bold py-4">Title</TableHead>
+                                <TableHead className="font-bold">Round Type</TableHead>
+                                <TableHead className="font-bold">Metadata</TableHead>
+                                <TableHead className="font-bold text-right pr-6">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filtered.map(set => (
+                                <TableRow key={set.id} className="hover:bg-primary/5 transition-colors group">
+                                    <TableCell className="py-4">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-bold text-foreground">{set.title}</span>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {set.topic_tags.map((t, i) => (
+                                                    <Badge key={i} variant="outline" className="text-[10px] h-4 font-normal bg-primary/5 text-primary border-primary/20">
+                                                        {t}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={`text-[10px] uppercase font-black px-2 py-0.5 border-none ${ROUND_TYPE_COLORS[set.round_type]}`}>
+                                            {set.round_type}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                                                <HelpCircle className="h-3.5 w-3.5" />
+                                                <span>{set.question_count} Questions</span>
+                                            </div>
+                                            {set.job_roles.length > 0 && (
+                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground opacity-70">
+                                                    <Users className="h-3 w-3" />
+                                                    <span className="truncate max-w-[200px]">{set.job_roles.join(', ')}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right pr-6">
+                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                onClick={() => openEdit(set)}
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() => setDeleteTarget(set)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Card>
             )}
 
             {/* Create / Edit modal */}

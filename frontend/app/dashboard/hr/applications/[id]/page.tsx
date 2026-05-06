@@ -62,7 +62,7 @@ const FSM_BUTTONS: Record<string, { action: string; label: string; icon: React.R
 }
 
 const RESUME_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-    pending: { label: "Resume: queued", color: "bg-slate-100 text-slate-700 border-slate-200" },
+    pending: { label: "Resume: queued", color: "bg-slate-100 text-foreground/80 border-border" },
     parsing: { label: "Resume: parsing…", color: "bg-sky-100 text-sky-800 border-sky-200" },
     parsed: { label: "Resume: ready", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     failed: { label: "Resume: failed", color: "bg-red-100 text-red-800 border-red-200" },
@@ -70,7 +70,7 @@ const RESUME_STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     applied: { label: "Applied", color: "bg-blue-100 text-blue-700 border-blue-200" },
-    screened: { label: "Screened", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+    screened: { label: "Screened", color: "bg-indigo-100 text-primary/80 border-indigo-200" },
     // interview_scheduled: { label: "Interview Scheduled", color: "bg-purple-100 text-purple-700 border-purple-200" },
     interview_completed: { label: "Interview Completed", color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
     review_later: { label: "Review Later", color: "bg-amber-100 text-amber-700 border-amber-200" },
@@ -288,7 +288,7 @@ export default function HRApplicationDetailPage() {
     return (
         <div className=" space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* ─── Candidate Info Card ───────────────────────────────── */}
-            <Card className=" border shadow-md bg-gradient-to-br from-white to-slate-50 relative overflow-hidden">
+            <Card className=" border shadow-md bg-gradient-to-br from-card to-muted/20 relative overflow-hidden">
                 <div className="absolute top-4 right-4 z-10 md:top-6 md:right-6">
                     <Badge className={`px-4 py-1.5 text-xs font-bold uppercase border shadow-sm whitespace-nowrap ${statusInfo.color}`}>
                         {statusInfo.label}
@@ -312,7 +312,7 @@ export default function HRApplicationDetailPage() {
                             <img
                                 src={application.photo_url}
                                 alt={application.candidate_name}
-                                className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-xl ring-1 ring-slate-200"
+                                className="w-24 h-24 rounded-2xl object-cover border-4 border-card shadow-xl ring-1 ring-border"
                             />
                         ) : (
                             <div className="w-24 h-24 rounded-2xl bg-primary/10 flex items-center justify-center border-2 border-primary/20 shadow-inner">
@@ -320,13 +320,13 @@ export default function HRApplicationDetailPage() {
                             </div>
                         )}
                         <div className="text-center md:text-left space-y-1">
-                            <CardTitle className="text-3xl font-extrabold tracking-tight text-slate-900">{application.candidate_name}</CardTitle>
-                            <CardDescription className="text-lg font-medium text-slate-500">{application.candidate_email}</CardDescription>
+                            <CardTitle className="text-3xl font-extrabold tracking-tight text-foreground">{application.candidate_name}</CardTitle>
+                            <CardDescription className="text-lg font-medium text-muted-foreground">{application.candidate_email}</CardDescription>
                             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
-                                <Badge variant="outline" className="bg-white text-slate-600 border-slate-200">
-                                    Applied for: <span className="ml-1 font-bold text-slate-900">{application.job?.title || 'Unknown Position'}</span>
+                                <Badge variant="outline" className="bg-card text-slate-600 border-border">
+                                    Applied for: <span className="ml-1 font-bold text-foreground">{application.job?.title || 'Unknown Position'}</span>
                                 </Badge>
-                                <Badge variant="outline" className="bg-white text-slate-600 border-slate-200 capitalize">
+                                <Badge variant="outline" className="bg-card text-slate-600 border-border capitalize">
                                     {application.job?.location || 'Remote'}
                                 </Badge>
                             </div>
@@ -343,7 +343,7 @@ export default function HRApplicationDetailPage() {
                         <Card className="border shadow-sm h-full flex flex-col">
                             <CardHeader>
                                 <CardTitle className="text-lg flex flex-wrap items-center gap-2 font-bold text-slate-800">
-                                    <FileText className="h-5 w-5 text-indigo-600" />
+                                    <FileText className="h-5 w-5 text-primary" />
                                     AI Resume Analysis
                                     <Badge
                                         variant="outline"
@@ -375,8 +375,8 @@ export default function HRApplicationDetailPage() {
                                     <>
                                         <div className="space-y-3">
                                             <div className="grid grid-cols-3 gap-3">
-                                                <div className="text-center p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex flex-col items-center justify-center">
-                                                    <p className="text-2xl font-black text-indigo-700 leading-none">
+                                                <div className="text-center p-3 bg-primary/10/50 rounded-xl border border-indigo-100 flex flex-col items-center justify-center">
+                                                    <p className="text-2xl font-black text-primary/80 leading-none">
                                                         {((resumeExtraction.resume_score || 0) * 10).toFixed(1)}
                                                     </p>
                                                     <TooltipProvider>
@@ -389,7 +389,7 @@ export default function HRApplicationDetailPage() {
                                                             </TooltipTrigger>
                                                             <TooltipContent className="max-w-xs border-indigo-100 shadow-xl p-3">
                                                                 <p className="text-xs font-bold mb-1 text-indigo-900">AI Scoring Reasoning</p>
-                                                                <p className="text-[11px] leading-relaxed text-slate-700">
+                                                                <p className="text-[11px] leading-relaxed text-foreground/80">
                                                                     {(typeof resumeExtraction.reasoning === 'object' && resumeExtraction.reasoning !== null) 
                                                                         ? (resumeExtraction.reasoning.ai_justification || "Automated analysis based on core skill density and experience verification.") 
                                                                         : (resumeExtraction.reasoning || "Automated analysis based on core skill density and experience verification.")}
@@ -402,25 +402,25 @@ export default function HRApplicationDetailPage() {
                                                     <p className="text-2xl font-black text-emerald-700">{resumeExtraction.skill_match_percentage?.toFixed(1) || '0'}%</p>
                                                     <p className="text-[10px] uppercase font-bold text-emerald-500 tracking-wider">Skill Match</p>
                                                 </div>
-                                                <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                                    <p className="text-lg font-bold text-slate-700 truncate">{resumeExtraction.years_of_experience || resumeExtraction.experience_years || '0'}y</p>
-                                                    <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Experience</p>
+                                                <div className="text-center p-3 bg-muted/30 rounded-xl border border-border/50">
+                                                    <p className="text-lg font-bold text-foreground/80 truncate">{resumeExtraction.years_of_experience || resumeExtraction.experience_years || '0'}y</p>
+                                                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Experience</p>
                                                 </div>
                                             </div>
-                                            <div className="w-full p-4 bg-slate-50 rounded-xl border border-slate-100 min-h-[4.5rem] flex flex-col justify-center">
+                                            <div className="w-full p-4 bg-muted/30 rounded-xl border border-border/50 min-h-[4.5rem] flex flex-col justify-center">
                                                 {educationItems.length > 0 ? (
-                                                    <ul className="text-sm font-bold text-slate-700 space-y-3 text-left">
+                                                    <ul className="text-sm font-bold text-foreground/80 space-y-3 text-left">
                                                         {educationItems.map((item: any, i: number) => (
                                                             <li key={i} className="flex gap-2 items-start">
                                                                 <span className="text-indigo-500 font-bold mt-1">•</span>
                                                                 <div className="flex flex-col">
                                                                     {typeof item === 'object' && item !== null ? (
                                                                         <>
-                                                                            <span className="text-slate-900 leading-tight">
+                                                                            <span className="text-foreground leading-tight">
                                                                                 {item.degree || item.field_of_study || 'Qualification'}
                                                                                 {item.degree && item.field_of_study && ` in ${item.field_of_study}`}
                                                                             </span>
-                                                                            <span className="text-[11px] text-slate-500 font-medium leading-tight mt-1">
+                                                                            <span className="text-[11px] text-muted-foreground font-medium leading-tight mt-1">
                                                                                 {item.university || item.school || 'Unknown Institution'}
                                                                                 {item.graduation_date && ` (${item.graduation_date})`}
                                                                             </span>
@@ -433,18 +433,18 @@ export default function HRApplicationDetailPage() {
                                                         ))}
                                                     </ul>
                                                 ) : (
-                                                    <p className="text-sm font-bold text-slate-700 text-center">N/A</p>
+                                                    <p className="text-sm font-bold text-foreground/80 text-center">N/A</p>
                                                 )}
-                                                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mt-2 text-center">Education</p>
+                                                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-2 text-center">Education</p>
                                             </div>
                                         </div>
 
                                         {skills.length > 0 && (
                                             <div>
-                                                <h4 className="font-bold text-xs mb-2 text-slate-500 uppercase tracking-widest">Detected Skills</h4>
+                                                <h4 className="font-bold text-xs mb-2 text-muted-foreground uppercase tracking-widest">Detected Skills</h4>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {skills.slice(0, 8).map((skill: string, i: number) => (
-                                                        <Badge key={i} variant="secondary" className="text-[10px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border-none px-2 py-0.5">
+                                                        <Badge key={i} variant="secondary" className="text-[10px] font-semibold bg-slate-100 text-foreground/80 hover:bg-slate-200 border-none px-2 py-0.5">
                                                             {skill}
                                                         </Badge>
                                                     ))}
@@ -456,24 +456,24 @@ export default function HRApplicationDetailPage() {
                                         {(resumeExtraction.summary || resumeExtraction.extracted_text) && (
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between">
-                                                    <h4 className="font-bold text-xs text-slate-500 uppercase tracking-widest">AI Summary</h4>
+                                                    <h4 className="font-bold text-xs text-muted-foreground uppercase tracking-widest">AI Summary</h4>
                                                     <Dialog>
                                                         <DialogTrigger asChild>
-                                                            <Button variant="link" size="sm" className="h-auto p-0 text-indigo-600 font-bold text-xs hover:no-underline flex items-center gap-1 group">
+                                                            <Button variant="link" size="sm" className="h-auto p-0 text-primary font-bold text-xs hover:no-underline flex items-center gap-1 group">
                                                                 View More <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                                                             </Button>
                                                         </DialogTrigger>
                                                         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw]">
                                                             <DialogHeader>
                                                                 <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-                                                                    <FileText className="h-5 w-5 text-indigo-600" />
+                                                                    <FileText className="h-5 w-5 text-primary" />
                                                                     AI Analysis Details
                                                                 </DialogTitle>
                                                             </DialogHeader>
                                                             <div className="space-y-6 py-4">
                                                                 <div className="grid grid-cols-3 gap-3">
-                                                                    <div className="text-center p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-                                                                        <p className="text-2xl font-black text-indigo-700">{((resumeExtraction.resume_score || 0) * 10).toFixed(1)}</p>
+                                                                    <div className="text-center p-4 bg-primary/10 rounded-xl border border-indigo-100">
+                                                                        <p className="text-2xl font-black text-primary/80">{((resumeExtraction.resume_score || 0) * 10).toFixed(1)}</p>
                                                                         <p className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider">Score</p>
                                                                     </div>
                                                                     <div className="text-center p-4 bg-emerald-50 rounded-xl border border-emerald-100">
@@ -481,11 +481,11 @@ export default function HRApplicationDetailPage() {
                                                                         <p className="text-[10px] uppercase font-bold text-emerald-500 tracking-wider">Skill Match</p>
                                                                     </div>
                                                                     <div className="text-center p-4 bg-slate-100 rounded-xl border">
-                                                                        <p className="text-xl font-bold text-slate-700 truncate">{resumeExtraction.years_of_experience || '0'}y</p>
-                                                                        <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Experience</p>
+                                                                        <p className="text-xl font-bold text-foreground/80 truncate">{resumeExtraction.years_of_experience || '0'}y</p>
+                                                                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Experience</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="bg-slate-50 p-4 rounded-xl border whitespace-pre-wrap text-sm text-slate-700 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+                                                                <div className="bg-muted/30 p-4 rounded-xl border whitespace-pre-wrap text-sm text-foreground/80 overflow-y-auto" style={{ maxHeight: '60vh' }}>
                                                                     {resumeExtraction.summary || resumeExtraction.extracted_text}
                                                                 </div>
                                                             </div>
@@ -501,7 +501,7 @@ export default function HRApplicationDetailPage() {
                                             <div className="pt-2">
                                                 <button 
                                                     onClick={() => handleDownloadResume(application.resume_file_path)}
-                                                    className="text-indigo-600 hover:underline text-xs font-bold flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer"
+                                                    className="text-primary hover:underline text-xs font-bold flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer"
                                                 >
                                                     <FileText className="h-3 w-3" /> Download Original Resume
                                                 </button>
@@ -529,7 +529,7 @@ export default function HRApplicationDetailPage() {
                                 ) : (
                                     <div className="text-center py-10 space-y-4">
                                         <RotateCw className={`h-8 w-8 text-slate-300 mx-auto ${actionLoading === 'retry' ? 'animate-spin' : ''}`} />
-                                        <p className="text-slate-500 font-medium text-sm">No resume analysis yet.</p>
+                                        <p className="text-muted-foreground font-medium text-sm">No resume analysis yet.</p>
                                         <Button variant="outline" size="sm" onClick={handleRetryAnalysis} disabled={actionLoading === 'retry'}>Retry Analysis</Button>
                                     </div>
                                 )}
@@ -547,7 +547,7 @@ export default function HRApplicationDetailPage() {
                             <CardContent className="pt-2 space-y-6 flex-grow flex flex-col">
                                 {report && isInterviewNotCompleted(report) && (
                                     <div className={`p-4 rounded-2xl border-2 mb-2 flex items-start gap-4 animate-in fade-in zoom-in duration-300 ${report.termination_reason ? 'bg-red-50 border-red-100 text-red-900' : 'bg-amber-50 border-amber-100 text-amber-900'}`}>
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${report.termination_reason ? 'bg-white text-red-600' : 'bg-white text-amber-600'}`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${report.termination_reason ? 'bg-card text-red-600' : 'bg-card text-amber-600'}`}>
                                             <AlertCircle className="w-6 h-6" />
                                         </div>
                                         <div className="flex-1">
@@ -582,7 +582,7 @@ export default function HRApplicationDetailPage() {
                                                         </TooltipTrigger>
                                                         <TooltipContent className="max-w-xs border-orange-100 shadow-xl p-3">
                                                             <p className="text-xs font-bold mb-1 text-orange-900">Interview Insight</p>
-                                                            <p className="text-[11px] leading-relaxed text-slate-700">
+                                                            <p className="text-[11px] leading-relaxed text-foreground/80">
                                                                 {(typeof report.reasoning === 'object' && report.reasoning !== null) 
                                                                     ? (report.reasoning.ai_summary || "Composite score derived from technical accuracy, communication, and depth analysis.") 
                                                                     : (report.reasoning || "Composite score derived from technical accuracy, communication, and depth analysis.")}
@@ -605,8 +605,8 @@ export default function HRApplicationDetailPage() {
                                             </div>
                                         </div>
                                         {report.recommendation && (
-                                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                                                <h4 className="font-bold text-xs mb-2 text-slate-500 uppercase tracking-widest">Recommendation</h4>
+                                            <div className="p-4 bg-muted/30 rounded-xl border border-border/50 text-center">
+                                                <h4 className="font-bold text-xs mb-2 text-muted-foreground uppercase tracking-widest">Recommendation</h4>
                                                 {(() => {
                                                     const rec = normalizeHireRecommendation(report.recommendation)
                                                     return (
@@ -615,7 +615,7 @@ export default function HRApplicationDetailPage() {
                                                                 {rec.label}
                                                             </Badge>
                                                             {rec.kind === "unknown" ? null : (
-                                                                <p className="text-[10px] text-slate-500 line-clamp-2" title={report.recommendation}>
+                                                                <p className="text-[10px] text-muted-foreground line-clamp-2" title={report.recommendation}>
                                                                     {report.recommendation.replace(/_/g, " ")}
                                                                 </p>
                                                             )}
@@ -633,7 +633,7 @@ export default function HRApplicationDetailPage() {
                                 ) : (
                                     <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 flex-grow">
                                         <Clock className="h-8 w-8 text-slate-300" />
-                                        <p className="text-slate-500 font-medium text-sm">Report available after completion.</p>
+                                        <p className="text-muted-foreground font-medium text-sm">Report available after completion.</p>
                                     </div>
                                 )}
                             </CardContent>
@@ -645,7 +645,7 @@ export default function HRApplicationDetailPage() {
                 {/* ─── Sidebar (Right) ─── */}
                 <div className="space-y-6">
                     {!isTerminal && buttons.length > 0 && (
-                        <Card className="border shadow-lg bg-white overflow-hidden">
+                        <Card className="border shadow-lg bg-card overflow-hidden">
                             <div className="h-1.5 bg-primary w-full" />
                             <CardHeader>
                                 <CardTitle className="text-lg font-bold">Pipeline Actions</CardTitle>
@@ -691,7 +691,7 @@ export default function HRApplicationDetailPage() {
                     <Card className="border shadow-sm overflow-hidden">
                         <div className="h-1 bg-amber-400 w-full" />
                         <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500">HR Notes</CardTitle>
+                            <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">HR Notes</CardTitle>
                             {!isEditingNotes && <Button variant="ghost" size="sm" onClick={() => setIsEditingNotes(true)}><Edit2 className="h-4 w-4" /></Button>}
                         </CardHeader>
                         <CardContent>
@@ -704,7 +704,7 @@ export default function HRApplicationDetailPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{application.hr_notes || "No notes yet."}</p>
+                                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{application.hr_notes || "No notes yet."}</p>
                             )}
                         </CardContent>
                     </Card>

@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
+import { ModeToggle } from '@/components/mode-toggle'
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { user, logout } = useAuth()
@@ -201,19 +202,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-blue-900 p-4">
+            <SidebarFooter className="border-t border-sidebar-border p-4">
                 <SidebarMenu>
-                    <SidebarMenuItem>
+                    <SidebarMenuItem className="flex items-center gap-2">
                         <SidebarMenuButton
                             onClick={logout}
                             tooltip="Sign Out"
-                            className="gap-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                            className="flex-1 gap-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                         >
                             <LogOut className="h-5 w-5 shrink-0" />
                             <span className="group-data-[collapsible=icon]:hidden">
                                 Sign Out
                             </span>
                         </SidebarMenuButton>
+                        <div className="group-data-[collapsible=icon]:hidden">
+                            <ModeToggle />
+                        </div>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarFooter>

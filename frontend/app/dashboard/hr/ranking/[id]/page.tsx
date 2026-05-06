@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trophy, Medal, Award, User, ArrowLeft, Users } from 'lucide-react'
+import { ArrowLeft, Loader2, Award, Users, Search, Filter, RotateCcw, LayoutDashboard } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { useRouter } from 'next/navigation'
 
 interface RankedCandidate {
@@ -58,12 +59,11 @@ export default function LeaderboardPage() {
                     <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
                     <span className="text-sm font-bold">Back to Jobs</span>
                 </Button>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight uppercase">AI Candidate Ranking</h1>
-                        <p className="text-xs font-bold text-muted-foreground mt-2 uppercase tracking-widest opacity-60">Weighted composite score: 40% Resume + 30% Aptitude + 30% AI Interview</p>
-                    </div>
-                </div>
+                <PageHeader
+                    title="AI Candidate Ranking"
+                    description="Weighted composite score: 40% Resume + 30% Aptitude + 30% AI Interview"
+                    icon={Award}
+                />
             </div>
 
             <Card className="border-border/60 shadow-lg bg-card">

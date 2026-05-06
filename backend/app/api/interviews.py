@@ -1040,7 +1040,7 @@ async def generate_test_token(
     import secrets
     new_key = secrets.token_urlsafe(16)
     interview.access_key_hash = pwd_context.hash(new_key)
-    interview.expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    interview.expires_at = datetime.now(timezone.utc) + timedelta(days=10)
     interview.is_used = False
     _set_interview_status(interview, "not_started")
     interview.used_at = None

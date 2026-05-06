@@ -160,27 +160,35 @@ def get_interview_reports(
 
         if from_date:
             try:
-                sd = datetime.strptime(from_date, "%Y-%m-%d").date()
+                sd = datetime.strptime(from_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
                 query = query.filter(or_(
-                    func.date(Interview.created_at) >= sd,
-                    func.date(Application.applied_at) >= sd
+                    Interview.created_at >= sd,
+                    Application.applied_at >= sd,
+                    InterviewReport.created_at >= sd
                 ))
             except ValueError:
                 pass
         if to_date:
             try:
-                ed = datetime.strptime(to_date, "%Y-%m-%d").date()
+                ed = datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
                 query = query.filter(or_(
-                    func.date(Interview.created_at) <= ed,
-                    func.date(Application.applied_at) <= ed
+                    Interview.created_at <= ed,
+                    Application.applied_at <= ed,
+                    InterviewReport.created_at <= ed
                 ))
             except ValueError:
                 pass
 
         if score_min is not None:
-            query = query.filter(Interview.overall_score >= score_min)
+            query = query.filter(or_(
+                Interview.overall_score >= score_min,
+                InterviewReport.overall_score >= score_min
+            ))
         if score_max is not None:
-            query = query.filter(Interview.overall_score <= score_max)
+            query = query.filter(or_(
+                Interview.overall_score <= score_max,
+                InterviewReport.overall_score <= score_max
+            ))
 
         total = query.count()
         applications = query.options(
@@ -492,9 +500,13 @@ def get_filtered_interviews(
     
     if date:
         try:
-            filter_date = datetime.strptime(date, "%Y-%m-%d").date()
-            from sqlalchemy import cast, Date
-            query = query.filter(cast(Application.applied_at, Date) == filter_date)
+            sd = datetime.strptime(date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            ed = sd.replace(hour=23, minute=59, second=59)
+            from sqlalchemy import or_
+            query = query.filter(or_(
+                Application.applied_at.between(sd, ed),
+                Interview.created_at.between(sd, ed)
+            ))
         except ValueError:
             pass
 

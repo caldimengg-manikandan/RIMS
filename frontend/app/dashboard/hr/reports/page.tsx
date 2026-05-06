@@ -8,9 +8,16 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
-import { Calendar } from "@/components/ui/calendar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useSearchParams } from 'next/navigation'
+
+// MUI Imports for Date Pickers
+import dayjs, { Dayjs } from 'dayjs'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { Box } from '@mui/material'
 import {
   Select,
   SelectContent,
@@ -46,7 +53,8 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts'
-import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity, Video, CameraOff } from 'lucide-react'
+import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity, Video, CameraOff, BarChart } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 
 import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
 import { StatusChart, DetailedMetricsChart, SkillProficiencyChart } from '@/components/reports/Charts'
@@ -185,6 +193,18 @@ export default function ReportsPage() {
 
   const [scoreRange, setScoreRange] = useState([0, 10])
   const [searchQuery, setSearchQuery] = useState(urlSearch || '')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery)
+
+  const [fromDate, setFromDate] = useState<Dayjs | null>(null)
+  const [toDate, setToDate] = useState<Dayjs | null>(null)
+
+  // Debounce search query
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [searchQuery])
 
   // Construct API URL with server-side filters
   const reportsApiUrl = useMemo(() => {
@@ -196,11 +216,18 @@ export default function ReportsPage() {
     if (skillFilter !== "All") q.set("skill", skillFilter);
 
     if (experienceFilter !== "All") q.set("experience", experienceFilter);
-    if (searchQuery) q.set("search", searchQuery);
+    if (debouncedSearchQuery) q.set("search", debouncedSearchQuery);
     if (scoreRange[0] > 0) q.set("score_min", String(scoreRange[0]));
     if (scoreRange[1] < 10) q.set("score_max", String(scoreRange[1]));
     
-    if (dateFilter) {
+    if (fromDate) {
+      q.set("from_date", fromDate.format('YYYY-MM-DD'));
+    }
+    if (toDate) {
+      q.set("to_date", toDate.format('YYYY-MM-DD'));
+    }
+
+    if (dateFilter && !fromDate && !toDate) {
       const year = dateFilter.getFullYear();
       const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
       const day = String(dateFilter.getDate()).padStart(2, '0');
@@ -210,7 +237,7 @@ export default function ReportsPage() {
     }
 
     return `/api/analytics/reports?${q.toString()}`;
-  }, [reportsPage, statusFilter, skillFilter, experienceFilter, searchQuery, dateFilter, scoreRange]);
+  }, [reportsPage, statusFilter, skillFilter, experienceFilter, debouncedSearchQuery, dateFilter, scoreRange, fromDate, toDate]);
 
   // Dedicated Heatmap Data (Unfiltered by date/score to keep heatmap consistent)
   const heatmapApiUrl = useMemo(() => {
@@ -298,7 +325,9 @@ export default function ReportsPage() {
     return status?.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || status
   }
 
-  const isLoading = isSWRDashboardLoading && reports.length === 0
+  // ONLY show the full page spinner on the very FIRST load when we have no data at all.
+  // Subsequent re-fetches (filters) will show the existing data while loading in the background (SWR behavior).
+  const isInitialLoading = isSWRDashboardLoading && !reportsResponse
   const [errorState, setError] = useState<string | null>(null) // renamed to avoid conflict with error from useSWR
 
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionEvaluation | null>(null)
@@ -327,7 +356,7 @@ export default function ReportsPage() {
 
   // Derived Data for Filters (Fetch from all reports for heatmap if needed, but for now we use what we have)
   const { data: allJobsData } = useSWR<any[]>('/api/jobs?limit=500', fetcher);
-  const uniqueExperiences = useMemo(() => ["intern", "junior", "mid", "senior", "lead", "architect"], [])
+  const uniqueExperiences = useMemo(() => ["intern", "junior", "mid", "senior", "lead"], [])
 
   // Derived Interview Counts for Calendar Heatmap
   const interviewCounts = useMemo(() => {
@@ -473,11 +502,13 @@ export default function ReportsPage() {
     setScoreRange([0, 10])
     setSearchQuery('')
     setDateFilter(undefined)
+    setFromDate(null)
+    setToDate(null)
 
     setReportsPage(1)
   }
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return (
       <div className="flex justify-center items-center h-screen bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -508,16 +539,11 @@ export default function ReportsPage() {
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-4 lg:h-[calc(100vh-7.5rem)]">
 
       {/* Header - Fixed at the top of the component */}
-      <div className="flex-none flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-            Interview Reports
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Analytics and detailed reports for {totalCount} candidates
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Interview Reports"
+        description={`Analytics and detailed reports for ${totalCount} candidates`}
+        icon={BarChart}
+      />
 
       {/* Question Detail Modal */}
       <Dialog open={!!selectedQuestion} onOpenChange={(open) => !open && setSelectedQuestion(null)}>
@@ -657,10 +683,10 @@ export default function ReportsPage() {
               </div>
             </CardHeader>
             <Separator />
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
               {/* Search */}
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="search">Search</Label>
+              <div className="grid w-full items-center gap-1">
+                <Label htmlFor="search" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500 dark:text-slate-400" />
                   <Input
@@ -674,10 +700,10 @@ export default function ReportsPage() {
               </div>
 
               {/* Job Filter */}
-              <div className="space-y-1.5">
-                <Label className="text-sm">Filter by Job</Label>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Filter by Job</Label>
                 <Select value={jobFilter} onValueChange={setJobFilter}>
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger className="w-full h-8 text-sm">
                     <SelectValue placeholder="All Jobs" />
                   </SelectTrigger>
                   <SelectContent>
@@ -690,12 +716,12 @@ export default function ReportsPage() {
               </div>
 
               {/* Grouped Status/Exp/Skill Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 {/* Status Filter */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Status</Label>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -709,10 +735,10 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Experience Filter */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Experience</Label>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Exp.</Label>
                   <Select value={experienceFilter} onValueChange={setExperienceFilter}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Exp." />
                     </SelectTrigger>
                     <SelectContent>
@@ -725,10 +751,10 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Skill Filter */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Skillset</Label>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Skills</Label>
                   <Select value={skillFilter} onValueChange={setSkillFilter}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Skills" />
                     </SelectTrigger>
                     <SelectContent>
@@ -744,10 +770,10 @@ export default function ReportsPage() {
 
 
               {/* Score Range */}
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <Label>Score Range</Label>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">{scoreRange[0]} - {scoreRange[1]}</span>
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Score Range</Label>
+                  <span className="text-[10px] font-bold text-primary">{scoreRange[0]} - {scoreRange[1]}</span>
                 </div>
                 <Slider
                   defaultValue={[0, 10]}
@@ -755,51 +781,120 @@ export default function ReportsPage() {
                   step={1}
                   value={scoreRange}
                   onValueChange={setScoreRange}
-                  className="my-4"
+                  className="py-2"
                 />
               </div>
 
 
-              <Separator />
+              <Separator className="my-1" />
 
               {/* Calendar */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label>Interview Dates</Label>
-                  {(dateFilter) && (
-                    <Button variant="ghost" size="sm" onClick={() => setDateFilter(undefined)} className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2">Clear Date</Button>
-                  )}
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Date Range</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <DatePicker
+                        label="From"
+                        value={fromDate}
+                        onChange={(newValue) => setFromDate(newValue)}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true,
+                            sx: {
+                              '& .MuiInputBase-root': { fontSize: '0.875rem' }
+                            }
+                          }
+                        }}
+                      />
+                      <DatePicker
+                        label="To"
+                        value={toDate}
+                        onChange={(newValue) => setToDate(newValue)}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: true,
+                            sx: {
+                              '& .MuiInputBase-root': { fontSize: '0.875rem' }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    {(fromDate || toDate) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFromDate(null)
+                          setToDate(null)
+                        }}
+                        className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2 w-full mt-1"
+                      >
+                        Clear Range
+                      </Button>
+                    )}
+                  </div>
 
-                </div>
-                <div className="flex justify-center bg-primary/5 rounded-xl p-2 border border-primary/10">
-                  <Calendar
-                    mode="single"
-                    selected={dateFilter}
-                    onSelect={setDateFilter}
-                    className="rounded-md border-none shadow-none w-full"
+                  <Separator />
 
-                    modifiers={{
-                      low: (date) => {
-                        const c = interviewCounts[date.toDateString()] || 0
-                        return c >= 1 && c <= 5
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center px-1">
+                      <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Select Date</Label>
+                      {dateFilter && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDateFilter(undefined)}
+                          className="h-5 text-[9px] text-muted-foreground hover:text-red-500 px-1"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    <Box sx={{
+                      bgcolor: 'hsl(var(--muted) / 0.3)',
+                      borderRadius: '12px',
+                      border: '1px solid hsl(var(--border))',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      '& .MuiDateCalendar-root': {
+                        width: '100%',
+                        height: 'auto',
+                        maxWidth: '400px',
+                        transform: 'scale(0.95)',
+                        transformOrigin: 'top center',
+                        margin: '-10px 0 -25px 0',
                       },
-                      medium: (date) => {
-                        const c = interviewCounts[date.toDateString()] || 0
-                        return c >= 6 && c <= 15
+                      '& .MuiPickersDay-root': {
+                        width: '32px',
+                        height: '32px',
+                        fontSize: '0.8rem',
+                        color: 'hsl(var(--foreground))',
                       },
-                      high: (date) => {
-                        const c = interviewCounts[date.toDateString()] || 0
-                        return c > 15
+                      '& .MuiTypography-root': {
+                        fontSize: '0.8rem',
+                        color: 'hsl(var(--foreground))',
+                      },
+                      '& .MuiSvgIcon-root': {
+                        color: 'hsl(var(--foreground))',
+                      },
+                      '& .MuiPickersDay-root.Mui-selected': {
+                        bgcolor: 'hsl(var(--primary)) !important',
+                        color: 'hsl(var(--primary-foreground))',
                       }
-                    }}
-                    modifiersClassNames={{
-                      low: "after:content-['•'] after:block after:text-[10px] after:leading-[0] after:text-primary/40 after:mt-1",
-                      medium: "after:content-['••'] after:block after:text-[10px] after:leading-[0] after:text-amber-500/60 after:mt-1",
-                      high: "after:content-['•••'] after:block after:text-[10px] after:leading-[0] after:text-destructive/60 after:mt-1"
-                    }}
-                  />
+                    }}>
+                      <DateCalendar
+                        value={dateFilter ? dayjs(dateFilter) : null}
+                        onChange={(newValue) => setDateFilter(newValue?.toDate())}
+                      />
+                    </Box>
+                  </div>
                 </div>
-              </div>
+              </LocalizationProvider>
             </CardContent>
           </Card>
         </div>

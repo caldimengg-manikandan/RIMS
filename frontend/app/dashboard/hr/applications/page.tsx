@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   User,
+  Users,
 } from "lucide-react";
 import {
   Card,
@@ -30,6 +31,7 @@ import { API_BASE_URL } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useApplicationsMutate } from "./hooks/use-applications-mutate";
+import { PageHeader } from "@/components/page-header";
 
 interface Application {
   id: number;
@@ -268,22 +270,18 @@ export default function HRApplicationsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-4xl font-black text-foreground mb-2 tracking-tight">
-            Applications
-          </h1>
-          <p className="text-muted-foreground">
-            Review and manage candidate applications.
-          </p>
-        </div>
+      <PageHeader
+        title="Applications"
+        description="Review and manage candidate applications."
+        icon={Users}
+      >
         <div className="bg-primary/5 border border-primary/10 rounded-2xl px-6 py-4 flex flex-col items-end shadow-sm">
           <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Total Records Found</span>
           <span className="text-3xl font-black text-primary tabular-nums">
             {isLoading ? "..." : totalCount}
           </span>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Filters Toolbar */}
       <div className="bg-card p-2 rounded-2xl border border-border/50 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
@@ -345,7 +343,7 @@ export default function HRApplicationsPage() {
 
           {/* Status Filter */}
           <div className="w-[200px]">
-            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Current Status</label>
+            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Status</label>
             <select
               className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
               value={statusFilter}
@@ -430,11 +428,11 @@ export default function HRApplicationsPage() {
             <div className="col-span-2 text-right">Actions</div>
           </div>
 
-          <div className="divide-y divide-border/50">
+          <div className="bg-card">
             {applications.map((app, index) => (
               <div
                 key={app.id}
-                className="grid grid-cols-12 gap-6 px-8 py-5 items-center hover:bg-muted/30 transition-all cursor-pointer group"
+                className="grid grid-cols-12 gap-6 px-8 py-5 items-center hover:bg-muted/50 transition-all cursor-pointer group border-b border-border shadow-[0_4px_12px_-4px_rgba(0,0,0,0.1)] last:border-0 dark:shadow-none dark:border-slate-800/50"
                 onClick={() => router.push(`/dashboard/hr/applications/${app.id}`)}
               >
                 {/* Candidate Info */}
@@ -625,7 +623,7 @@ export default function HRApplicationsPage() {
                     setApplicationsPage(nextPage);
                   }}
                   disabled={applicationsPage <= 1 || isLoading}
-                  className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
                   id="applications-prev-page"
                 >
                   <ChevronLeft className="mr-2 h-5 w-5" /> Previous
@@ -643,7 +641,7 @@ export default function HRApplicationsPage() {
                     setApplicationsPage(nextPage);
                   }}
                   disabled={!hasMoreApplications || isLoading}
-                  className="h-11 px-6 rounded-xl font-bold bg-white hover:bg-slate-50 border-slate-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                  className="h-11 px-6 rounded-xl font-bold bg-background dark:bg-muted hover:bg-accent border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
                   id="applications-next-page"
                 >
                   Next <ChevronRight className="ml-2 h-5 w-5" />

@@ -1,206 +1,109 @@
-# CALRIMS - Automated Recruitment System
+# CALRIMS - AI-Powered Recruitment Information Management System
 
-An AI-powered, fully automated recruitment platform with intelligent interviews, resume screening, data-driven hiring decisions, and a **premium user experience**.
+An industry-leading, fully automated recruitment platform that leverages cutting-edge AI to streamline hiring. From intelligent interviews and resume parsing to data-driven decision making, CALRIMS delivers a **premium, high-performance experience** for both HR teams and candidates.
 
-## 🌟 Recent Architecture & UI Upgrades
+## 🚀 Key Modern Enhancements
 
-We have recently overhauled the frontend to deliver a state-of-the-art visual experience:
+- **Next.js 16 + Tailwind CSS 4**: Built on the absolute latest frontend stack for unmatched performance and developer experience.
+- **Unified Global Navigation**: A responsive `GlobalNavbar` providing seamless transitions across landing, authentication, and dashboard views.
+- **AI-Driven Logic**: Integrated support for OpenAI, Anthropic, and Groq to provide flexible, intelligent assessments.
+- **Premium Aesthetics**: Sophisticated dark/light mode theming with glassmorphism (`backdrop-blur-xl`) and meticulous component design.
+- **Real-Time Interaction**: WebSocket-powered live interview engine for synchronous assessment and feedback.
 
-- **Unified Global Navigation**: A responsive, dynamically contextual Global Navbar (`GlobalNavbar`) that provides seamless, uninterrupted navigation across Landing, Authentication, and Dashboard views.
-- **Premium Theming**: Perfectly balanced Dark and Light modes featuring customized, glare-free navy (`blue-950`) color hierarchies, immersive glassmorphism (`backdrop-blur-xl`), and meticulously standardized 40x40 interactive layout icons.
-- **Immersive Authentication**: Completely redesigned, two-column interactive login and registration flows featuring dynamic animations and AI-generated HR branding.
+## 🛠️ Project Architecture
 
-## Project Overview
+CALRIMS is built as a robust, scalable microservices-ready application:
 
-This is a production-ready recruitment system consisting of:
+1.  **Frontend**: Next.js 16 (App Router) with TypeScript, Tailwind CSS, and Framer Motion.
+2.  **Backend**: High-performance FastAPI (Python 3.12+) with asynchronous handlers.
+3.  **Database**: PostgreSQL with SQLAlchemy 2.0 ORM and Alembic migrations.
+4.  **Storage**: Supabase Object Storage for resumes and media assets.
+5.  **Infrastructure**: Dockerized environment with Nginx and Redis for caching/rate-limiting.
 
-1. **PostgreSQL Database** - Relational database with 11 tables
-2. **Python FastAPI Backend** - RESTful API with AI integration
-3. **Next.js 16 Frontend** - Modern React UI for candidates and HR
+### System Overview
 
-### Key Features
-
-- **AI-Powered Interviews**: Adaptive, intelligent interviews that adjust questions based on responses
-- **Resume Screening**: Automatic parsing and skill matching against job requirements
-- **Role-Based Access**: Separate interfaces for candidates and HR managers
-- **Real-Time Pipeline**: Track applications through the hiring funnel
-- **Interview Reports**: Comprehensive AI-generated assessments with recommendations
-- **Data-Driven Decisions**: Detailed analytics and candidate scoring
-
----
-
-## Directory Structure
-
-```
-├── /
-│   ├── app/                          # Next.js frontend
-│   │   ├── auth/                     # Authentication pages
-│   │   │   ├── login/
-│   │   │   └── register/
-│   │   ├── dashboard/                # Protected dashboard
-│   │   │   ├── candidate/            # Candidate views
-│   │   │   └── hr/                   # HR views
-│   │   ├── page.tsx                  # Landing page
-│   │   ├── layout.tsx                # Root layout (now including Global Navbar)
-│   │   └── globals.css               # Global styles (custom premium palettes)
-│   ├── lib/
-│   │   ├── auth-context.tsx          # Auth state management
-│   │   ├── api-client.ts             # API client utility
-│   │   └── utils.ts                  # Helper functions
-│   ├── components/                   # Core components (Global Navbar, Sidebar, etc.)
-│   ├── .env.local                    # Frontend env vars
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── backend/                          # Python FastAPI backend
-│   ├── app/
-│   │   ├── main.py                   # FastAPI application
-│   │   ├── config.py                 # Settings
-│   │   ├── database.py               # Database connection
-│   │   ├── models.py                 # SQLAlchemy models
-│   │   ├── auth.py                   # JWT authentication
-│   │   ├── schemas.py                # Pydantic schemas
-│   │   ├── routes/                   # API endpoints
-│   │   └── services/
-│   │       └── ai_service.py         # OpenAI integration
-│   ├── requirements.txt              # Python dependencies
-│   ├── .env.example                  # Example env vars
-│   └── SETUP.md                      # Backend setup guide
-│
-├── DATABASE_SCHEMA.sql               # PostgreSQL schema
-├── SYSTEM_ARCHITECTURE.md            # Detailed architecture docs
-└── README.md                         # This file
+```mermaid
+graph TD
+    Client[Next.js Frontend] <--> API[FastAPI Backend]
+    API <--> DB[(PostgreSQL)]
+    API <--> Cache[(Redis)]
+    API <--> Storage[Supabase Storage]
+    API <--> AI[AI Providers: OpenAI/Anthropic/Groq]
 ```
 
----
-
-## System Architecture
+## 📁 Directory Structure
 
 ```
-┌─────────────────────────────────────────┐
-│  Next.js Frontend (React + TypeScript)  │
-│  - Candidate Portal                     │
-│  - HR Dashboard                         │
-└──────────────┬──────────────────────────┘
-               │ (REST API with JWT)
-┌──────────────▼──────────────────────────┐
-│  Python FastAPI Backend                 │
-│  - Authentication                       │
-│  - Job Management                       │
-│  - Application Handling                 │
-│  - AI Interview Engine                  │
-│  - Report Generation                    │
-│  - Decision Making                      │
-└──────────────┬──────────────────────────┘
-               │ (SQLAlchemy ORM)
-┌──────────────▼──────────────────────────┐
-│  PostgreSQL Database (hr_system)        │
-│  - Users, Jobs, Applications            │
-│  - Interviews, Reports, Decisions       │
-└──────────────────────────────────────────┘
-
-┌──────────────────────────────────────────┐
-│  OpenAI GPT-4o (External AI Service)     │
-│  - Resume Parsing                        │
-│  - Question Generation                   │
-│  - Answer Evaluation                     │
-│  - Report Generation                     │
-└──────────────────────────────────────────┘
+├── backend/                  # Python FastAPI backend
+│   ├── app/                  # Core application logic (Routes, Services, Models)
+│   ├── tests/                # Comprehensive test suite
+│   ├── scripts/              # Migration and maintenance scripts
+│   ├── Dockerfile            # Containerization settings
+│   └── requirements.txt      # Python dependencies
+├── frontend/                 # Next.js 16 frontend
+│   ├── app/                  # Next.js App Router (Auth, Dashboards, Landing)
+│   ├── components/           # Reusable UI components (Shadcn UI based)
+│   ├── lib/                  # Shared utilities, hooks, and context
+│   ├── tests/                # Playwright & Vitest suites
+│   └── package.json          # Node.js dependencies
+├── database/                 # Database schema and migration files
+├── docs/                     # Extended documentation and guides
+├── supabase/                 # Supabase configuration and edge functions
+├── docker-compose.prod.yml   # Production deployment orchestration
+└── README.md                 # Project documentation
 ```
 
----
+## ✨ Core Features
 
-## Quick Start
+- **AI Interview Engine**: Adaptive voice/text interviews that analyze candidate responses in real-time.
+- **Smart Resume Screening**: Automated skill extraction and matching against job requirements using LLMs.
+- **Advanced HR Analytics**: Data-driven insights into hiring pipelines, diversity, and time-to-hire.
+- **Integrated Support System**: Ticket management for both candidates and HR personnel.
+- **Onboarding Pipeline**: Automated workflows to transition candidates from 'Hired' to 'Onboarded'.
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions for Candidates, HR Managers, and Super Admins.
 
-### Prerequisites
+## 🚦 Quick Start
 
-- Node.js 18+ (for Next.js)
-- Python 3.9+ (for FastAPI)
-- PostgreSQL 12+ (database)
-- OpenAI API key (for AI features)
-
-### 1. Database Setup
-
-```bash
-# Create PostgreSQL database
-createdb -U postgres -h localhost hr_system
-
-# OR via psql
-psql -U postgres -c "CREATE DATABASE hr_system;"
-```
+### 1. Prerequisites
+- **Node.js**: 18.x or higher
+- **Python**: 3.9 - 3.12
+- **PostgreSQL**: 14+
+- **Redis**: 6+ (Optional for local dev)
 
 ### 2. Backend Setup
-
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-
-# Activate (Windows: venv\Scripts\activate)
-source venv/bin/activate
-
-# Copy env file
-cp .env.example .env
-
-# Edit .env with your settings
-# DATABASE_URL=postgresql+psycopg2://postgres:8765@localhost:5432/hr_system
-# OPENAI_API_KEY=sk-your-api-key-here
-
-# Install dependencies
+# Windows: venv\Scripts\activate | Unix: source venv/bin/activate
 pip install -r requirements.txt
-
-# Run server (tables auto-created)
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env
+# Configure your DATABASE_URL and API keys in .env
+python -m uvicorn app.main:app --reload --port 10000
 ```
-
-Server: `http://localhost:8000`
-API Docs: `http://localhost:8000/docs`
+*API Docs: [http://localhost:10000/docs](http://localhost:10000/docs)*
 
 ### 3. Frontend Setup
-
 ```bash
-# From root directory
-
-# Install dependencies
+cd frontend
 npm install
-
-# Create .env.local
-echo "NEXT_PUBLIC_API_BASE_URL=http://localhost:10000" > .env.local
-
-# Run dev server
 npm run dev
 ```
+*App URL: [http://localhost:3000](http://localhost:3000)*
 
-Frontend: `http://localhost:3000`
+### 4. Default Credentials
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **HR Manager** | `hr@company.com` | `password123` |
+| **Candidate** | `candidate@example.com` | `password123` |
 
-### 4. Test the System
+## 📚 Documentation & Guides
 
-**Test Credentials** (created automatically by backend):
-
-Candidate:
-
-- Email: `candidate@example.com`
-- Password: `password123`
-
-HR Manager:
-
-- Email: `hr@company.com`
-- Password: `password123`
-
----
-
-## Support & Documentation
-
-- **API Documentation**: `http://localhost:10000/docs` (Swagger UI)
-- **Frontend Dashboard**: `http://localhost:3000`
+For more detailed information, please refer to the following guides:
+- [Onboarding Guide](file:///c:/Users/aashi/OneDrive/Desktop/Project/rims/ONBOARDING_GUIDE.md) - Detailed setup for new developers.
+- [Client Setup Guide](file:///c:/Users/aashi/OneDrive/Desktop/Project/rims/CLIENT_SETUP_GUIDE.md) - Instructions for client deployments.
+- [Project Report](file:///c:/Users/aashi/OneDrive/Desktop/Project/rims/PROJECT_REPORT.md) - Technical overview and implementation details.
+- [Database Schema](file:///c:/Users/aashi/OneDrive/Desktop/Project/rims/DATABASE_SCHEMA.sql) - Visual representation of the relational model.
 
 ---
 
-## License
-
-This project was built with React, Next.js, and Python and is ready for production use.
-
----
-
-**Happy Hiring! 🚀**
+**Built with ❤️ for Modern Hiring Teams.**

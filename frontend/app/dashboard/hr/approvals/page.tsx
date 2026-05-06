@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Check, ArrowRight, Trash2 } from 'lucide-react'
+import { Check, ArrowRight, Trash2, UserCheck } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -151,20 +152,17 @@ export default function ApprovalsPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-primary">Admin management</p>
-          <h1 className="text-3xl font-semibold text-slate-900">HR Account Management</h1>
-          <p className="text-sm text-muted-foreground mt-2">Manage HR access, approve requests, and deactivate accounts.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/hr">
-            <Button variant="outline" className="whitespace-nowrap">
-              <ArrowRight className="mr-2 h-4 w-4" /> Back to dashboard
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="HR Management"
+        description="Manage HR access, approve requests, and deactivate accounts."
+        icon={UserCheck}
+      >
+        <Link href="/dashboard/hr">
+          <Button variant="outline" className="whitespace-nowrap font-bold h-11 px-6 rounded-xl shadow-sm hover:bg-accent border-border">
+            <ArrowRight className="mr-2 h-4 w-4" /> Back to dashboard
+          </Button>
+        </Link>
+      </PageHeader>
 
       <Tabs value={status} onValueChange={setStatus} className="w-full">
         <TabsList className="grid w-full grid-cols-3 max-w-md">

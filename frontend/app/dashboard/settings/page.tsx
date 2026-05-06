@@ -8,9 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { APIClient } from '@/app/dashboard/lib/api-client'
 import { toast } from "sonner"
-import { Building2, Mail, Phone, User, Image as ImageIcon, FileText, Save, Loader2, ShieldAlert } from 'lucide-react'
+import { Loader2, Save, Building2, User, Mail, Phone, FileText, ShieldAlert, Settings as SettingsIcon } from 'lucide-react'
+import { PageHeader } from '@/components/page-header'
 import { useAuth } from '@/app/dashboard/lib/auth-context'
 import { useRouter } from 'next/navigation'
+import { ModeToggle } from '@/components/mode-toggle'
 
 export default function SettingsPage() {
     const { user } = useAuth()
@@ -104,23 +106,21 @@ export default function SettingsPage() {
 
     return (
         <div className="p-6 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between">
-                <div>
-                    <h1 className="text-3xl font-extrabold tracking-tight">System Settings</h1>
-                    <p className="text-muted-foreground mt-1">Configure company details and automation templates</p>
-                </div>
-                <div className="flex justify-end pt-4">
-                    <Button 
-                        size="lg" 
-                        className="gap-2 px-8 font-bold" 
-                        onClick={handleSave}
-                        disabled={saving}
-                    >
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Save Changes
-                    </Button>
-                </div>
-            </div>
+            <PageHeader
+                title="System Settings"
+                description="Configure company details and automation templates"
+                icon={SettingsIcon}
+            >
+                <Button 
+                    size="lg" 
+                    className="font-bold gap-2 px-8 shadow-md rounded-xl h-12"
+                    onClick={handleSave}
+                    disabled={saving}
+                >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save Changes
+                </Button>
+            </PageHeader>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border-border/50 shadow-sm overflow-hidden">
@@ -228,6 +228,30 @@ export default function SettingsPage() {
                                     }}
                                     placeholder="+91 9876543210"
                                 />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* New Theme Preference Card */}
+                <Card className="border-border/50 shadow-sm overflow-hidden md:col-span-2">
+                    <CardHeader className="bg-muted/30">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Settings className="h-5 w-5 text-primary" />
+                                    Theme Preferences
+                                </CardTitle>
+                                <CardDescription>Choose how CAL-RIMS looks to you</CardDescription>
+                            </div>
+                            <ModeToggle />
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between gap-6">
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium">Appearance Mode</p>
+                                <p className="text-xs text-muted-foreground">Select between Light, Dark, or System default theme.</p>
                             </div>
                         </div>
                     </CardContent>

@@ -531,7 +531,7 @@ async def send_approved_for_interview_email(to_email: str, job_title: str, raw_a
     <html><body style="font-family:sans-serif; color:#333;">
       <h2>Interview Invitation</h2>
       <p>Your application for <strong>{job_title}</strong> has been approved!</p>
-      <p>Please use the secure link below to access the interview portal. This link is unique to you and expires in 24 hours.</p>
+      <p>Please use the secure link below to access the interview portal. This link is unique to you and expires in 10 days.</p>
       <div style="margin: 20px 0; text-align: center;">
         <a href="{access_url}" style="background-color: #2563eb; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Begin Interview</a>
       </div>
@@ -541,7 +541,7 @@ async def send_approved_for_interview_email(to_email: str, job_title: str, raw_a
       <p style="margin: 0 0 6px 0; font-weight:600;">Need help with your interview experience?</p>
       <p style="margin: 0 0 8px 0;">If you faced a technical issue, unexpected termination, or need to raise a grievance, use the Support Portal:</p>
       <p style="margin: 0 0 12px 0;">
-        👉 <a href="{support_url}" style="color:#2563eb; font-weight:700;">Support Portal Link</a>
+         <a href="{support_url}" style="color:#2563eb; font-weight:700;">Support Portal Link</a>
       </p>
       <p style="margin: 0; font-size:0.95em; color:#555;">Our HR team will review your request promptly and reach out if more details are needed.</p>
       <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;"/>
