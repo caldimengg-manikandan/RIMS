@@ -15,7 +15,6 @@ def ensure_global_settings_table(db: Session) -> None:
 
 @router.get("", response_model=GlobalSettingsResponse)
 def get_settings(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Fetch global settings."""
@@ -57,4 +56,4 @@ def update_settings(
     db.commit()
     
     # Return updated settings
-    return get_settings(current_user=current_user, db=db)
+    return get_settings(db=db)

@@ -128,6 +128,24 @@ export default function OnboardingPage() {
         }
     }
 
+    const handleResendOffer = async (candidate: OnboardingCandidate) => {
+        if (!candidate.joining_date) {
+            toast.error("Cannot resend: joining date is missing.")
+            return
+        }
+        try {
+            const joiningDateISO = new Date(candidate.joining_date).toISOString()
+            await APIClient.post(
+                `/api/onboarding/applications/${candidate.id}/send-offer?joining_date=${encodeURIComponent(joiningDateISO)}&auto_approve=true`,
+                {}
+            )
+            toast.success(`Offer letter resent to ${candidate.candidate_name}`)
+            mutate()
+        } catch (error: any) {
+            toast.error(error.message || "Failed to resend offer letter.")
+        }
+    }
+
     const handleGenerateID = async (id: number) => {
         try {
             const res = await APIClient.post(`/api/onboarding/applications/${id}/generate-id-card`, {}) as any
@@ -199,8 +217,8 @@ export default function OnboardingPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Action required: send letters</p>
+                        <div className="text-2xl font-black">{candidates?.filter(c => c.status === 'hired').length || 0}</div>
+                        <p className="text-xs text-muted-foreground">Hired — offer letter not yet issued</p>
                     </CardContent>
                 </Card>
                 <Card className="border-border/50 bg-gradient-to-br from-amber-500/5 to-amber-600/5">
@@ -324,9 +342,18 @@ export default function OnboardingPage() {
                                                     return <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">📄 Staging</Badge>;
                                                 })()}
                                                 
-                                                {candidate.offer_token_expiry && new Date(candidate.offer_token_expiry) < new Date() && candidate.offer_response_status === 'pending' && (
-                                                    <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter">Link Expired</span>
-                                                )}
+                                                {(() => {
+                                                    const isExpired = candidate.offer_token_expiry &&
+                                                        new Date(candidate.offer_token_expiry) < new Date() &&
+                                                        candidate.offer_response_status === 'pending'
+                                                    return (
+                                                        <>
+                                                            {isExpired && (
+                                                                <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter">Link Expired</span>
+                                                            )}
+                                                        </>
+                                                    )
+                                                })()}
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
@@ -351,6 +378,21 @@ export default function OnboardingPage() {
                                                             </Button>
                                                         }
                                                     />
+                                                )}
+                                                {/* Resend button for expired offer links */}
+                                                {candidate.status === 'offer_sent' &&
+                                                    candidate.offer_token_expiry &&
+                                                    new Date(candidate.offer_token_expiry) < new Date() &&
+                                                    candidate.offer_response_status === 'pending' && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-8 gap-1.5 text-xs text-destructive border-destructive/50 hover:bg-destructive/10"
+                                                        onClick={() => handleResendOffer(candidate)}
+                                                    >
+                                                        <RefreshCcw className="h-3.5 w-3.5" />
+                                                        Resend Offer
+                                                    </Button>
                                                 )}
                                                 {candidate.status === 'pending_approval' && (user?.role === 'super_admin' || user?.role === 'hr') && (
                                                     <Button 

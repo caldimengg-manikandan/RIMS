@@ -26,6 +26,7 @@ class User(Base):
     is_active = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     approval_status = Column(String(20), default='pending', index=True, nullable=True)
+    profile_image_url = Column(String(500), nullable=True)
     otp_code = Column(String(255), nullable=True)
     otp_expiry = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime, default=func.now(), server_default=func.now())

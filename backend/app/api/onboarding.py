@@ -119,13 +119,17 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
     """
     settings = get_settings()
     # Call the Next.js API route we created
-    # Note: Using localhost:3000 assuming frontend is running there during dev
-    pdf_service_url = f"{settings.frontend_base_url.rstrip('/')}/api/generate-pdf/"
+    # Ensure we use the correct base path even if env var is slightly misconfigured
+    frontend_url = os.environ.get("FRONTEND_BASE_URL") or settings.frontend_base_url
+    if "/calrims" not in frontend_url and settings.env != "production":
+        frontend_url = f"{frontend_url.rstrip('/')}/calrims"
+        
+    pdf_service_url = f"{frontend_url.rstrip('/')}/api/generate-pdf/"
     
     start_time = time.time()
     logger.info(f"Starting Puppeteer PDF generation request to {pdf_service_url} for {filename}...")
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         try:
             response = await client.post(
                 pdf_service_url,

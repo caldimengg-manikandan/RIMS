@@ -187,6 +187,10 @@ async def hire_candidate(
         raise HTTPException(status_code=500, detail="Failed to upload offer letter to storage.")
 
     # 8. Persist HiringDecision and update Application atomically
+    application.offer_sent = True
+    application.offer_sent_date = datetime.now(timezone.utc)
+    application.offer_pdf_path = storage_path
+    
     hiring_decision = HiringDecision(
         application_id=application_id,
         hr_id=current_user.id,

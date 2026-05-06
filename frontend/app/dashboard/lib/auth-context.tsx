@@ -12,6 +12,7 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   approval_status: 'pending' | 'approved' | 'rejected'
+  profile_image_url?: string
   created_at: string
 }
 

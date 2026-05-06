@@ -19,6 +19,7 @@ import {
     Camera, CameraOff, Video, Play, ShieldAlert, Cpu,
     ShieldCheck
 } from 'lucide-react'
+import useSWR from 'swr'
 import { IssueReportDialog, FeedbackDialog } from '@/components/interview-support'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -47,6 +48,9 @@ export default function InterviewPage() {
     const params = useParams()
     const router = useRouter()
     const interviewId = params.id as string
+
+    const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+    const companyLogo = settings?.company_logo_url || "/calrims/logo-dark.png"
 
     const [questions, setQuestions] = useState<Question[]>([])
     const [currentIndex, setCurrentIndex] = useState(0)
@@ -808,52 +812,21 @@ export default function InterviewPage() {
                 }
 
                 setCurrentIndex(startIdx)
-
-                // Load saved draft answer if exists
-                const savedAnswer = localStorage.getItem(`rims_draft_answer_${interviewId}_${startIdx}`);
-                if (savedAnswer) {
-                    setAnswer(savedAnswer);
-                    answerRef.current = savedAnswer;
+                const lastSavedAnswer = localStorage.getItem(`rims_draft_answer_${interviewId}_${startIdx}`);
+                if (lastSavedAnswer) {
+                    setAnswer(lastSavedAnswer);
+                    answerRef.current = lastSavedAnswer;
                 }
 
-                setVisitedIds(new Set([qs[startIdx].id]))
-                setInterviewStatus('active')
-            } else {
-                console.warn("Interview session has no questions yet.")
-                setInterviewStatus('active') // Still set to active so it doesn't show error page immediately
+                if (data.status === 'active' || data.status === 'in_progress' || data.status === 'aptitude') {
+                    setInterviewStatus('active')
+                } else {
+                    setInterviewStatus('ready')
+                }
             }
         } catch (err: any) {
-            console.error("Failed to load interview session:", err)
-            const errorMsg = err.message || ""
-
-            // Handled by APIClient already, but we add redundant safety check
-            const isAuthError =
-                errorMsg.includes('401') ||
-                errorMsg.includes('403') ||
-                errorMsg.includes('Unauthorized') ||
-                errorMsg.includes('Authentication failed') ||
-                errorMsg.includes('Invalid interview credentials') ||
-                errorMsg.includes('denied');
-
-            if (isAuthError) {
-                try {
-                    const guardKey = `interview_reauth_attempted_${interviewId}`
-                    const alreadyAttempted = sessionStorage.getItem(guardKey)
-                    if (alreadyAttempted) {
-                        // Prevent infinite redirect loops; show the error UI instead.
-                        setInterviewStatus('error')
-                        return
-                    }
-                    sessionStorage.setItem(guardKey, '1')
-                } catch (e) {
-                    // sessionStorage not available, continue anyway
-                }
-
-                localStorage.removeItem('interview_token')
-                router.push('/interview/access')
-            } else {
-                setInterviewStatus('error')
-            }
+            console.error("Load failed", err)
+            toast.error(err.message || "Failed to load interview")
         } finally {
             setIsLoading(false)
         }
@@ -861,438 +834,109 @@ export default function InterviewPage() {
 
     const startInterviewManual = async () => {
         try {
-            // STEP 1: Fullscreen First (Must be immediate for browser security)
+            await initOverallRecording()
+            // Try fullscreen but don't hard fail
             try {
                 if (!document.fullscreenElement) {
                     await document.documentElement.requestFullscreen()
                 }
-            } catch (err) {
-                console.warn("Fullscreen request denied or failed:", err)
-            }
+            } catch { }
 
-            // STEP 2: API Call to Backend
-            setIsLoading(true)
             await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/start`,
                 {},
-                `rims-${interviewId}-start-manual`,
+                `rims-${interviewId}-start`,
             )
-
-            // STEP 3: Media Access (Trigger camera/mic permissions)
-            await initOverallRecording()
-
-            // STEP 4: UI Transition (State change to revealed questions)
-            // loadData will update status to 'active' internally
-            await loadData()
-        } catch (err: any) {
-            console.error("Failed to start interview sequence:", err)
-
-            // Exit fullscreen immediately on error so user isn't trapped
-            if (document.fullscreenElement) {
-                try { document.exitFullscreen() } catch { }
-            }
-
-            if (err.message === "MEDIA_PERMISSION_DENIED") {
-                setMediaError(true)
-            } else if (err.message) {
-                toast.error("Operation failed: " + err.message)
-            }
-        } finally {
-            setIsLoading(false)
+            setInterviewStatus('active')
+            toast.success("Interview started. Good luck!")
+        } catch (err) {
+            console.error("Start failed", err)
+            toast.error("Failed to start interview. Please ensure camera/mic access.")
         }
     }
 
     const handleSubmit = async () => {
-        // Use ref for the latest value as state might be updated by transcription in the background
-        const currentAnswer = answerRef.current;
-        const isVoiceActive = isListening || isTranscribing || transcribeInFlightRef.current;
-
-        if (!currentAnswer.trim() && !isVoiceActive) return
         if (!currentQuestion || isSubmitting) return
-
-        setIsSubmitting(true)
-
-        // 1. If currently recording, stop it and wait for the transcription to start processing
-        if (isListening) {
-            stopRecording()
-            // Short grace period for the 'onstop' event and 'handleTranscribe' transition
-            await new Promise(r => setTimeout(r, 400));
-        }
-
-        // 2. Wait for any in-flight transcription to complete (max 15s)
-        if (isTranscribing || transcribeInFlightRef.current) {
-            const startTime = Date.now();
-            while ((isTranscribing || transcribeInFlightRef.current) && Date.now() - startTime < 15000) {
-                await new Promise(r => setTimeout(r, 200));
-            }
-        }
-
-        // 3. Final validation with the latest answer from the ref
-        const finalAnswer = answerRef.current;
-        if (!finalAnswer.trim()) {
-            setIsSubmitting(false)
+        const currentAnswer = answerRef.current;
+        if (!currentAnswer.trim()) {
+            toast.error("Please provide an answer before submitting.")
             return
         }
 
+        setIsSubmitting(true)
         try {
-            const res = await APIClient.postWithRequestId<any>(
+            await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/submit-answer`,
                 {
                     question_id: currentQuestion.id,
-                    answer_text: finalAnswer,
+                    answer_text: currentAnswer
                 },
-                `rims-${interviewId}-q-${currentQuestion.id}`,
+                `rims-${interviewId}-submit-${currentQuestion.id}`,
             )
 
-            if (res.idempotent_replay) {
-                toast.message('This answer was already submitted; showing the saved result.')
-            }
+            // Update local state
+            setQuestions(prev => prev.map(q =>
+                q.id === currentQuestion.id ? { ...q, is_answered: true, evaluation_pending: true } : q
+            ))
 
-            if (res.terminated) {
-                toast.error(res.message || "This interview session has been terminated.");
-                setInterviewStatus('completed');
-                return;
-            }
+            // Clear draft answer for this question
+            localStorage.removeItem(`rims_draft_answer_${interviewId}_${currentIndex}`);
 
-            // Update local state (evaluation may still be pending for non-aptitude)
-            const submittedQid = currentQuestion.id
-            const isAptitudeQ = (currentQuestion.question_type || '').toLowerCase() === 'aptitude'
-            const updatedQuestions = questions.map((q, idx) =>
-                idx === currentIndex
-                    ? {
-                        ...q,
-                        is_answered: true,
-                        evaluation_pending: !isAptitudeQ,
-                        evaluated_at: isAptitudeQ ? new Date().toISOString() : q.evaluated_at,
-                    }
-                    : q
-            )
-            setQuestions(updatedQuestions)
-            setAnswer('')
-            answerRef.current = '';
+            toast.success("Answer submitted successfully.")
 
-            if (!isAptitudeQ) {
-                if (evalPollRef.current) clearInterval(evalPollRef.current)
-                let polls = 0
-                evalPollRef.current = setInterval(async () => {
-                    polls += 1
-                    try {
-                        const qs = await APIClient.get<Question[]>(`/api/interviews/${interviewId}/questions`)
-                        if (Array.isArray(qs)) {
-                            setQuestions(qs)
-                            const row = qs.find((x) => x.id === submittedQid)
-                            if (row?.evaluated_at || polls >= 45) {
-                                if (evalPollRef.current) {
-                                    clearInterval(evalPollRef.current)
-                                    evalPollRef.current = null
-                                }
-                            }
-                        }
-                    } catch {
-                        if (evalPollRef.current) {
-                            clearInterval(evalPollRef.current)
-                            evalPollRef.current = null
-                        }
-                    }
-                }, 2000)
-            }
-
-            // Auto-move to next unanswered or just next
-            const nextUnanswered = updatedQuestions.findIndex((q, idx) => !q.is_answered && idx > currentIndex)
-            if (nextUnanswered !== -1) {
-                setCurrentIndex(nextUnanswered)
-            } else {
-                // If no more unanswered after this one, check ALL earlier questions
-                const earlierUnanswered = updatedQuestions.findIndex(q => !q.is_answered)
-                if (earlierUnanswered !== -1) {
-                    setCurrentIndex(earlierUnanswered)
-                } else {
-                    // --- Round Transition Logic ---
-                    if (isAptitudeQ) {
-                        try {
-                            setSectionMessage("Aptitude round completed! transitioning to interview rounds...")
-                            await APIClient.postWithRequestId<any>(
-                                `/api/interviews/${interviewId}/complete-aptitude`,
-                                {},
-                                `rims-${interviewId}-complete-aptitude`,
-                            )
-                            // Load technical/behavioral questions
-                            await loadData()
-                        } catch (err: any) {
-                            console.error("Transition error", err)
-                            toast.error("Failed to transition from aptitude round. Please refresh.")
-                        }
-                    } else {
-                        finishInterview(updatedQuestions)
-                    }
-                }
+            // Auto-advance
+            if (currentIndex < totalQuestions - 1) {
+                const nextIdx = currentIndex + 1
+                setCurrentIndex(nextIdx)
+                // Load draft for next question if exists
+                const nextDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${nextIdx}`);
+                setAnswer(nextDraft || '')
+                answerRef.current = nextDraft || ''
             }
         } catch (err: any) {
-            console.error("Submission error details:", err)
-            const errorMsg = err.message || "Failed to submit answer.";
-
-            // Handle common error states with UI feedback
-            if (errorMsg.includes("403") || errorMsg.includes("401") || errorMsg.includes("Unauthorized")) {
-                toast.error(`Session Error: ${errorMsg}. Redirecting to access page.`);
-                router.push('/interview/access');
-            } else {
-                toast.error(`${errorMsg}\n\nPlease check your internet connection and try again.`);
-            }
+            console.error("Submit failed", err)
+            toast.error(err.message || "Failed to submit answer")
         } finally {
             setIsSubmitting(false)
         }
     }
 
-    const finishInterview = async (manualQuestions?: Question[], isForced = false) => {
-        if (finishingInterviewRef.current) return
-
-        const qsToUse = manualQuestions || questions
-        const unansweredCount = qsToUse.filter(q => !q.is_answered).length
-
-        // If not forced and there are unanswered questions, navigate to first unanswered
-        if (unansweredCount > 0 && !isForced) {
-            const firstUnanswered = qsToUse.findIndex(q => !q.is_answered)
-            if (firstUnanswered !== -1) {
-                setCurrentIndex(firstUnanswered)
-                toast.message(`You have ${unansweredCount} unanswered question(s). Please answer all questions before submitting.`, {
-                    duration: 4000,
-                    position: 'top-center',
-                })
-            }
+    const finishInterview = async (terminationReason?: string, isForced = false) => {
+        const unanswered = questions.filter(q => !q.is_answered).length
+        if (unanswered > 0 && !isForced && !terminationReason) {
+            setConfirmEndInterview({ unansweredCount: unanswered, isForced: false })
+            return
+        }
+        if (isForced && !terminationReason) {
+            setConfirmEndInterview({ unansweredCount: unanswered, isForced: true })
             return
         }
 
-        // Final confirmation for the user
-        const confirmMsg = unansweredCount > 0
-            ? `You have ${unansweredCount} unanswered question(s). Are you sure you want to end the interview now? Your answered questions will be submitted.`
-            : `Are you sure you want to end and submit your interview?`
-
-        setConfirmEndInterview({ unansweredCount, isForced })
+        handleConfirmEndInterview(terminationReason)
     }
 
-    const handleConfirmEndInterview = async () => {
-        if (!confirmEndInterview) return
-        const { unansweredCount, isForced } = confirmEndInterview
+    const handleConfirmEndInterview = async (terminationReason?: string) => {
         setConfirmEndInterview(null)
-
-        finishingInterviewRef.current = true
-        interviewStatusRef.current = 'finishing'
+        setIsSubmitting(true)
         try {
-            setIsSubmitting(true)
             await stopOverallRecording()
-
-            // Pass force=true when explicitly forced (violations, timer, or user confirmed with unanswered questions)
-            const forceFlag = isForced || unansweredCount > 0
-            // Let the backend know the candidate deliberately ended early so it can update hr_notes
-            const endedEarly = isForced && unansweredCount > 0
-
             await APIClient.postWithRequestId(
                 `/api/interviews/${interviewId}/end`,
-                { force: forceFlag, ended_early: endedEarly },
-                `rims-${interviewId}-end`,
+                { termination_reason: terminationReason },
+                `rims-${interviewId}-end-final`,
             )
-            // Clear persistence
-            localStorage.removeItem(`rims_session_progress_${interviewId}`);
-            // Clear all draft answers for this interview
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(`rims_draft_answer_${interviewId}_`)) {
-                    localStorage.removeItem(key);
-                    i--; // Adjust index after removal
-                }
-            }
             setInterviewStatus('completed')
             setShowFeedbackDialog(true)
+            // Exit fullscreen on completion
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => { })
+            }
         } catch (err: any) {
-            console.error("Error finishing interview", err)
-            interviewStatusRef.current = 'active'
-            finishingInterviewRef.current = false
-            toast.error(err.message || "Failed to complete interview. Please try again.")
+            console.error("End failed", err)
+            toast.error(err.message || "Failed to end interview")
         } finally {
             setIsSubmitting(false)
-            finishingInterviewRef.current = false
         }
-    }
-
-    if (interviewStatus === 'preparing') {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-                <div className="text-center max-w-md px-6">
-                    <div className="relative w-20 h-20 mx-auto mb-6">
-                        <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-600 animate-spin" />
-                    </div>
-                    <p className="text-slate-800 font-semibold mb-2">Preparing your interview questions</p>
-                    <p className="text-slate-500 text-sm">This usually takes a few seconds. Please keep this page open.</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (mediaError && interviewStatus !== 'completed') {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
-                <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border-4 border-red-100">
-                    <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
-                        <CameraOff className="w-12 h-12 text-red-600" />
-                    </div>
-                    <h1 className="text-4xl font-black text-red-600 mb-4 tracking-tight uppercase">Permission Required</h1>
-
-                    <div className="bg-red-50/50 rounded-2xl p-8 mb-10 border border-red-100">
-                        <p className="text-slate-700 text-lg font-bold mb-4">
-                            Camera and microphone access are mandatory to proceed with this AI-proctored interview.
-                        </p>
-                        <div className="flex items-start gap-4 text-left bg-white p-4 rounded-xl border border-red-200">
-                            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
-                                <Lock className="w-4 h-4 text-amber-600" />
-                            </div>
-                            <p className="text-sm text-slate-600 font-medium">
-                                Click the <strong>"Lock" icon</strong> in your browser's address bar next to the URL and select <strong>"Allow"</strong> for Camera and Microphone.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <Button
-                            className="w-full bg-red-600 hover:bg-red-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-red-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
-                            onClick={startInterviewManual}
-                            disabled={isLoading}
-                        >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Retry & Grant Permissions <ChevronRight className="w-6 h-6" /></>}
-                        </Button>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center">
-                            You must grant permissions to start the session
-                        </p>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    if (interviewStatus === 'ready') {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
-                <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center border border-slate-200">
-                    <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-8 border-4 border-blue-50">
-                        <Play className="w-12 h-12 text-blue-600 ml-1" />
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight uppercase">Ready to Start?</h1>
-
-                    <div className="bg-blue-50/50 rounded-2xl p-6 mb-8 border border-blue-100/50">
-                        <h2 className="text-blue-700 font-bold mb-2 flex items-center justify-center gap-2">
-                            <ShieldCheck className="w-5 h-5" /> Proctoring Notice
-                        </h2>
-                        <p className="text-slate-600 text-sm font-medium leading-relaxed">
-                            To ensure interview integrity, <strong>Fullscreen mode</strong> and <strong>Camera proctoring</strong> will be enabled immediately upon clicking start.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 text-left">
-                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
-                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
-                                <ShieldCheck className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Security</p>
-                            <p className="text-xs font-bold text-slate-700">Protected session</p>
-                        </div>
-                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
-                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
-                                <Cpu className="w-5 h-5 text-purple-600" />
-                            </div>
-                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">AI Evaluated</p>
-                            <p className="text-xs font-bold text-slate-700">Dynamic analysis</p>
-                        </div>
-                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 group hover:border-blue-200 transition-colors">
-                            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
-                                <Clock className="w-5 h-5 text-green-600" />
-                            </div>
-                            <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Duration</p>
-                            <p className="text-xs font-bold text-slate-700">{interviewData?.duration_minutes || 60} min session</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <Button
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-blue-500/30 text-xl transition-all hover:scale-[1.02] active:scale-95"
-                            onClick={startInterviewManual}
-                            disabled={isLoading}
-                        >
-                            {isLoading ? (
-                                <Loader2 className="w-6 h-6 animate-spin" />
-                            ) : (
-                                "Begin Interview Now"
-                            )}
-                        </Button>
-                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest text-center">
-                            By clicking, you agree to our proctoring terms and conditions
-                        </p>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    if (interviewStatus === 'error') {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
-                <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-10 text-center border border-slate-200">
-                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100">
-                        <AlertTriangle className="w-10 h-10 text-red-500" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Error</h1>
-                    <p className="text-slate-500 mb-8">
-                        We encountered an issue loading your interview session. This may be due to an expired session or unauthorized access.
-                    </p>
-                    <Button
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold h-12 rounded-xl"
-                        onClick={() => router.push('/interview/access')}
-                    >
-                        Try Again / Re-login
-                    </Button>
-                </div>
-            </div>
-        )
-    }
-
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-                <div className="text-center">
-                    <div className="relative w-20 h-20 mx-auto mb-6">
-                        <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-600 animate-spin"></div>
-                    </div>
-                    <p className="text-slate-500 font-medium animate-pulse">Initializing Secure Interview Environment...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (interviewStatus === 'completed') {
-        return (
-            <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center p-6">
-                <div className="max-w-xl w-full bg-white rounded-3xl shadow-2xl p-12 text-center border border-slate-200">
-                    <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8 border border-green-200">
-                        <CheckCircle2 className="w-12 h-12 text-green-600" />
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Interview Complete</h1>
-                    <p className="text-slate-600 text-lg mb-10 leading-relaxed">
-                        Excellent work! Your responses have been captured and are being analyzed by our AI system. Our HR team will review your report shortly.
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 rounded-2xl shadow-lg shadow-blue-500/20"
-                            onClick={() => router.push('/jobs')}
-                        >
-                            Back to Jobs Page
-                        </Button>
-                    </div>
-                </div>
-                <FeedbackDialog
-                    open={showFeedbackDialog}
-                    onOpenChange={setShowFeedbackDialog}
-                    interviewId={interviewId}
-                />
-            </div>
-        )
     }
 
     const parseOptions = () => {
@@ -1314,12 +958,136 @@ export default function InterviewPage() {
             return 'bg-amber-400 border-amber-600 text-white shadow-sm ring-2 ring-amber-200'
         }
         if (q.is_answered) {
-            return 'bg-green-500 border-green-600 text-white shadow-sm'
+            return 'bg-green-50 border-green-600 text-white shadow-sm'
         }
         if (visitedIds.has(q.id)) {
             return 'bg-red-500 border-red-600 text-white shadow-sm'
         }
         return 'bg-blue-50 border-blue-200 text-blue-600'
+    }
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-6">
+                <div className="relative">
+                    <div className="w-20 h-20 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                    <Brain className="w-10 h-10 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+                </div>
+                <div className="text-center">
+                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Initializing Session</h2>
+                    <p className="text-slate-500 font-bold text-sm">Please wait while we prepare your environment...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (interviewStatus === 'preparing') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+                <div className="max-w-md w-full bg-white rounded-[3rem] p-12 shadow-2xl border border-blue-100 flex flex-col items-center">
+                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-8 border border-blue-100 relative">
+                        <div className="absolute inset-0 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <Cpu className="w-10 h-10 text-blue-600" />
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Generating Questions</h2>
+                    <p className="text-slate-600 font-bold mb-8 leading-relaxed">
+                        Our AI is tailoring questions based on the required skills. This usually takes 30-60 seconds...
+                    </p>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
+                        <div className="bg-blue-600 h-full animate-progress-indeterminate"></div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Processing Intelligence</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (interviewStatus === 'ready') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+                <div className="max-w-2xl w-full bg-white rounded-[3.5rem] p-16 shadow-2xl border border-blue-100 flex flex-col items-center">
+                    <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mb-10 shadow-xl shadow-blue-500/20 rotate-3 transition-transform hover:rotate-0">
+                        <ShieldCheck className="w-12 h-12 text-white" />
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900 mb-6 tracking-tight uppercase">Ready to Begin?</h1>
+                    <div className="grid grid-cols-2 gap-4 w-full mb-10">
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left">
+                            <Clock className="w-6 h-6 text-blue-600 mb-3" />
+                            <h3 className="font-black text-xs uppercase text-slate-400 mb-1">Duration</h3>
+                            <p className="font-bold text-slate-900">{interviewData?.duration_minutes || 60} Minutes</p>
+                        </div>
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left">
+                            <Target className="w-6 h-6 text-blue-600 mb-3" />
+                            <h3 className="font-black text-xs uppercase text-slate-400 mb-1">Skill Area</h3>
+                            <p className="font-bold text-slate-900">{interviewData?.locked_skill || 'General'}</p>
+                        </div>
+                    </div>
+                    <div className="bg-blue-50/50 p-8 rounded-[2rem] border border-blue-100 w-full mb-10 text-left space-y-4">
+                        <h4 className="font-black text-[10px] text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                            <Lock className="w-3 h-3" /> Integrity Requirements
+                        </h4>
+                        <ul className="space-y-2">
+                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                                Keep camera & mic active at all times
+                            </li>
+                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                                No tab switching or browser resizing
+                            </li>
+                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
+                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                                Stay in fullscreen throughout the session
+                            </li>
+                        </ul>
+                    </div>
+                    <Button
+                        size="lg"
+                        className="w-full h-20 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xl shadow-2xl shadow-blue-500/40 transition-all hover:-translate-y-1 active:scale-95"
+                        onClick={startInterviewManual}
+                    >
+                        START INTERVIEW NOW
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    if (interviewStatus === 'completed') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+                <div className="max-w-lg w-full bg-white rounded-[3.5rem] p-16 shadow-2xl border border-blue-100 flex flex-col items-center">
+                    <div className="w-24 h-24 bg-green-500 rounded-[2rem] flex items-center justify-center mb-10 shadow-xl shadow-green-500/20">
+                        <CheckCircle2 className="w-12 h-12 text-white" />
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight uppercase">Interview Finished</h1>
+                    <p className="text-slate-500 font-bold text-lg mb-12">
+                        Thank you for completing the assessment. Your results are being processed and will be reviewed by the HR team.
+                    </p>
+                    <div className="space-y-4 w-full">
+                        <Button
+                            variant="outline"
+                            className="w-full h-16 rounded-2xl border-2 border-slate-100 text-slate-900 font-black"
+                            onClick={() => router.push('/jobs')}
+                        >
+                            BROWSE MORE JOBS
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className="w-full h-12 text-slate-400 font-bold"
+                            onClick={() => setShowFeedbackDialog(true)}
+                        >
+                            Give Feedback
+                        </Button>
+                    </div>
+                </div>
+                <FeedbackDialog
+                    open={showFeedbackDialog}
+                    onOpenChange={setShowFeedbackDialog}
+                    interviewId={interviewId}
+                />
+            </div>
+        )
     }
 
     return (
@@ -1590,6 +1358,7 @@ export default function InterviewPage() {
                 {/* Question Info Bar (Replacing Header) */}
                 <div className="h-20 flex items-center justify-between px-10 relative z-20">
                     <div className="flex items-center gap-4">
+                        <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[140px]" />
                         <div className="bg-slate-900 text-white px-5 py-2 rounded-full flex items-center gap-2 shadow-lg">
                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Locked:</span>
                             <span className="text-xs font-bold tracking-wider">{interviewData?.locked_skill?.toUpperCase() || 'GENERAL'}</span>
@@ -1825,7 +1594,7 @@ export default function InterviewPage() {
                         <Button variant="outline" onClick={() => setConfirmEndInterview(null)}>Cancel</Button>
                         <Button
                             className={confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0 ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
-                            onClick={handleConfirmEndInterview}
+                            onClick={() => handleConfirmEndInterview()}
                         >
                             {confirmEndInterview?.isForced && (confirmEndInterview?.unansweredCount ?? 0) > 0 ? 'End Early' : 'Submit Interview'}
                         </Button>

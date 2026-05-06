@@ -9,6 +9,8 @@ import { ChevronRight } from 'lucide-react'
 import { UserNav } from '@/components/user-nav'
 import { NotificationBell } from '@/components/notification-bell'
 import { ThemeTogglerButton } from '@/components/animate-ui/components/buttons/theme-toggler'
+import useSWR from 'swr'
+import { APIClient } from '@/app/dashboard/lib/api-client'
 
 export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const [mounted, setMounted] = useState(false)
@@ -19,6 +21,10 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
   const { isAuthenticated, user } = useAuth()
+
+  const { data: settings } = useSWR('/api/settings', (url) => APIClient.get(url)) as { data: any }
+  const companyLogo = settings?.company_logo_url || "/calrims/logo-dark.png"
+  const companyName = settings?.company_name || "CALRIMS"
 
   if (!mounted) return null
 
@@ -47,17 +53,19 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
     </div>
   )
 
+  const logoLink = isAuthenticated 
+    ? (user?.role === 'candidate' ? '/jobs' : '/dashboard/hr') 
+    : '/'
+
   return (
     <nav className="sticky top-0 w-full z-50 bg-[#0a1a3c]/90 backdrop-blur-xl border-b border-white/5 shadow-2xl h-16 flex items-center shrink-0">
       <div className="w-full px-4 md:px-8 flex items-center justify-between">
 
         {/* Left: Logo and Title */}
-        <Link href="" className="flex items-center gap-2 group">
-          <div className="bg-primary/20 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
-            <img src="/logo-dark.png" alt="Logo" className="h-5 w-auto brightness-200" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white hidden lg:block">
-            CALRIMS
+        <Link href={logoLink} className="flex items-center gap-2 group">
+          <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[150px] group-hover:scale-105 transition-transform" />
+          <span className="text-xl font-bold tracking-tight text-white hidden lg:block uppercase">
+            {companyName}
           </span>
         </Link>
 

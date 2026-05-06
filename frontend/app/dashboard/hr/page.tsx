@@ -294,7 +294,8 @@ export default function HRDashboard() {
           bg="bg-amber-500/10"
         />
         <StatsCard
-          title="Offers Released"
+          title="Offer Letters Sent"
+          subtitle="Candidates who received an offer"
           value={r_metrics.offers_released}
           icon={CheckCircle}
           color="text-blue-600"
@@ -537,13 +538,18 @@ export default function HRDashboard() {
   )
 }
 
-const StatsCard = React.memo(({ title, value, icon: Icon, color, bg }: any) => {
+const StatsCard = React.memo(({ title, subtitle, value, icon: Icon, color, bg }: any) => {
   return (
     <Card className="shadow-sm hover:shadow-lg transition-all duration-300 border-border bg-card group hover:-translate-y-1">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base font-bold text-muted-foreground group-hover:text-foreground transition-colors">
-          {title}
-        </CardTitle>
+        <div>
+          <CardTitle className="text-base font-bold text-muted-foreground group-hover:text-foreground transition-colors">
+            {title}
+          </CardTitle>
+          {subtitle && (
+            <p className="text-xs text-muted-foreground/70 mt-0.5">{subtitle}</p>
+          )}
+        </div>
         <div className={`p-2 rounded-full ${bg}`}>
           <Icon className={`h-4 w-4 ${color}`} />
         </div>
