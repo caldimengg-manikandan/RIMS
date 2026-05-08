@@ -3,8 +3,9 @@
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Users } from 'lucide-react'
+import { ArrowLeft, Users, Trophy, GitBranch } from 'lucide-react'
 import { PipelineBoard } from '@/components/pipeline-board'
+import { PageHeader } from '@/components/page-header'
 import useSWR from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 
@@ -17,27 +18,42 @@ export default function PipelinePage() {
     const { data: job } = useSWR<any>(jobId ? `/api/jobs/${jobId}` : null, fetcher)
 
     return (
-        <div className="flex flex-col h-[calc(100vh-80px)] space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 px-4 pt-4">
-                <div className="space-y-4">
-                    <Button
-                        variant="ghost"
-                        onClick={() => router.push('/dashboard/hr/pipeline')} 
-                        className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group"
-                    >
-                        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-                        <span className="text-sm font-bold">Back to Pipeline</span>
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase leading-none">
-                            Job Specific Pipeline for {job?.title || `JOB #${jobId}`}
-                        </h1>
+        <div className="flex flex-col lg:h-[calc(100vh-7.5rem)] gap-6 overflow-hidden">
+            <div className="flex flex-col gap-4 shrink-0 px-4 pt-4">
+                <Button
+                    variant="ghost"
+                    onClick={() => router.push('/dashboard/hr/pipeline')} 
+                    className="gap-2 text-muted-foreground hover:text-foreground h-auto p-0 flex items-center transition-colors group w-fit"
+                >
+                    <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+                    <span className="text-sm font-bold">Back to Pipeline</span>
+                </Button>
+                
+                <div className="flex items-center justify-between gap-4">
+                    <PageHeader
+                        title={`Pipeline: ${job?.title || "Loading..."}`}
+                        description={`Visual workflow management for Job #${jobId}`}
+                        icon={GitBranch}
+                    />
 
+                    <div className="inline-flex items-center rounded-xl border border-border/60 bg-muted/30 p-1">
+                        <Button
+                            size="sm"
+                            className="rounded-lg h-8 px-3"
+                        >
+                            <Users className="h-4 w-4 mr-1.5" />
+                            Pipeline View
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => router.push(`/dashboard/hr/ranking/${jobId}`)}
+                            className="rounded-lg h-8 px-3 text-muted-foreground"
+                        >
+                            <Trophy className="h-4 w-4 mr-1.5" />
+                            Ranking View
+                        </Button>
                     </div>
-                </div>
-                <div className="flex items-center gap-2 bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-2xl border border-primary/20 shrink-0">
-                    <Users className="h-5 w-5 text-primary dark:text-blue-200" />
-                    <span className="text-sm font-black text-primary dark:text-blue-50">LIVE PIPELINE</span>
                 </div>
             </div>
 

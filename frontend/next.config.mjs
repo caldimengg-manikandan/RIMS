@@ -16,8 +16,6 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      // Redirect bare root (e.g. localhost:3000) → /calrims/
-      // basePath:false means this runs BEFORE basePath is applied
       {
         source: '/',
         destination: '/calrims/',

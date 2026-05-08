@@ -17,6 +17,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { PickerDay } from '@mui/x-date-pickers'
+import type { PickerDayProps } from '@mui/x-date-pickers'
 import { Box } from '@mui/material'
 import {
   Select,
@@ -36,6 +38,7 @@ import {
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import useSWR, { mutate } from 'swr'
 import { fetcher } from '@/app/dashboard/lib/swr-fetcher'
 import { API_BASE_URL } from '@/lib/config'
@@ -50,11 +53,12 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer
 } from 'recharts'
-import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity, Video, CameraOff, BarChart } from 'lucide-react'
+import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle, RotateCcw, Activity, Video, CameraOff, BarChart, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
+import { cn } from '@/app/dashboard/lib/utils'
 
 import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
 import { StatusChart, DetailedMetricsChart, SkillProficiencyChart } from '@/components/reports/Charts'
@@ -70,8 +74,13 @@ import {
 
 // Constants
 const SKILL_CATEGORIES = [
-  "backend", "frontend", "fullstack", "devops", "networking",
-  "data", "mobile", "aec_bim", "hr", "qa_testing", "ui_ux", "cybersecurity"
+  "backend", "business_analyst", "business_intelligence", "CAE-MECHANICAL",
+  "customer_support", "cybersecurity", "data_analysis", "database_admin",
+  "devops", "digital_marketing", "electrical", "embedded_systems",
+  "finance_accounting", "frontend", "fullstack", "generative_ai",
+  "graphic_design", "healthcare_it", "hr", "instrumentation", "legal",
+  "mobile", "networking", "project_management", "qa_testing", "sales_crm",
+  "Steel_detailing", "ui_ux", "video_editing"
 ]
 
 // Types
@@ -177,14 +186,16 @@ function getRecommendationColor(score: number) {
 }
 
 export default function ReportsPage() {
+
   const searchParams = useSearchParams()
   const urlReportId = searchParams.get('reportId')
   const urlSearch = searchParams.get('search')
 
   // Pagination & Filter State
   const [reportsPage, setReportsPage] = useState(1);
-  const REPORTS_PER_PAGE = 25;
-  const [statusFilter, setStatusFilter] = useState('All')
+  const [reportsPerPage, setReportsPerPage] = useState(10);
+  const [activeTab, setActiveTab] = useState('detailed');
+  const [statusFilter, setStatusFilter] = useState('Default')
   const [jobFilter, setJobFilter] = useState('All')
 
   const [skillFilter, setSkillFilter] = useState('All')
@@ -192,52 +203,67 @@ export default function ReportsPage() {
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined)
 
   const [scoreRange, setScoreRange] = useState([0, 10])
+  const [pendingScoreRange, setPendingScoreRange] = useState([0, 10])
   const [searchQuery, setSearchQuery] = useState(urlSearch || '')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery)
 
   const [fromDate, setFromDate] = useState<Dayjs | null>(null)
   const [toDate, setToDate] = useState<Dayjs | null>(null)
 
-  // Debounce search query
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery)
-    }, 500)
-    return () => clearTimeout(handler)
-  }, [searchQuery])
+  // Applied state for manual triggering
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: '',
+    status: 'Default',
+    job: 'All',
+    skill: 'All',
+    experience: 'All',
+    score: [0, 10],
+    from: null as Dayjs | null,
+    to: null as Dayjs | null,
+    date: undefined as Date | undefined
+  })
+
+
+
+  const commitSearch = React.useCallback(() => {
+    // Search is now part of the manual apply flow if needed, 
+    // but we can keep the local debounced state for internal use if preferred.
+    // For now, let's keep it simple.
+  }, [])
 
   // Construct API URL with server-side filters
   const reportsApiUrl = useMemo(() => {
     const q = new URLSearchParams();
-    q.set("limit", String(REPORTS_PER_PAGE));
-    q.set("skip", String((reportsPage - 1) * REPORTS_PER_PAGE));
-    if (statusFilter !== "All") q.set("status", statusFilter);
-    if (jobFilter !== "All") q.set("job_id", jobFilter);
-    if (skillFilter !== "All") q.set("skill", skillFilter);
-
-    if (experienceFilter !== "All") q.set("experience", experienceFilter);
-    if (debouncedSearchQuery) q.set("search", debouncedSearchQuery);
-    if (scoreRange[0] > 0) q.set("score_min", String(scoreRange[0]));
-    if (scoreRange[1] < 10) q.set("score_max", String(scoreRange[1]));
+    q.set("limit", String(reportsPerPage));
+    q.set("skip", String((reportsPage - 1) * reportsPerPage));
     
-    if (fromDate) {
-      q.set("from_date", fromDate.format('YYYY-MM-DD'));
-    }
-    if (toDate) {
-      q.set("to_date", toDate.format('YYYY-MM-DD'));
-    }
+    if (appliedFilters.status !== "Default") q.set("status", appliedFilters.status);
+    if (appliedFilters.job !== "All") q.set("job_id", appliedFilters.job);
+    if (appliedFilters.skill !== "All") q.set("skill", appliedFilters.skill);
+    if (appliedFilters.experience !== "All") q.set("experience", appliedFilters.experience);
+    if (appliedFilters.search) q.set("search", appliedFilters.search);
+    if (appliedFilters.score[0] > 0) q.set("score_min", String(appliedFilters.score[0]));
+    if (appliedFilters.score[1] < 10) q.set("score_max", String(appliedFilters.score[1]));
+    
+    const { from, to, date } = appliedFilters
+    const hasValidRange = from && to ? !from.isAfter(to, 'day') : true
+    
+    if (from && hasValidRange) q.set("from_date", from.format('YYYY-MM-DD'));
+    if (to && hasValidRange) q.set("to_date", to.format('YYYY-MM-DD'));
 
-    if (dateFilter && !fromDate && !toDate) {
-      const year = dateFilter.getFullYear();
-      const month = String(dateFilter.getMonth() + 1).padStart(2, '0');
-      const day = String(dateFilter.getDate()).padStart(2, '0');
+    if (date && !from && !to) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
       const d = `${year}-${month}-${day}`;
       q.set("from_date", d);
       q.set("to_date", d);
     }
 
     return `/api/analytics/reports?${q.toString()}`;
-  }, [reportsPage, statusFilter, skillFilter, experienceFilter, debouncedSearchQuery, dateFilter, scoreRange, fromDate, toDate]);
+  }, [reportsPage, reportsPerPage, appliedFilters]);
+
+
 
   // Dedicated Heatmap Data (Unfiltered by date/score to keep heatmap consistent)
   const heatmapApiUrl = useMemo(() => {
@@ -249,10 +275,20 @@ export default function ReportsPage() {
   const { data: reportsResponse, error: fetchError, isLoading: isSWRDashboardLoading } = useSWR<{ reports: Report[], total: number, count: number, failed?: number, pages: number }>(reportsApiUrl, fetcher)
   const { data: heatmapResponse } = useSWR<any>(heatmapApiUrl, fetcher)
 
-  const rawReports = reportsResponse?.reports || [];
-  const heatmapReports = heatmapResponse?.reports || [];
-  const totalCount = reportsResponse?.total || 0;
-  const totalPages = reportsResponse?.pages || 0;
+  const rawReports = Array.isArray(reportsResponse)
+    ? reportsResponse
+    : (reportsResponse?.reports || []);
+  const heatmapReports = Array.isArray(heatmapResponse)
+    ? heatmapResponse
+    : (heatmapResponse?.reports || []);
+  const totalCount = Array.isArray(reportsResponse)
+    ? reportsResponse.length
+    : (reportsResponse?.total ?? rawReports.length ?? 0);
+  const totalPages = Array.isArray(reportsResponse)
+    ? Math.ceil((reportsResponse.length || 0) / reportsPerPage)
+    : (reportsResponse?.pages ?? Math.ceil(((reportsResponse?.total ?? 0) / reportsPerPage)));
+
+
 
   const reports = useMemo(() => {
     const processed = rawReports.map(report => {
@@ -301,6 +337,8 @@ export default function ReportsPage() {
     return processed;
   }, [rawReports])
 
+
+
   // Contract Validation Warning
   React.useEffect(() => {
     if (reportsResponse && !Array.isArray(reportsResponse) && !reportsResponse.reports) {
@@ -337,7 +375,7 @@ export default function ReportsPage() {
   // Reset to first page when filters change
   React.useEffect(() => {
     setReportsPage(1);
-  }, [statusFilter, jobFilter, skillFilter, experienceFilter, searchQuery, dateFilter]);
+  }, [statusFilter, jobFilter, skillFilter, experienceFilter, debouncedSearchQuery, dateFilter, scoreRange, fromDate, toDate]);
 
 
 
@@ -371,6 +409,23 @@ export default function ReportsPage() {
     return counts
   }, [heatmapReports])
 
+  const ReportDensityDay = (props: PickerDayProps) => {
+    const dayKey = props.day.toDate().toDateString()
+    const count = interviewCounts[dayKey] || 0
+    const intensity = count >= 5 ? 1 : count >= 3 ? 0.75 : count >= 1 ? 0.5 : 0
+    return (
+      <PickerDay
+        {...props}
+        sx={{
+          ...(count > 0 && {
+            boxShadow: `inset 0 -3px 0 0 hsl(var(--primary) / ${intensity})`,
+            fontWeight: 600,
+          }),
+        }}
+      />
+    )
+  }
+
   // Since filtering is now server-side, filteredReports is just reports
   const filteredReports = reports;
 
@@ -385,6 +440,50 @@ export default function ReportsPage() {
 
     return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
   }, [filteredReports, reportsResponse])
+
+  const isAnyFilterActive = useMemo(() => {
+    return (
+      searchQuery !== '' ||
+      statusFilter !== 'Default' ||
+      jobFilter !== 'All' ||
+      skillFilter !== 'All' ||
+      experienceFilter !== 'All' ||
+      (scoreRange[0] !== 0 || scoreRange[1] !== 10) ||
+      fromDate !== null ||
+      toDate !== null ||
+      dateFilter !== undefined
+    )
+  }, [searchQuery, statusFilter, jobFilter, skillFilter, experienceFilter, scoreRange, fromDate, toDate, dateFilter])
+
+  const isDirty = useMemo(() => {
+    return (
+      searchQuery !== appliedFilters.search ||
+      statusFilter !== appliedFilters.status ||
+      jobFilter !== appliedFilters.job ||
+      skillFilter !== appliedFilters.skill ||
+      experienceFilter !== appliedFilters.experience ||
+      scoreRange[0] !== appliedFilters.score[0] ||
+      scoreRange[1] !== appliedFilters.score[1] ||
+      fromDate !== appliedFilters.from ||
+      toDate !== appliedFilters.to ||
+      dateFilter !== appliedFilters.date
+    )
+  }, [searchQuery, statusFilter, jobFilter, skillFilter, experienceFilter, scoreRange, fromDate, toDate, dateFilter, appliedFilters])
+
+  const applyFilters = () => {
+    setAppliedFilters({
+      search: searchQuery,
+      status: statusFilter,
+      job: jobFilter,
+      skill: skillFilter,
+      experience: experienceFilter,
+      score: scoreRange,
+      from: fromDate,
+      to: toDate,
+      date: dateFilter
+    })
+    setReportsPage(1)
+  }
 
   // Chart Data for Report Modal
   const radarData = useMemo(() => {
@@ -494,16 +593,28 @@ export default function ReportsPage() {
   }
 
   const clearAllFilters = () => {
-    setStatusFilter('All')
+    setStatusFilter('Default')
     setJobFilter('All')
     setSkillFilter('All')
-
     setExperienceFilter('All')
     setScoreRange([0, 10])
+    setPendingScoreRange([0, 10])
     setSearchQuery('')
     setDateFilter(undefined)
     setFromDate(null)
     setToDate(null)
+
+    setAppliedFilters({
+      search: '',
+      status: 'Default',
+      job: 'All',
+      skill: 'All',
+      experience: 'All',
+      score: [0, 10],
+      from: null,
+      to: null,
+      date: undefined
+    })
 
     setReportsPage(1)
   }
@@ -665,45 +776,99 @@ export default function ReportsPage() {
                 */}
         <div className="lg:col-span-1 md:col-span-1 max-h-full lg:max-h-[calc(100vh-10rem)] animate-in fade-in slide-in-from-left-8 duration-700 ease-out fill-mode-both">
 
-          <Card className="h-full flex flex-col shadow-md border-slate-200 !py-0 !gap-0">
-            <CardHeader className="p-3 !pb-0 shrink-0">
+          <Card className="h-full flex flex-col shadow-sm border-border/60 !py-0 !gap-0 bg-card/80 backdrop-blur-sm">
+            <CardHeader className="p-4 !pb-0 shrink-0 border-b border-border/50">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <Filter className="h-4 w-4 text-primary" /> Filters
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-500 dark:text-slate-400 hover:text-red-500"
-                  onClick={clearAllFilters}
-                  title="Clear all filters"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1.5 min-w-[40px] justify-end">
+                  <TooltipProvider delayDuration={100}>
+                    {/* Reset Button - Always shown when filters are active, slides left if dirty */}
+                    {isAnyFilterActive && (
+                      <div className="flex items-center animate-in slide-in-from-right-4 duration-300">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                              onClick={clearAllFilters}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-[10px]">Clear all filters</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    )}
+
+                    {/* Apply Button (Tick) - Appears when changes are made */}
+                    {isDirty && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-full animate-in zoom-in spin-in-90 duration-300 shadow-sm border border-emerald-100"
+                            onClick={applyFilters}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-[10px] font-bold">Click to apply filters</TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {/* Initial Reset Button - Only shown when absolutely nothing is active to maintain position */}
+                    {!isAnyFilterActive && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-300 cursor-not-allowed opacity-50"
+                        disabled
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </TooltipProvider>
+                </div>
               </div>
             </CardHeader>
-            <Separator />
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <CardContent className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
               {/* Search */}
-              <div className="grid w-full items-center gap-1">
-                <Label htmlFor="search" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Search</Label>
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="search" className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500 dark:text-slate-400" />
-                  <Input
-                    id="search"
-                    placeholder="Candidate Name"
-                    className="pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip open={searchQuery.length > 0 && debouncedSearchQuery !== searchQuery}>
+                      <TooltipTrigger asChild>
+                        <Input
+                          id="search"
+                          placeholder="Candidate Name"
+                          className="pl-8"
+                          value={searchQuery}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitSearch()
+                          }}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value)
+                          }}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" align="start" className="text-xs">
+                        Press Enter after typing
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
 
-              {/* Job Filter */}
-              <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Filter by Job</Label>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-0 space-y-2">
+                <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Filter by Job</Label>
                 <Select value={jobFilter} onValueChange={setJobFilter}>
-                  <SelectTrigger className="w-full h-8 text-sm">
+                  <SelectTrigger className="w-full h-9 text-sm">
                     <SelectValue placeholder="All Jobs" />
                   </SelectTrigger>
                   <SelectContent>
@@ -716,27 +881,27 @@ export default function ReportsPage() {
               </div>
 
               {/* Grouped Status/Exp/Skill Filters */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {/* Status Filter */}
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</Label>
+                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
+                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="All">All</SelectItem>
-                      <SelectItem value="Select">Select</SelectItem>
-                      <SelectItem value="Consider">Consider</SelectItem>
-                      <SelectItem value="Reject">Reject</SelectItem>
-                      <SelectItem value="Not Completed">Not Completed</SelectItem>
+                      <SelectItem value="Default">Default</SelectItem>
+                      <SelectItem value="Select">Selected</SelectItem>
+                      <SelectItem value="Reject">Rejected</SelectItem>
+                      <SelectItem value="Terminated">Terminated</SelectItem>
+                      <SelectItem value="Not Completed">Not completed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Experience Filter */}
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Exp.</Label>
+                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
+                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Exp.</Label>
                   <Select value={experienceFilter} onValueChange={setExperienceFilter}>
                     <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Exp." />
@@ -751,8 +916,8 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Skill Filter */}
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Skills</Label>
+                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
+                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Skills</Label>
                   <Select value={skillFilter} onValueChange={setSkillFilter}>
                     <SelectTrigger className="w-full h-8 text-xs">
                       <SelectValue placeholder="Skills" />
@@ -760,7 +925,9 @@ export default function ReportsPage() {
                     <SelectContent>
                       <SelectItem value="All">All Skills</SelectItem>
                       {SKILL_CATEGORIES.map((skill, idx) => (
-                        <SelectItem key={idx} value={skill}>{skill.charAt(0).toUpperCase() + skill.slice(1)}</SelectItem>
+                        <SelectItem key={idx} value={skill}>
+                          {skill.split(/[_-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -770,17 +937,18 @@ export default function ReportsPage() {
 
 
               {/* Score Range */}
-              <div className="space-y-1">
+              <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 ">
                 <div className="flex justify-between items-center">
-                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Score Range</Label>
-                  <span className="text-[10px] font-bold text-primary">{scoreRange[0]} - {scoreRange[1]}</span>
+                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Score Range</Label>
+                  <span className="text-[13px] font-sembold text-primary">{pendingScoreRange[0]} - {pendingScoreRange[1]}</span>
                 </div>
                 <Slider
                   defaultValue={[0, 10]}
                   max={10}
-                  step={1}
-                  value={scoreRange}
-                  onValueChange={setScoreRange}
+                  step={0.1}
+                  value={pendingScoreRange}
+                  onValueChange={setPendingScoreRange}
+                  onValueCommit={setScoreRange}
                   className="py-2"
                 />
               </div>
@@ -790,20 +958,43 @@ export default function ReportsPage() {
 
               {/* Calendar */}
               <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <div className="space-y-2">
+                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20">
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Date Range</Label>
+                    <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider  pb-4">Date Range</Label>
                     <div className="grid grid-cols-2 gap-1.5">
                       <DatePicker
                         label="From"
                         value={fromDate}
-                        onChange={(newValue) => setFromDate(newValue)}
+                        minDate={dayjs('1900-01-01')}
+                        maxDate={toDate || dayjs()}
+                        onChange={(newValue) => {
+                          setFromDate(newValue)
+                          if (toDate && newValue && newValue.isAfter(toDate, 'day')) {
+                            setToDate(newValue)
+                          }
+                          if (dateFilter) setDateFilter(undefined)
+                        }}
                         slotProps={{
                           textField: {
                             size: 'small',
                             fullWidth: true,
                             sx: {
-                              '& .MuiInputBase-root': { fontSize: '0.875rem' }
+                              '& .MuiInputBase-root': { 
+                                fontSize: '0.875rem',
+                              },
+                              '& .MuiInputBase-input': {
+                                color: 'hsl(var(--foreground)) !important',
+                                WebkitTextFillColor: 'hsl(var(--foreground)) !important',
+                              },
+                              '& .MuiInputLabel-root': { 
+                                color: 'hsl(var(--muted-foreground))' 
+                              },
+                              '& .MuiOutlinedInput-notchedOutline': { 
+                                borderColor: 'hsl(var(--border) / 0.5)' 
+                              },
+                              '& .MuiSvgIcon-root': {
+                                color: 'hsl(var(--muted-foreground))'
+                              }
                             }
                           }
                         }}
@@ -811,44 +1002,63 @@ export default function ReportsPage() {
                       <DatePicker
                         label="To"
                         value={toDate}
-                        onChange={(newValue) => setToDate(newValue)}
+                        minDate={fromDate || dayjs('1900-01-01')}
+                        maxDate={dayjs()}
+                        onChange={(newValue) => {
+                          setToDate(newValue)
+                          if (dateFilter) setDateFilter(undefined)
+                        }}
                         slotProps={{
                           textField: {
                             size: 'small',
                             fullWidth: true,
                             sx: {
-                              '& .MuiInputBase-root': { fontSize: '0.875rem' }
+                              '& .MuiInputBase-root': { 
+                                fontSize: '0.875rem',
+                              },
+                              '& .MuiInputBase-input': {
+                                color: 'hsl(var(--foreground)) !important',
+                                WebkitTextFillColor: 'hsl(var(--foreground)) !important',
+                              },
+                              '& .MuiInputLabel-root': { 
+                                color: 'hsl(var(--muted-foreground))' 
+                              },
+                              '& .MuiOutlinedInput-notchedOutline': { 
+                                borderColor: 'hsl(var(--border) / 0.5)' 
+                              },
+                              '& .MuiSvgIcon-root': {
+                                color: 'hsl(var(--muted-foreground))'
+                              }
                             }
                           }
                         }}
                       />
                     </div>
-                    {(fromDate || toDate) && (
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
                           setFromDate(null)
                           setToDate(null)
-                        }}
-                        className="h-6 text-xs text-muted-foreground hover:text-red-500 px-2 w-full mt-1"
-                      >
-                        Clear Range
-                      </Button>
-                    )}
+                          setDateFilter(undefined)
+                      }}
+                      className="h-7 text-xs text-muted-foreground hover:text-primary px-2 w-full mt-1 flex items-center gap-2"
+                    >
+                      <RotateCcw className="h-3 w-3" /> Reset to Default
+                    </Button>
                   </div>
 
                   <Separator />
 
                   <div className="space-y-1">
                     <div className="flex justify-between items-center px-1">
-                      <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Select Date</Label>
+                      <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Select Date</Label>
                       {dateFilter && (
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setDateFilter(undefined)}
-                          className="h-5 text-[9px] text-muted-foreground hover:text-red-500 px-1"
+                          className="h-5 text-[14px] text-muted-foreground hover:text-red-500 px-1"
                         >
                           Clear
                         </Button>
@@ -884,12 +1094,34 @@ export default function ReportsPage() {
                       },
                       '& .MuiPickersDay-root.Mui-selected': {
                         bgcolor: 'hsl(var(--primary)) !important',
-                        color: 'hsl(var(--primary-foreground))',
+                        color: 'hsl(var(--primary-foreground)) !important',
+                      },
+                      '& .MuiDayCalendar-weekDayLabel': {
+                        color: 'hsl(var(--muted-foreground))',
                       }
                     }}>
                       <DateCalendar
                         value={dateFilter ? dayjs(dateFilter) : null}
-                        onChange={(newValue) => setDateFilter(newValue?.toDate())}
+                        onChange={(newValue) => {
+                          setDateFilter(newValue?.toDate())
+                          if (newValue) {
+                            setFromDate(null)
+                            setToDate(null)
+                          }
+                        }}
+                        sx={{
+                          backgroundColor: 'transparent',
+                          '& .MuiPickersDay-root': {
+                            color: 'hsl(var(--foreground))',
+                          },
+                          '& .MuiTypography-root': {
+                            color: 'hsl(var(--foreground))'
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: 'hsl(var(--foreground))'
+                          }
+                        }}
+                        slots={{ day: ReportDensityDay }}
                       />
                     </Box>
                   </div>
@@ -908,34 +1140,26 @@ export default function ReportsPage() {
         <div className="lg:col-span-3 md:col-span-2 h-full overflow-y-auto pr-2 pb-2 space-y-4">
 
 
-          {/* Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-8 duration-700 ease-out fill-mode-both delay-100">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Reports</CardDescription>
-                <CardTitle className="text-2xl">{metrics.total}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Avg Score</CardDescription>
-                <CardTitle className="text-2xl">{metrics.avgScore}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Avg Questions</CardDescription>
-                <CardTitle className="text-2xl">{metrics.avgQuestions}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Selection Rate</CardDescription>
-                <CardTitle className="text-2xl">
-                  {metrics.total > 0 ? Math.round((metrics.selected / metrics.total) * 100) : 0}%
-                </CardTitle>
-              </CardHeader>
-            </Card>
+          {/* Compact Metrics Strip */}
+          <div className="animate-in fade-in slide-in-from-top-8 duration-700 ease-out fill-mode-both delay-100 rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm px-3 py-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Total Reports</p>
+                <p className="text-xl font-semibold leading-tight">{metrics.total}</p>
+              </div>
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Score</p>
+                <p className="text-xl font-semibold leading-tight">{metrics.avgScore}</p>
+              </div>
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Questions</p>
+                <p className="text-xl font-semibold leading-tight">{metrics.avgQuestions}</p>
+              </div>
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Selection Rate</p>
+                <p className="text-xl font-semibold leading-tight">{metrics.total > 0 ? Math.round((metrics.selected / metrics.total) * 100) : 0}%</p>
+              </div>
+            </div>
           </div>
 
           {/* Status Stats */}
@@ -955,63 +1179,78 @@ export default function ReportsPage() {
           </div>
 
           {/* Reports List / Results */}
-          <Tabs defaultValue="detailed">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="flex justify-between items-center mb-4">
-              <TabsList>
-                <TabsTrigger value="detailed">Detailed View</TabsTrigger>
-                <TabsTrigger value="table">Table View</TabsTrigger>
-                <TabsTrigger value="analytics">Summary Analytics</TabsTrigger>
+              <TabsList className="h-11 rounded-full p-1 bg-slate-100/80 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
+                <TabsTrigger value="detailed" className="rounded-full px-5 h-full">Detailed View</TabsTrigger>
+                <TabsTrigger value="table" className="rounded-full px-5 h-full">Table View</TabsTrigger>
+                <TabsTrigger value="analytics" className="rounded-full px-5 h-full">Summary Analytics</TabsTrigger>
               </TabsList>
-              <span className="text-sm text-slate-500 dark:text-slate-400">Showing {filteredReports.length} reports</span>
+              
+              <div className="flex items-center gap-3">
+                {activeTab === 'table' && (
+                  <Button 
+                    onClick={downloadCSV} 
+                    variant="outline" 
+                    className="gap-2 bg-background hover:bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300 shadow-sm h-11 rounded-full px-6 font-bold animate-in fade-in slide-in-from-right-4 duration-300"
+                  >
+                    <FileText className="h-4 w-4" /> Export to Excel
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-2.5 bg-slate-100/80 dark:bg-slate-800/50 px-4 h-11 rounded-full border border-slate-200/60 dark:border-slate-700/50 shadow-sm animate-in fade-in zoom-in duration-500">
+                  <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Show</span>
+                  <Select
+                    value={String(reportsPerPage)}
+                    onValueChange={(v) => {
+                      setReportsPerPage(Number(v))
+                      setReportsPage(1)
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[84px] rounded-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-[14px] font-extrabold text-slate-700 dark:text-slate-200 shadow-none focus:ring-2 focus:ring-primary/20 transition-all hover:border-primary/40 px-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-slate-200 dark:border-slate-700 shadow-xl">
+                      <SelectItem value="10" className="rounded-lg focus:bg-primary/10">10</SelectItem>
+                      <SelectItem value="25" className="rounded-lg focus:bg-primary/10">25</SelectItem>
+                      <SelectItem value="50" className="rounded-lg focus:bg-primary/10">50</SelectItem>
+                      <SelectItem value="100" className="rounded-lg focus:bg-primary/10">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">per page</span>
+                </div>
+              </div>
             </div>
 
             <TabsContent value="detailed" className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out fill-mode-both delay-300">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
-                  {filteredReports.map((report: Report, idx: number) => (
-                    <ReportCard
-                      key={idx}
-                      report={report}
-                      onClick={() => setViewingReport(report)}
-                    />
-                  ))}
+                  {filteredReports.length > 0 ? (
+                    filteredReports.map((report: Report, idx: number) => (
+                      <ReportCard
+                        key={idx}
+                        report={report}
+                        onClick={() => setViewingReport(report)}
+                      />
+                    ))
+                  ) : (
+                    <div className="h-64 flex flex-col items-center justify-center border border-dashed rounded-2xl bg-muted/10 animate-in fade-in zoom-in duration-500">
+                      <div className="bg-muted/20 p-4 rounded-full mb-4">
+                        <AlertCircle className="h-10 w-10 text-muted-foreground/30" />
+                      </div>
+                      <p className="text-lg font-bold text-muted-foreground">No reports found</p>
+                      <p className="text-sm text-muted-foreground/60 max-w-[280px] text-center mt-1">
+                        Try adjusting your filters or search query to find what you're looking for.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between bg-card p-4 rounded-xl border border-border/50 shadow-sm mt-6">
-                    <div className="text-sm text-muted-foreground">
-                      Page <span className="font-bold text-foreground">{reportsPage}</span> of {totalPages}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={reportsPage <= 1}
-                        onClick={() => setReportsPage(prev => prev - 1)}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={reportsPage >= totalPages}
-                        onClick={() => setReportsPage(prev => prev + 1)}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
             </TabsContent>
 
             <TabsContent value="table" className="animate-in fade-in zoom-in-95 duration-300">
-              <div className="flex justify-end mb-4">
-                <Button onClick={downloadCSV} variant="outline" className="gap-2 bg-background hover:bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-300 shadow-sm">
-                  <FileText className="h-4 w-4" /> Export to Excel
-                </Button>
-              </div>
+
               <Card>
                 <CardContent className="p-0">
                   <Table>
@@ -1068,44 +1307,96 @@ export default function ReportsPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="analytics" className="animate-in fade-in zoom-in-95 duration-300">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Overview & Analysis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col lg:flex-row gap-8 items-start">
-                    <div className="flex-1 w-full h-[250px]">
-                      <StatusChart data={[
-                        { name: 'Selected', value: metrics.selected, color: '#10b981' },
-                        { name: 'Hold', value: metrics.hold, color: '#f59e0b' },
-                        { name: 'Rejected', value: metrics.rejected, color: '#ef4444' }
-                      ].filter(d => d.value > 0)} />
-                    </div>
+            {/* Common Pagination Controls for Detailed and Table views */}
+            {activeTab !== 'analytics' && totalPages > 1 && (
+              <div className="flex items-center justify-between bg-card p-1 px-2 rounded-xl border border-border/50 shadow-sm mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="text-sm text-muted-foreground px-4">
+                  Page <span className="font-bold text-foreground">{reportsPage}</span> of {totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={reportsPage <= 1}
+                    onClick={() => setReportsPage(prev => prev - 1)}
+                    className="rounded-lg h-9"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={reportsPage >= totalPages}
+                    onClick={() => setReportsPage(prev => prev + 1)}
+                    className="rounded-lg h-9"
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
-                    <div className="w-full lg:w-1/3 grid grid-cols-2 gap-4">
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
-                        <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.avgScore}</div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Average Overall Score</div>
+            <TabsContent value="analytics" className="animate-in fade-in zoom-in-95 duration-300">
+              {metrics.total > 0 ? (
+                <Card className="border-none shadow-xl bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-900/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <BarChart className="h-5 w-5 text-primary" />
+                      Overview & Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col lg:flex-row gap-8 items-start py-4">
+                      <div className="flex-1 w-full h-[280px] relative">
+                        <StatusChart data={[
+                          { name: 'Selected', value: metrics.selected, color: '#10b981' },
+                          { name: 'Hold', value: metrics.hold, color: '#f59e0b' },
+                          { name: 'Rejected', value: metrics.rejected, color: '#ef4444' }
+                        ].filter(d => d.value > 0)} />
                       </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
-                        <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.total}</div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Total Interviews</div>
-                      </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
-                        <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{metrics.avgQuestions}</div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Avg Questions Answered</div>
-                      </div>
-                      <div className="bg-muted/30 p-4 rounded-xl border text-center flex flex-col justify-center">
-                        <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">
-                          {metrics.total > 0 ? Math.round((metrics.selected / metrics.total) * 100) : 0}%
+
+                      <div className="w-full lg:w-1/3 grid grid-cols-2 gap-4">
+                        <div className="bg-white/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center flex flex-col justify-center shadow-sm hover:shadow-md transition-all">
+                          <div className="text-3xl font-black text-slate-900 dark:text-slate-50 tracking-tight">{metrics.avgScore}</div>
+                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Avg Score</div>
                         </div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">Selection Rate</div>
+                        <div className="bg-white/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center flex flex-col justify-center shadow-sm hover:shadow-md transition-all">
+                          <div className="text-3xl font-black text-slate-900 dark:text-slate-50 tracking-tight">{metrics.total}</div>
+                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Interviews</div>
+                        </div>
+                        <div className="bg-white/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center flex flex-col justify-center shadow-sm hover:shadow-md transition-all">
+                          <div className="text-3xl font-black text-slate-900 dark:text-slate-50 tracking-tight">{metrics.avgQuestions}</div>
+                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Avg Qs</div>
+                        </div>
+                        <div className="bg-white/50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 text-center flex flex-col justify-center shadow-sm hover:shadow-md transition-all">
+                          <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                            {metrics.total > 0 ? Math.round((metrics.selected / metrics.total) * 100) : 0}%
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">Success Rate</div>
+                        </div>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="h-80 flex flex-col items-center justify-center border border-dashed rounded-3xl bg-muted/5 animate-in fade-in zoom-in duration-500">
+                  <div className="bg-muted/10 p-5 rounded-full mb-4">
+                    <Activity className="h-12 w-12 text-muted-foreground/20" />
                   </div>
-                </CardContent>
-              </Card>
+                  <p className="text-xl font-black text-muted-foreground tracking-tight">No analysis data available</p>
+                  <p className="text-sm text-muted-foreground/50 max-w-[320px] text-center mt-2 font-medium">
+                    We couldn't find any reports matching your current filter criteria to generate analytics.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={clearAllFilters}
+                    className="mt-6 rounded-full px-6 font-bold hover:bg-primary hover:text-white transition-all"
+                  >
+                    Clear Filters
+                  </Button>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -1266,7 +1557,7 @@ export default function ReportsPage() {
                             <PolarAngleAxis dataKey="subject" tick={{ fill: 'currentColor', fontSize: 11 }} />
                             <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{ fontSize: 10 }} />
                             <Radar name="Score" dataKey="A" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.6} />
-                            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+                            <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
                           </RadarChart>
                         </ResponsiveContainer>
                       )}
@@ -1285,7 +1576,7 @@ export default function ReportsPage() {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                             <XAxis dataKey="name" tick={{ fill: 'currentColor', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <YAxis domain={[0, 10]} tick={{ fill: 'currentColor', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+                            <RechartsTooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
                             <Line type="monotone" dataKey="Tech" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} />
                             <Line type="monotone" dataKey="Comm" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
                           </LineChart>

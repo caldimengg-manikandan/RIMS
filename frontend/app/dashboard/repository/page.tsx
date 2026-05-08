@@ -815,14 +815,13 @@ export default function RepositoryPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Badge variant="outline" className={`text-[10px] uppercase font-black px-2 py-0.5 border-none ${ROUND_TYPE_COLORS[set.round_type]}`}>
+                                            <Badge variant="outline" className={`text-[12px] uppercase font-black px-2 py-0.5 border-none ${ROUND_TYPE_COLORS[set.round_type]}`}>
                                                 {set.round_type}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <div className="flex flex-col gap-0.5">
-                                                <span className="font-black text-primary text-base">{set.question_count}</span>
-                                                <span className="text-[9px] text-muted-foreground uppercase font-bold opacity-50">Items</span>
+                                                <span className="text-[18px] font-black text-primary text-base">{set.question_count}</span>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
