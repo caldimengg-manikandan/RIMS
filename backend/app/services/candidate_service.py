@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.domain.models import Application, ApplicationStage, User, AuditLog
 from datetime import datetime
 import json
+from app.core.timezone import get_ist_now
 
 class CandidateService:
     def __init__(self, db: Session):
@@ -156,7 +157,7 @@ class CandidateService:
 
         raw_access_key = secrets.token_urlsafe(16)
         hashed_key = pwd_context.hash(raw_access_key)
-        expiration = datetime.now(timezone.utc) + timedelta(days=10)
+        expiration = get_ist_now() + timedelta(days=10)
 
         existing_interview = self.db.query(Interview).filter(
             Interview.application_id == application.id

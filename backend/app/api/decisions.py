@@ -12,6 +12,7 @@ from app.core.auth import get_current_user, get_current_hr
 from app.core.ownership import validate_hr_ownership
 from app.services.email_service import send_hired_email, send_rejected_email
 import logging
+from app.core.timezone import get_ist_now
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/decisions", tags=["hiring decisions"])
@@ -65,7 +66,7 @@ def make_hiring_decision(
         hr_id=current_user.id,
         decision=decision_data.decision,
         decision_comments=decision_data.decision_comments,
-        decided_at=datetime.now(timezone.utc)
+        decided_at=get_ist_now()
     )
     
     # Populate ownership context for immediate response
@@ -178,7 +179,7 @@ async def hire_candidate(
         raise HTTPException(status_code=500, detail=f"Failed to generate offer letter PDF: {e}")
 
     # 7. Upload generated PDF to Supabase
-    timestamp = int(datetime.now(timezone.utc).timestamp())
+    timestamp = int(get_ist_now().timestamp())
     storage_path = f"offer_letters/offer_{application_id}_{timestamp}.pdf"
     try:
         upload_file(settings.supabase_bucket_offers, storage_path, pdf_bytes, content_type="application/pdf")
@@ -188,7 +189,7 @@ async def hire_candidate(
 
     # 8. Persist HiringDecision and update Application atomically
     application.offer_sent = True
-    application.offer_sent_date = datetime.now(timezone.utc)
+    application.offer_sent_date = get_ist_now()
     application.offer_pdf_path = storage_path
     
     hiring_decision = HiringDecision(
@@ -198,7 +199,7 @@ async def hire_candidate(
         decision_comments=hire_data.notes,
         joining_date=jdate,
         offer_letter_path=storage_path,
-        decided_at=datetime.now(timezone.utc)
+        decided_at=get_ist_now()
     )
     db.add(hiring_decision)
     try:

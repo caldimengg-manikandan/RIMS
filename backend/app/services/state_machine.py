@@ -1,3 +1,6 @@
+from __future__ import annotations
+from app.core.timezone import get_ist_now
+
 """
 Candidate State Machine — Single Source of Truth
 
@@ -11,8 +14,6 @@ Design principles:
   4. State history is logged to StateTransitionLog
   5. Emails trigger ONLY after a successful state transition
 """
-
-from __future__ import annotations
 
 import json
 import logging
@@ -225,7 +226,7 @@ class CandidateStateMachine:
                 AuditLog.user_id == user_id,
                 AuditLog.resource_id == application.id,
                 AuditLog.action == "STATE_TRANSITION",
-                AuditLog.created_at >= datetime.now(timezone.utc) - timedelta(seconds=120)
+                AuditLog.created_at >= get_ist_now() - timedelta(seconds=120)
             ).all()
 
             for log in recent_logs:
@@ -265,7 +266,7 @@ class CandidateStateMachine:
 
         # 3. Atomic status update
         application.status = target_state.value
-        application.updated_at = datetime.now(timezone.utc)
+        application.updated_at = get_ist_now()
 
         # 4. Log the transition
         self._log_transition(

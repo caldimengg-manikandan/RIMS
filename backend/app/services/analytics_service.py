@@ -19,7 +19,7 @@ class AnalyticsService:
         try:
             from sqlalchemy import and_
             
-            # Helper to apply shared filters
+            # Helper to apply shared filters — timestamps are stored as IST, compare directly
             def apply_filters(q, model_for_date=Application):
                 if hr_id:
                     q = q.outerjoin(Job, Application.job_id == Job.id).filter(
@@ -30,12 +30,17 @@ class AnalyticsService:
                 if from_date:
                     try:
                         sd = datetime.strptime(from_date, "%Y-%m-%d").date()
-                        q = q.filter(model_for_date.created_at >= sd)
+                        # Use applied_at for Application, created_at for Interview
+                        date_col = Application.applied_at if model_for_date == Application else model_for_date.created_at
+                        from sqlalchemy import func as sqlfunc
+                        q = q.filter(sqlfunc.date(date_col) >= sd)
                     except: pass
                 if to_date:
                     try:
                         ed = datetime.strptime(to_date, "%Y-%m-%d").date()
-                        q = q.filter(model_for_date.created_at <= ed + timedelta(days=1))
+                        date_col = Application.applied_at if model_for_date == Application else model_for_date.created_at
+                        from sqlalchemy import func as sqlfunc
+                        q = q.filter(sqlfunc.date(date_col) <= ed)
                     except: pass
                 return q
 

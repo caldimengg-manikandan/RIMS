@@ -1,4 +1,5 @@
 import logging
+from app.core.timezone import get_ist_now
 
 from app.core.config import get_settings
 from app.core.ephemeral_result_cache import cache_get, cache_set
@@ -38,7 +39,7 @@ async def process_interview_message(session_id: str, data: dict):
         if action == "start":
             if interview.status == "not_started":
                 interview.status = "in_progress"
-                interview.started_at = datetime.now(timezone.utc)
+                interview.started_at = get_ist_now()
                 db.commit()
                 logger.info(f"Starting fresh adaptive interview for ID {interview_id}")
             else:
@@ -137,7 +138,7 @@ async def process_interview_message(session_id: str, data: dict):
                 # 3. Ending condition or generate next
                 if interview.questions_asked >= (interview.total_questions or 10):
                     interview.status = "completed"
-                    interview.ended_at = datetime.now(timezone.utc)
+                    interview.ended_at = get_ist_now()
                     db.commit()
                     
                     await session_manager.send_personal_message({"type": "system", "message": "Evaluation complete. Finalizing results..."}, session_id)

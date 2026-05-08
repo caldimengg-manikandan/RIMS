@@ -145,7 +145,7 @@ def list_feedback(
         query = query.filter(Application.hr_id == current_user.id)
 
     total = query.count()
-    feedbacks = query.order_by(InterviewFeedback.created_at.desc()).offset(skip).limit(limit).all()
+    feedbacks = query.order_by(InterviewFeedback.created_at.desc(), InterviewFeedback.id.desc()).offset(skip).limit(limit).all()
 
     # Enrich with candidate data from the joined tables
     result = []
@@ -171,17 +171,23 @@ def get_ticket_count(
     db: Session = Depends(get_db)
 ):
     """Lightweight endpoint returning just the pending ticket count for sidebar badges."""
-    q = (
-        db.query(InterviewIssue)
-        .outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
-        .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
-        .outerjoin(Job, Application.job_id == Job.id)
-        .filter(InterviewIssue.status == "pending")
-    )
-    # Apply visibility isolation
+    from sqlalchemy import exists
+    q = db.query(InterviewIssue).filter(InterviewIssue.status == "pending")
+
+    # Apply visibility isolation using EXISTS to avoid ambiguous joins
     if current_user.role.lower() == "hr":
-        q = q.filter(Application.hr_id == current_user.id)
+        has_interview_match = exists().where(
+            Interview.id == InterviewIssue.interview_id,
+            Application.id == Interview.application_id,
+            Application.hr_id == current_user.id
+        )
+        has_direct_match = exists().where(
+            Application.id == InterviewIssue.application_id,
+            Application.hr_id == current_user.id
+        )
+        q = q.filter(has_interview_match | has_direct_match)
     # Super Admin sees all.
+
     count = q.count()
     return {"count": count}
 
@@ -193,53 +199,58 @@ def get_tickets(
     current_user: User = Depends(get_current_hr),
     db: Session = Depends(get_db)
 ):
-    query = db.query(InterviewIssue).options(
-        joinedload(InterviewIssue.interview)
-        .joinedload(Interview.application)
-        .joinedload(Application.job),
-        joinedload(InterviewIssue.interview)
-        .joinedload(Interview.application)
-        .joinedload(Application.hr),
-        joinedload(InterviewIssue.application)
-        .joinedload(Application.job),
-        joinedload(InterviewIssue.application)
-        .joinedload(Application.hr)
-    )
     query = (
-        query.outerjoin(Interview, InterviewIssue.interview_id == Interview.id)
-        .outerjoin(Application, or_(InterviewIssue.application_id == Application.id, Interview.application_id == Application.id))
-        .outerjoin(Job, Application.job_id == Job.id)
+        db.query(InterviewIssue)
+        .options(
+            joinedload(InterviewIssue.interview)
+            .joinedload(Interview.application)
+            .joinedload(Application.job),
+            joinedload(InterviewIssue.interview)
+            .joinedload(Interview.application)
+            .joinedload(Application.hr),
+            joinedload(InterviewIssue.application)
+            .joinedload(Application.job),
+            joinedload(InterviewIssue.application)
+            .joinedload(Application.hr)
+        )
     )
-    # Apply visibility isolation
+
+    # Visibility isolation: HR only sees tickets related to their own candidates
     if current_user.role.lower() == "hr":
-        query = query.filter(Application.hr_id == current_user.id)
+        from sqlalchemy import exists
+        # Match via Interview -> Application OR direct application_id
+        has_interview_match = exists().where(
+            Interview.id == InterviewIssue.interview_id,
+            Application.id == Interview.application_id,
+            Application.hr_id == current_user.id
+        )
+        has_direct_match = exists().where(
+            Application.id == InterviewIssue.application_id,
+            Application.hr_id == current_user.id
+        )
+        query = query.filter(has_interview_match | has_direct_match)
     # Super Admin sees all.
+
     if status != 'all':
         query = query.filter(InterviewIssue.status == status)
 
     total = query.count()
-    tickets = query.order_by(InterviewIssue.created_at.desc()).offset(skip).limit(limit).all()
-    
+    tickets = query.order_by(InterviewIssue.created_at.desc(), InterviewIssue.id.desc()).offset(skip).limit(limit).all()
+
     # Hybrid population
     for t in tickets:
         app = t.application or (t.interview.application if t.interview else None)
         if app:
             t.application_id = app.id
             t.job_id = app.job_id
-            if app.job:
-                t.job_identifier = app.job.job_id
-            else:
-                t.job_identifier = None
+            t.job_identifier = app.job.job_id if app.job else None
         else:
             t.application_id = None
             t.job_id = None
             t.job_identifier = None
-            
-        if t.interview:
-            t.test_id = t.interview.test_id
-        else:
-            t.test_id = None
-        
+
+        t.test_id = t.interview.test_id if t.interview else None
+
         # Ownership Awareness (Architecture Rule 3)
         if app:
             t.assigned_hr_id = app.hr_id
@@ -249,7 +260,7 @@ def get_tickets(
             t.assigned_hr_id = None
             t.assigned_hr_name = None
             t.is_owner = False
-            
+
     return {"items": tickets, "total": total}
 
 @router.put("/{ticket_id}/resolve", response_model=InterviewIssueResponse)
@@ -286,6 +297,8 @@ def resolve_ticket(
 
     # Status update logic – accept both canonical forms (e.g. 'resolve'/'resolved', 'dismiss'/'dismissed')
     if resolution.action == 'reissue_key':
+        if not ticket.interview:
+            raise HTTPException(status_code=400, detail="Cannot reissue key: This ticket is not linked to an active interview session.")
         ticket.status = 'resolved'
     elif resolution.action in ['resolve', 'resolved']:
         ticket.status = 'resolved'
@@ -296,17 +309,18 @@ def resolve_ticket(
         ticket.status = 'pending'
     
     ticket.hr_response = resolution.hr_response or ticket.hr_response or ""
-    ticket.resolved_at = datetime.now() if ticket.status != 'pending' else None
+    ticket.resolved_at = (datetime.now() if ticket.status != 'pending' else None)
     
-    app = ticket.application or (ticket.interview.application if ticket.interview else None)
+    # Pre-populate return fields from available relations
+    ticket.application_id = app.id if app else ticket.application_id
+    ticket.test_id = ticket.interview.test_id if ticket.interview else ticket.test_id
+    ticket.job_id = app.job_id if app else ticket.job_id
+    ticket.job_identifier = app.job.job_id if (app and app.job) else ticket.job_identifier
+
     if not app:
         # If application is missing, we can only update the ticket status, not send emails or reissue
         db.commit()
         db.refresh(ticket)
-        ticket.application_id = None
-        ticket.test_id = None
-        ticket.job_id = None
-        ticket.job_identifier = None
         return ticket
 
     job_title = app.job.title if app.job else "your applied position"
@@ -321,16 +335,17 @@ def resolve_ticket(
         
         # Send reissue email if requested
         if resolution.send_email:
+            final_response = resolution.hr_response or "Your interview access key has been reissued due to the reported technical issue. You can now resume your assessment."
             background_tasks.add_task(
                 send_key_reissued_email,
                 to_email=ticket.candidate_email,
                 job_title=job_title,
                 new_key=new_key,
-                hr_response=resolution.hr_response
+                hr_response=final_response
             )
             logger.info(f"RE-ISSUED KEY queued for {ticket.candidate_email}")
     else:
-        # Send resolution/dismissal email if requested (and if hr_response is set)
+        # Send resolution/dismissal email if requested
         if resolution.send_email and resolution.hr_response:
             background_tasks.add_task(
                 send_ticket_resolved_email,
@@ -343,7 +358,7 @@ def resolve_ticket(
     db.commit()
     db.refresh(ticket)
     
-    # Populate extra fields for response
+    # Final population of extra fields for response consistency
     ticket.application_id = app.id
     ticket.test_id = ticket.interview.test_id if ticket.interview else None
     ticket.job_id = app.job_id

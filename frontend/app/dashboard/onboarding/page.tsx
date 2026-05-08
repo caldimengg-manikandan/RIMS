@@ -224,6 +224,17 @@ export default function OnboardingPage() {
                         Export Data
                     </Button>
                     <Button 
+                        variant="outline" 
+                        className="gap-2 h-11 px-5 rounded-xl border-border font-bold hover:bg-muted/50" 
+                        onClick={() => {
+                            mutate();
+                            toast.info("Refreshing candidate data...");
+                        }}
+                    >
+                        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                    <Button 
                         variant={showStats ? "default" : "outline"}
                         className={`gap-2 h-11 px-5 rounded-xl font-bold shadow-sm transition-all ${showStats ? 'bg-primary text-white' : 'border-border'}`} 
                         onClick={() => setShowStats(!showStats)}
@@ -304,7 +315,8 @@ export default function OnboardingPage() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
+                <CardContent className="p-0 overflow-x-auto">
+                    <div className="min-w-[800px]">
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-muted/20 hover:bg-muted/20">
@@ -472,7 +484,12 @@ export default function OnboardingPage() {
                                                             <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500 hover:bg-emerald-50" onClick={async () => {
                                                                 try {
                                                                     const res = await APIClient.get(`/api/onboarding/applications/${candidate.id}/download-id-card`) as any;
-                                                                    window.open(res.url, '_blank');
+                                                                    const link = document.createElement('a');
+                                                                    link.href = res.url;
+                                                                    link.download = `ID_Card_${candidate.candidate_name.replace(/\s+/g, '_')}.pdf`;
+                                                                    document.body.appendChild(link);
+                                                                    link.click();
+                                                                    document.body.removeChild(link);
                                                                 } catch(e) {
                                                                     toast.error('Failed to get download link');
                                                                 }
@@ -481,7 +498,7 @@ export default function OnboardingPage() {
                                                                 Download ID
                                                             </Button>
                                                         )}
-                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 hidden sm:inline-flex">
                                                             Onboarded
                                                         </Badge>
                                                     </div>
@@ -493,8 +510,9 @@ export default function OnboardingPage() {
                             )}
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </CardContent>
+        </Card>
 
             {totalPages > 1 && (
                 <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">

@@ -8,6 +8,7 @@ import logging
 from app.core.config import get_settings
 from app.domain.models import User
 from app.infrastructure.database import get_db, set_db_identity
+from app.core.timezone import get_ist_now
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -35,9 +36,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = get_ist_now() + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expiration_minutes)
+        expire = get_ist_now() + timedelta(minutes=settings.jwt_expiration_minutes)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
@@ -273,9 +274,7 @@ def get_current_interview(
         # Check for hard expiration timestamp
         if interview.expires_at:
             exp_at = interview.expires_at
-            if exp_at.tzinfo is None:
-                exp_at = exp_at.replace(tzinfo=timezone.utc)
-            if exp_at < datetime.now(timezone.utc):
+            if exp_at < get_ist_now():
                 if interview.status != "expired":
                     logger.warning(f"Interview auth failed: Session {interview_id} expired at {exp_at}. Marking as expired.")
                     try:
@@ -399,9 +398,7 @@ def get_current_interview_any_status(
         # Check for hard expiration timestamp even for "any status" (read-only)
         if interview.expires_at:
             exp_at = interview.expires_at
-            if exp_at.tzinfo is None:
-                exp_at = exp_at.replace(tzinfo=timezone.utc)
-            if exp_at < datetime.now(timezone.utc) and interview.status != "completed":
+            if exp_at < get_ist_now() and interview.status != "completed":
                 # If completed, we might still want to allow viewing the report/thank you page
                 logger.warning(f"Interview auth failed (any status): Session {interview_id} expired at {exp_at}. Marking as expired.")
                 try:

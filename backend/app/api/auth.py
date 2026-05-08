@@ -13,6 +13,7 @@ import secrets
 import string
 import logging
 from sqlalchemy import or_
+from app.core.timezone import get_ist_now
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +44,13 @@ def data_health(request: Request, db: Session = Depends(get_db)):
         "monitoring": {
             "stuck_resume_parsing": db.query(func.count(Application.id)).filter(
                 Application.resume_status == "parsing",
-                Application.parsing_started_at < datetime.now(timezone.utc) - timedelta(hours=1)
+                Application.parsing_started_at < get_ist_now() - timedelta(hours=1)
             ).scalar(),
             "failed_resume_parsing": db.query(func.count(Application.id)).filter(
                 Application.resume_status == "failed"
             ).scalar(),
         },
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": get_ist_now().isoformat()
     }
 
 @router.post("/register", response_model=UserResponse)
@@ -89,7 +90,7 @@ def register(request: Request, user_data: UserRegister, background_tasks: Backgr
             existing_user.is_verified = False
             existing_user.approval_status = "pending"
             existing_user.otp_code = hash_password(raw_otp)
-            existing_user.otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+            existing_user.otp_expiry = get_ist_now() + timedelta(minutes=30)
             db.commit()
             db.refresh(existing_user)
             background_tasks.add_task(send_otp_email, existing_user.email, raw_otp)
@@ -112,7 +113,7 @@ def register(request: Request, user_data: UserRegister, background_tasks: Backgr
         is_verified=False,
         approval_status="pending",
         otp_code=hashed_otp,
-        otp_expiry=datetime.now(timezone.utc) + timedelta(minutes=30)
+        otp_expiry=get_ist_now() + timedelta(minutes=30)
     )
 
     try:
@@ -155,7 +156,7 @@ def verify_otp(request: Request, verification_data: UserVerifyOTP, db: Session =
     if expiry_time.tzinfo is None:
         expiry_time = expiry_time.replace(tzinfo=timezone.utc)
         
-    if datetime.now(timezone.utc) > expiry_time:
+    if get_ist_now() > expiry_time:
         try:
             user.otp_code = None
             user.otp_expiry = None
@@ -412,7 +413,7 @@ def forgot_password(request: Request, data: ForgotPasswordRequest, background_ta
     
     raw_otp = ''.join(secrets.choice(string.digits) for _ in range(6))
     user.otp_code = hash_password(raw_otp)
-    user.otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+    user.otp_expiry = get_ist_now() + timedelta(minutes=30)
     
     try:
         db.commit()
@@ -438,7 +439,7 @@ def reset_password(request: Request, data: ResetPasswordRequest, db: Session = D
     if expiry_time.tzinfo is None:
         expiry_time = expiry_time.replace(tzinfo=timezone.utc)
         
-    if datetime.now(timezone.utc) > expiry_time:
+    if get_ist_now() > expiry_time:
         raise HTTPException(status_code=400, detail="Reset OTP has expired")
         
     if not pwd_context.verify(data.otp, user.otp_code):

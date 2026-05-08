@@ -280,6 +280,12 @@ export default function PublicJobDetailPage() {
                 return
             }
 
+            if (file.size === 0) {
+                setSubmitError('Invalid or empty file.')
+                if (fileInputRef.current) fileInputRef.current.value = ''
+                setResumeFile(null)
+                return
+            }
             if (file.size > 5 * 1024 * 1024) {
                 setSubmitError('File is too large. Maximum size is 5MB.')
                 if (fileInputRef.current) fileInputRef.current.value = ''
@@ -449,6 +455,8 @@ export default function PublicJobDetailPage() {
                 if (errorMsg.toLowerCase().includes('already applied')) {
                     setHasApplied(true)
                     setSubmitError(null)
+                } else if (errorMsg.toLowerCase().includes('already been submitted')) {
+                    setSubmitError('This resume has already been submitted for this job. Please use a different file.')
                 } else {
                     setSubmitError(errorMsg)
                 }

@@ -22,6 +22,7 @@ from reportlab.lib.units import inch
 from fastapi.responses import FileResponse, RedirectResponse
 from io import BytesIO
 from app.core.storage import upload_file, get_signed_url, get_public_url, get_supabase_client
+from app.core.timezone import get_ist_now
 
 import secrets
 import time
@@ -102,9 +103,10 @@ def check_hr_permission(user: User, application: Application, db: Session):
     Standardize HR permission guard. 
     Global access for HR and Super Admin.
     """
-    if user.role == "super_admin":
+    if user.role in ["super_admin", "admin"]:
         return True
-    if user.role == "hr" and application.hr_id == user.id:
+    if user.role == "hr":
+        # Any HR can manage onboarding if they have access to the app
         return True
         
     raise HTTPException(
@@ -215,7 +217,7 @@ def get_onboarding_candidates(
     
     query = db.query(Application).filter(
         Application.status.in_(["hired", "pending_approval", "offer_sent", "accepted", "onboarded"])
-    ).order_by(Application.updated_at.desc())
+    ).order_by(Application.id.desc())
     
     # Apply visibility isolation
     if current_user.role.lower() in ["hr", "staff"]:
@@ -264,9 +266,14 @@ async def request_offer_approval(
         raise HTTPException(status_code=400, detail="Candidate email is missing")
 
     try:
-        jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
-    except:
-        raise HTTPException(status_code=400, detail="Invalid joining date format")
+        if 'T' in joining_date:
+            jdate = datetime.fromisoformat(joining_date.replace('Z', '+00:00'))
+        else:
+            # Handle YYYY-MM-DD
+            jdate = datetime.strptime(joining_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except Exception as e:
+        logger.error(f"Date parsing error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid joining date format. Expected YYYY-MM-DD or ISO format.")
 
     settings_records = db.query(GlobalSettings).all()
     gs = {s.key: s.value for s in settings_records}
@@ -276,7 +283,7 @@ async def request_offer_approval(
     application.offer_template_snapshot = gs.get("offer_letter_template")
     application.offer_token = str(uuid.uuid4())
     application.offer_short_id = generate_short_id()
-    application.offer_token_expiry = datetime.now(timezone.utc) + timedelta(days=7)
+    application.offer_token_expiry = get_ist_now() + timedelta(days=7)
     application.offer_token_used = False
 
     if auto_approve:
@@ -316,10 +323,10 @@ async def request_offer_approval(
             
             application.offer_pdf_path = final_path
             application.offer_sent = True
-            application.offer_sent_date = datetime.now(timezone.utc)
+            application.offer_sent_date = get_ist_now()
             application.offer_approval_status = "approved"
             application.offer_approved_by = current_user.id
-            application.offer_approved_at = datetime.now(timezone.utc)
+            application.offer_approved_at = get_ist_now()
             application.offer_email_status = "pending"
             
             db.add(application)
@@ -423,10 +430,10 @@ async def approve_offer_letter(
 
     # Update Application State
     application.offer_sent = True
-    application.offer_sent_date = datetime.now(timezone.utc)
+    application.offer_sent_date = get_ist_now()
     application.offer_approval_status = "approved"
     application.offer_approved_by = current_user.id
-    application.offer_approved_at = datetime.now(timezone.utc)
+    application.offer_approved_at = get_ist_now()
     application.offer_email_status = "pending"
     
     db.add(application)
@@ -502,7 +509,7 @@ async def get_offer_preview(request: Request, token: str, db: Session = Depends(
         expiry = application.offer_token_expiry
         if expiry.tzinfo is None:
             expiry = expiry.replace(tzinfo=timezone.utc)
-        if expiry < datetime.now(timezone.utc):
+        if expiry < get_ist_now():
             raise HTTPException(status_code=400, detail="Offer expired.")
 
     company_name_setting = db.query(GlobalSettings).filter(GlobalSettings.key == "company_name").first()
@@ -592,11 +599,11 @@ def check_onboarding_reminders(background_tasks: BackgroundTasks, db: Session = 
     (System/Admin) Check for candidates joining in exactly 7 days and send reminder.
     Task 1 Requirement.
     """
-    today = datetime.now(timezone.utc).date()
+    today = get_ist_now().date()
     target_date = today + timedelta(days=7)
     
-    start_of_target = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-    end_of_target = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    start_of_target = datetime.combine(target_date, datetime.min.time())
+    end_of_target = datetime.combine(target_date, datetime.max.time())
 
     # Find candidates who accepted offer and join in exactly 7 days
     candidates = db.query(Application).filter(
@@ -630,7 +637,7 @@ def check_onboarding_reminders(background_tasks: BackgroundTasks, db: Session = 
                 job_title=job_title
             )
 
-        app.reminder_sent_at = datetime.now(timezone.utc)
+        app.reminder_sent_at = get_ist_now()
         reminders_sent += 1
         
     db.commit()
@@ -727,7 +734,7 @@ async def respond_to_offer(request: Request, response_req: OfferResponseRequest,
     if application.offer_token_used:
          raise HTTPException(status_code=400, detail="Response already processed. Access locked.")
     
-    now = datetime.now(timezone.utc)
+    now = get_ist_now()
     target_action = TransitionAction.ACCEPT_OFFER if response_req.response_type == "accept" else TransitionAction.REJECT
     
     from app.services.state_machine import CandidateStateMachine
@@ -835,7 +842,7 @@ def complete_onboarding(
         
     # Relaxed Guard: Onboarding allowed even if before joining date, with a log warning.
     if application.joining_date:
-        today = datetime.now(timezone.utc).date()
+        today = get_ist_now().date()
         joining_date = application.joining_date.date()
         if joining_date > today:
             days_remaining = (joining_date - today).days
@@ -849,7 +856,7 @@ def complete_onboarding(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
         
-    application.onboarded_at = datetime.now(timezone.utc)
+    application.onboarded_at = get_ist_now()
     
     log_audit(db, "ONBOARDED_MANUAL", application.id, current_user.id, {"status": "success"}, is_critical=True)
     db.commit()
@@ -862,11 +869,11 @@ def check_candidate_arrivals(db: Session = Depends(get_db)):
     Task 2 Requirement.
     """
     from app.services.state_machine import CandidateState
-    today = datetime.now(timezone.utc).date()
+    today = get_ist_now().date()
     
     # Range check for the whole day
-    start_of_day = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
-    end_of_day = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc)
+    start_of_day = datetime.combine(today, datetime.min.time())
+    end_of_day = datetime.combine(today, datetime.max.time())
 
     # Find candidates who accepted offer and join today
     candidates = db.query(Application).filter(
@@ -878,7 +885,7 @@ def check_candidate_arrivals(db: Session = Depends(get_db)):
     onboarded_count = 0
     for app in candidates:
         app.status = "onboarded"
-        app.onboarded_at = datetime.now(timezone.utc)
+        app.onboarded_at = get_ist_now()
         
         log_audit(db, "SYSTEM_AUTO_ONBOARD", app.id, None, {"reason": "Joining date reached"}, is_critical=True)
         

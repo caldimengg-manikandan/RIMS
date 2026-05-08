@@ -9,6 +9,7 @@ from sqlalchemy.sql import func
 from app.infrastructure.database import Base
 from app.core.encryption import EncryptedText
 from app.domain.constants import CandidateState
+from app.core.timezone import get_ist_now
 
 
 class User(Base):
@@ -29,8 +30,8 @@ class User(Base):
     profile_image_url = Column(String(500), nullable=True)
     otp_code = Column(String(255), nullable=True)
     otp_expiry = Column(DateTime(timezone=True), nullable=True, index=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
     # Relationships
     jobs = relationship("Job", back_populates="hr")
@@ -78,8 +79,8 @@ class Job(Base):
     behavioural_repo_set_id = Column(Integer, ForeignKey('question_sets.id', ondelete='SET NULL'), nullable=True)
     duration_minutes = Column(Integer, default=60) # Global interview duration
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
     closed_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -116,6 +117,7 @@ class Application(Base):
     candidate_phone_raw = Column(EncryptedText, nullable=True)
     resume_file_path = Column(String(500))
     resume_file_name = Column(String(255))
+    resume_hash = Column(String(64), nullable=True, index=True) # SHA256 of content
     candidate_photo_path = Column(String(500), nullable=True)
     status = Column(String(50), default='applied', index=True)
     # Resume AI pipeline: pending → parsing → parsed | failed
@@ -132,8 +134,8 @@ class Application(Base):
     # Recommendations (Point 4)
     recommendation = Column(String(50)) # 'Strong Hire', 'Hire', 'Borderline', 'Reject'
     
-    applied_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    applied_at = Column(DateTime, default=get_ist_now, server_default=func.now(), index=True)
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
     # Reliability & Versioning
     parsing_started_at = Column(DateTime, nullable=True)
@@ -211,7 +213,7 @@ class ApplicationStage(Base):
     evaluator_id = Column(Integer, ForeignKey('users.id', ondelete="SET NULL"), nullable=True)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
 
     # Relationships
     application = relationship("Application", back_populates="pipeline_stages")
@@ -238,8 +240,8 @@ class ResumeExtraction(Base):
     phone_number = Column(String(50), nullable=True)
     reasoning = Column(JSON, nullable=True)  # AI reasoning for scores
 
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
 
     # Relationships
@@ -272,8 +274,8 @@ class Interview(Base):
     first_level_completed = Column(Boolean, default=False)
     first_level_score = Column(Float, nullable=True)
     video_recording_path = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
 
     # Relationships
@@ -318,8 +320,8 @@ class InterviewQuestion(Base):
     expected_points = Column(JSON, nullable=True) # AI-generated rubric for this question
     options = Column(Text, nullable=True)  # JSON array for multiple choice options
     correct_answer = Column(Text, nullable=True)
-    ai_generated_at = Column(DateTime, default=datetime.datetime.now(timezone.utc))
-    created_at = Column(DateTime, default=datetime.datetime.now(timezone.utc))
+    ai_generated_at = Column(DateTime, default=get_ist_now)
+    created_at = Column(DateTime, default=get_ist_now)
     
     # Relationships
     interview = relationship("Interview", back_populates="questions")
@@ -348,7 +350,7 @@ class InterviewAnswer(Base):
     fallback_used = Column(Boolean, default=False)
     confidence_score = Column(Float, nullable=True)
     reasoning = Column(JSON, nullable=True)  # AI reasoning for scores
-    submitted_at = Column(DateTime, default=func.now(), server_default=func.now())
+    submitted_at = Column(DateTime, default=get_ist_now, server_default=func.now())
     evaluated_at = Column(DateTime)
 
     # Relationships
@@ -387,8 +389,8 @@ class InterviewReport(Base):
     confidence_score = Column(Float, nullable=True)
     retry_count = Column(Integer, default=0)
     failure_reason = Column(String(1000))
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime, default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
     # Relationships
     interview = relationship("Interview", back_populates="report")
@@ -407,8 +409,8 @@ class HiringDecision(Base):
     decision_comments = Column(EncryptedText)
     joining_date = Column(DateTime)
     offer_letter_path = Column(String(500))
-    decided_at = Column(DateTime, default=func.now(), server_default=func.now())
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
+    decided_at = Column(DateTime, default=get_ist_now, server_default=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
 
     # Relationships
     application = relationship("Application", back_populates="hiring_decision")
@@ -426,7 +428,7 @@ class Notification(Base):
     is_read = Column(Boolean, default=False, index=True)
     related_application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"))
     related_interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"))
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now(), index=True)
     read_at = Column(DateTime)
 
     # Relationships
@@ -450,7 +452,7 @@ class InterviewIssue(Base):
     status = Column(String(20), default='pending', index=True)
     hr_response = Column(Text)
     is_reissue_granted = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now(), index=True)
     resolved_at = Column(DateTime)
 
     # Relationships
@@ -465,7 +467,7 @@ class InterviewFeedback(Base):
     interview_id = Column(Integer, ForeignKey('interviews.id', ondelete="CASCADE"), nullable=False, unique=True, index=True)
     ui_ux_rating = Column(Integer)  # 1-5
     feedback_text = Column(Text)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now())
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now())
 
     # Relationships
     interview = relationship("Interview", back_populates="feedback")
@@ -482,7 +484,7 @@ class AuditLog(Base):
     details = Column(EncryptedText) 
     ip_address = Column(String(50))
     is_critical = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), index=True)
+    created_at = Column(DateTime, default=get_ist_now, server_default=func.now(), index=True)
 
     # Relationships
     user = relationship("User")
@@ -495,7 +497,7 @@ class InterviewSession(Base):
     candidate_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False, index=True)
     job_id = Column(Integer, ForeignKey('jobs.id', ondelete="CASCADE"), nullable=False, index=True)
     application_id = Column(Integer, ForeignKey('applications.id', ondelete="CASCADE"), nullable=True, index=True)
-    start_time = Column(DateTime(timezone=True), default=func.now())
+    start_time = Column(DateTime(timezone=True), default=get_ist_now)
     end_time = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default='pending', index=True)  # 'pending', 'active', 'completed', 'aborted'
     final_score = Column(Float, nullable=True)
@@ -515,7 +517,7 @@ class InterviewEvent(Base):
     session_id = Column(Integer, ForeignKey('interview_sessions.id'), nullable=False, index=True)
     event_type = Column(String(50), nullable=False)  # 'question_asked', 'answer_received', 'ai_evaluated', 'status_changed'
     payload = Column(Text, nullable=True)  # JSON serialized data
-    created_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    created_at = Column(DateTime(timezone=True), default=get_ist_now, index=True)
 
     # Relationships
     session = relationship("InterviewSession", back_populates="events")
@@ -530,7 +532,7 @@ class QuestionBank(Base):
     difficulty = Column(String(50), index=True) # 'easy', 'medium', 'hard'
     question_text = Column(Text, nullable=False)
     expected_key_points = Column(Text) # JSON array of points
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), default=get_ist_now)
 
 
 class QuestionSet(Base):
@@ -547,8 +549,8 @@ class QuestionSet(Base):
     questions = Column(Text, nullable=False)   # JSON array of question objects
     topic_tags = Column(Text, nullable=True)   # JSON array of topic strings for display
     hr_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=get_ist_now, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=get_ist_now, server_default=func.now(), onupdate=get_ist_now)
 
 
 class CandidateSkill(Base):
@@ -573,7 +575,7 @@ class AIEvaluation(Base):
     communication_score = Column(Float)
     reasoning_score = Column(Float)
     feedback_text = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=func.now())
+    created_at = Column(DateTime(timezone=True), default=get_ist_now)
 
     # Relationships
     answer = relationship("InterviewAnswer", back_populates="evaluation")
@@ -585,8 +587,8 @@ class GlobalSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(100), unique=True, nullable=False, index=True)
     value = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=get_ist_now)
+    updated_at = Column(DateTime, default=get_ist_now, onupdate=get_ist_now)
 
 
 class JobVersion(Base):
@@ -600,7 +602,7 @@ class JobVersion(Base):
     description = Column(Text, nullable=False)
     primary_evaluated_skills = Column(Text)
     experience_level = Column(String(50))
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime, default=get_ist_now)
 
 
 class ResumeExtractionVersion(Base):
@@ -613,7 +615,7 @@ class ResumeExtractionVersion(Base):
     extracted_text = Column(EncryptedText)
     extracted_skills = Column(Text)
     resume_score = Column(Float)
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime, default=get_ist_now)
 
 
 class InterviewReportVersion(Base):
@@ -625,4 +627,4 @@ class InterviewReportVersion(Base):
     version_number = Column(Integer, nullable=False)
     overall_score = Column(Float)
     summary = Column(EncryptedText)
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime, default=get_ist_now)

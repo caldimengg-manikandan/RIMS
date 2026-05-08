@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Form, Request
+from app.core.timezone import get_ist_now
 # Performance Serialization Fallback
 try:
     import orjson
@@ -14,7 +15,7 @@ import os
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.infrastructure.database import get_db, SessionLocal
 from app.domain.models import User, Application, Job, ResumeExtraction, Interview, InterviewAnswer, ResumeExtractionVersion, InterviewReport
 from app.domain.schemas import (
@@ -141,7 +142,7 @@ def build_application_summary_response(application: Application, current_user_id
         candidate_phone=application.candidate_phone,
         status=application.status,
         file_status=application.file_status,
-        applied_at=application.applied_at or datetime.now(timezone.utc),
+        applied_at=application.applied_at or get_ist_now(),
         resume_extraction=re_summary,
         interview=int_summary,
         resume_score=application.resume_score or 0.0,
@@ -196,7 +197,7 @@ def build_application_detail_response(application: Application, current_user_id:
 
     # 7. Fallback Safety (Scenario 5 Guard)
     if not detail.applied_at:
-        fallback_date = application.created_at or datetime.now(timezone.utc)
+        fallback_date = application.created_at or get_ist_now()
         detail.applied_at = fallback_date
         logger.error(
             f"INTEGRITY_ALERT: App {application.id} missing applied_at. Using fallback.",
@@ -470,7 +471,7 @@ async def apply_for_job(
         )
     content = await resume_file.read()
     if not content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Resume file is empty.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or empty file")
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -479,7 +480,58 @@ async def apply_for_job(
     
     ok, reason = validate_resume_signature(resume_ext, content)
     if not ok:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid resume content.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid resume content: {reason}")
+
+    # 4c. Content Validity Check (BA_007) - Detect "empty" PDFs (no readable text)
+    if resume_ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+            from io import BytesIO
+            reader = PdfReader(BytesIO(content))
+            has_text = False
+            for page in reader.pages:
+                text_content = page.extract_text() or ""
+                if text_content.strip():
+                    has_text = True
+                    break
+            if not has_text:
+                logger.warning(f"Empty PDF uploaded: {resume_file.filename}")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or empty file: No readable text found in PDF.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"PDF validation failed: {e}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or empty file: Corrupted or unreadable PDF.")
+    elif resume_ext in [".docx", ".doc"]:
+        try:
+            import docx
+            from io import BytesIO
+            doc = docx.Document(BytesIO(content))
+            has_text = any(para.text.strip() for para in doc.paragraphs)
+            if not has_text:
+                logger.warning(f"Empty DOCX uploaded: {resume_file.filename}")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or empty file: No readable text found in document.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DOCX validation failed: {e}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or empty file: Corrupted or unreadable document.")
+
+    # 4b. Duplicate Resume Content Detection (Point 7)
+    import hashlib
+    resume_hash = hashlib.sha256(content).hexdigest()
+    
+    existing_resume = db.query(Application).filter(
+        Application.job_id == job_id,
+        Application.resume_hash == resume_hash
+    ).first()
+    
+    if existing_resume:
+        logger.warning(f"Duplicate resume detected for job {job_id}. Hash: {resume_hash}. Existing app ID: {existing_resume.id}")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Duplicate resume entry: This file has already been processed for this job."
+        )
 
     # 5. Photo Validation
     photo_content = None
@@ -515,9 +567,11 @@ async def apply_for_job(
         candidate_phone_normalized=candidate_phone_normalized,
         candidate_phone_raw=candidate_phone_raw,
         candidate_phone_hash=candidate_phone_hash,
+        resume_file_name=resume_file.filename,
+        resume_hash=resume_hash,
         status="applied",
         hr_notes=warning_notes,
-        applied_at=datetime.now(timezone.utc),
+        applied_at=datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(tzinfo=None),
         resume_status="pending",
     )
 
@@ -621,7 +675,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             return
 
         application.resume_status = "parsing"
-        application.parsing_started_at = datetime.now(timezone.utc)
+        application.parsing_started_at = get_ist_now()
         db.commit()
         db.refresh(application)
         try:
@@ -747,7 +801,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         application.scoring_metadata = json.dumps({
             "logic_version": "v2.0",
             "weights": {"skills": 0.6, "experience": 0.4},
-            "recomputed_at": datetime.now(timezone.utc).isoformat(),
+            "recomputed_at": get_ist_now().isoformat(),
             "extraction_degraded": extraction_degraded_flag
         })
         
@@ -880,7 +934,7 @@ async def process_application_background(application_id: int, job_id: int, abs_f
                 application.resume_status = "failed"
                 application.retry_count = (application.retry_count or 0) + 1
                 application.failure_reason = str(e)[:1000]
-                application.last_attempt_at = datetime.now(timezone.utc)
+                application.last_attempt_at = get_ist_now()
 
                 # Escalation (Phase 5 fix)
                 if application.retry_count >= 3:
@@ -1047,41 +1101,64 @@ def get_hr_applications(
                 Job.title.ilike(term)
             ))
 
+        def parse_date(date_str):
+            if not date_str: return None
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    return datetime.strptime(date_str, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
         if from_date:
-            try:
-                sd = datetime.strptime(from_date, "%Y-%m-%d").date()
+            sd = parse_date(from_date)
+            if sd:
+                logger.info(f"Applying from_date filter (IST): {sd}")
+                # Data is now stored in IST, use direct comparison
                 query = query.filter(func.date(Application.applied_at) >= sd)
-            except ValueError:
+            else:
                 logger.warning(f"Invalid from_date format: {from_date}")
+        
         if to_date:
-            try:
-                ed = datetime.strptime(to_date, "%Y-%m-%d").date()
+            ed = parse_date(to_date)
+            if ed:
+                logger.info(f"Applying to_date filter (IST): {ed}")
+                # Data is now stored in IST, use direct comparison
                 query = query.filter(func.date(Application.applied_at) <= ed)
-            except ValueError:
+            else:
                 logger.warning(f"Invalid to_date format: {to_date}")
 
         if time_range and time_range != 'all':
-            # Applied Time Window Filter (Hour of Day in UTC)
-            # morning: 6-12, afternoon: 12-18, evening: 18-0, night: 0-6
-            hour_col = extract('hour', Application.applied_at)
+            # Applied Time Window Filter (Hour of Day)
+            # Adjusted for IST (UTC+5:30) as project context (e.g. phone defaults) is India-based.
+            # IST 06:00-12:00 (Morning)   => UTC 00:30-06:30
+            # IST 12:00-18:00 (Afternoon) => UTC 06:30-12:30
+            # IST 18:00-00:00 (Evening)   => UTC 12:30-18:30
+            # IST 00:00-06:00 (Night)     => UTC 18:30-00:30
+            
+            # Data is now stored in IST, extract hour directly
+            ist_hour = extract('hour', Application.applied_at)
+            
             if time_range == 'morning':
-                query = query.filter(hour_col >= 6, hour_col < 12)
+                query = query.filter(ist_hour >= 6, ist_hour < 12)
             elif time_range == 'afternoon':
-                query = query.filter(hour_col >= 12, hour_col < 18)
+                query = query.filter(ist_hour >= 12, ist_hour < 18)
             elif time_range == 'evening':
-                query = query.filter(hour_col >= 18, hour_col < 24)
+                query = query.filter(ist_hour >= 18, ist_hour < 24)
             elif time_range == 'night':
-                query = query.filter(hour_col >= 0, hour_col < 6)
+                query = query.filter(ist_hour < 6)
 
         # 3. Security
         # Apply visibility isolation: Anyone not a super_admin is restricted to their own apps
-        if current_user.role.lower() != "super_admin":
-            query = query.filter(Application.hr_id == current_user.id)
+        if current_user.role.lower() not in ["super_admin", "admin"]:
+            # Standard HR sees jobs they own OR apps they are assigned to
+            query = query.join(Application.job)
+            query = query.filter(or_(Job.hr_id == current_user.id, Application.hr_id == current_user.id))
         # Super Admin sees all.
 
         # 4. Retrieval
         total = query.count()
-        applications = query.order_by(Application.applied_at.desc()).offset(safe_skip).limit(safe_limit).all()
+        applications = query.order_by(Application.applied_at.desc(), Application.id.desc()).offset(safe_skip).limit(safe_limit).all()
 
         # Path sanitization
         for app in applications:
@@ -1349,7 +1426,7 @@ async def retry_resume_analysis(
     validate_hr_ownership(application, current_user, resource_name="application")
         
     application.resume_status = "parsing"
-    application.updated_at = datetime.now(timezone.utc)
+    application.updated_at = get_ist_now()
     db.commit()
     db.refresh(application)
     try:
@@ -1526,7 +1603,7 @@ async def update_application_status(
                 hr_id=current_user.id,
                 decision="hired",
                 decision_comments=status_update.hr_notes or "Hired via pipeline",
-                decided_at=datetime.now(timezone.utc),
+                decided_at=get_ist_now(),
             )
             db.add(decision)
 
@@ -1541,7 +1618,7 @@ async def update_application_status(
                 hr_id=current_user.id,
                 decision="rejected",
                 decision_comments=status_update.hr_notes or "Rejected via pipeline",
-                decided_at=datetime.now(timezone.utc),
+                decided_at=get_ist_now(),
             )
             db.add(decision)
     # ────────────────────────────────────────────────────────────────────

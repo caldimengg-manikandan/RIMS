@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.observability import log_json
 from app.infrastructure.database import get_db
 from app.domain.models import User, Interview, Application, InterviewQuestion, InterviewAnswer, InterviewReport, Job, InterviewReportVersion
+from app.core.timezone import get_ist_now
 from app.domain.schemas import (
     InterviewStart, InterviewAnswerSubmit, InterviewResponse, 
     InterviewQuestionResponse, InterviewDetailResponse, InterviewReportResponse,
@@ -867,7 +868,7 @@ async def access_interview(
                 detail="Interview record vanished during access. Please try again."
             )
         
-        current_time = datetime.now(timezone.utc)
+        current_time = get_ist_now()
         
         # 3. Session State & Expiry Validation
         if interview.is_used:
@@ -1040,7 +1041,7 @@ async def generate_test_token(
     import secrets
     new_key = secrets.token_urlsafe(16)
     interview.access_key_hash = pwd_context.hash(new_key)
-    interview.expires_at = datetime.now(timezone.utc) + timedelta(days=10)
+    interview.expires_at = get_ist_now() + timedelta(days=10)
     interview.is_used = False
     _set_interview_status(interview, "not_started")
     interview.used_at = None
@@ -1079,7 +1080,7 @@ async def start_interview_session(
             detail="This interview has already ended or cannot be started.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = get_ist_now()
 
     if interview.status == "not_started":
         application = interview.application
@@ -1491,7 +1492,7 @@ async def evaluate_answer_task(
         answer.ai_used = bool(ai_used)
         answer.fallback_used = bool(fallback_used)
         answer.confidence_score = float(max(0.0, min(confidence_score, 1.0)))
-        answer.evaluated_at = datetime.now(timezone.utc)
+        answer.evaluated_at = get_ist_now()
         
         # 3. Low Performance Screening (DEPRECATED: Interviews no longer auto-terminate for poor responses)
         # This block has been removed as per user request to ensure all candidates can complete their session.
@@ -1601,7 +1602,7 @@ async def submit_answer(
             try:
                 _set_interview_status(interview, "terminated")
                 interview.interview_stage = STAGE_COMPLETED
-                interview.ended_at = datetime.now(timezone.utc)
+                interview.ended_at = get_ist_now()
                 
                 from app.services.state_machine import CandidateStateMachine, TransitionAction
                 from app.domain.models import InterviewIssue
@@ -1667,7 +1668,7 @@ async def submit_answer(
                 question_id=current_question.id,
                 interview_id=interview_id,
                 answer_text=stored_answer_text,
-                submitted_at=datetime.now(timezone.utc)
+                submitted_at=get_ist_now()
             )
 
             # Auto-grade aptitude MCQs
@@ -1691,7 +1692,7 @@ async def submit_answer(
                 
                 answer.answer_score = 10.0 if is_correct else 0.0
                 answer.skill_relevance_score = 10.0 if is_correct else 0.0
-                answer.evaluated_at = datetime.now(timezone.utc)
+                answer.evaluated_at = get_ist_now()
                 answer.answer_evaluation = json.dumps({"auto_graded": True, "is_correct": is_correct})
 
             db.add(answer)
@@ -1792,7 +1793,7 @@ async def complete_aptitude(
     else:
         interview.aptitude_score = 0.0
 
-    interview.aptitude_completed_at = datetime.now(timezone.utc)
+    interview.aptitude_completed_at = get_ist_now()
     interview.aptitude_completed = True
 
     job = interview.application.job
@@ -1831,7 +1832,7 @@ async def complete_aptitude(
             # Aptitude only — mark as completed
             interview.interview_stage = STAGE_COMPLETED
             _set_interview_status(interview, "completed")
-            interview.ended_at = datetime.now(timezone.utc)
+            interview.ended_at = get_ist_now()
             interview.overall_score = interview.aptitude_score
             # Use FSM for state transition: ai_interview -> interview_completed
             from app.services.state_machine import CandidateStateMachine, TransitionAction
@@ -1927,7 +1928,7 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
     if interview.status == "in_progress":
         _set_interview_status(interview, "completed")
     if not interview.ended_at:
-        interview.ended_at = datetime.now(timezone.utc)
+        interview.ended_at = get_ist_now()
     
     # 2. Calculate scores
     questions = db.query(InterviewQuestion).filter(
@@ -2095,7 +2096,7 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
             report.detailed_feedback = detailed_feedback_val
             report.recommendation = rec_val
             report.reasoning = {"ai_summary": report_data.get("reasoning")}
-            report.updated_at = datetime.now(timezone.utc)
+            report.updated_at = get_ist_now()
         else:
             report = InterviewReport(
                 interview_id=interview_id,
@@ -2243,7 +2244,7 @@ async def end_interview(
 
     # 1.6 Annotate hr_notes when the candidate deliberately ends the interview early
     if (ended_early or is_forced) and interview.application:
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now_str = get_ist_now().strftime("%Y-%m-%d %H:%M UTC")
         early_note = (
             f"[{now_str}] Candidate ended the interview early using the 'End Early' button "
             "before completing all questions."
@@ -2259,7 +2260,7 @@ async def end_interview(
     # 2. Mark state immediately so the frontend sees a finished interview right away.
     interview.interview_stage = STAGE_COMPLETED
     if not interview.ended_at:
-        interview.ended_at = datetime.now(timezone.utc)
+        interview.ended_at = get_ist_now()
     db.commit()
 
     # 3. Run the heavy AI report generation in the background so this response
@@ -2297,7 +2298,7 @@ async def abandon_interview(
         # Mark as terminated
         _set_interview_status(interview, "terminated")
         interview.interview_stage = STAGE_COMPLETED
-        interview.ended_at = datetime.now(timezone.utc)
+        interview.ended_at = get_ist_now()
         
         # Track abandonment in Issue list
         from app.domain.models import InterviewIssue
@@ -2573,7 +2574,7 @@ async def upload_interview_video(
     # 6. Upload to Supabase
     from app.core.storage import upload_file
     from datetime import datetime
-    timestamp = int(datetime.now(timezone.utc).timestamp())
+    timestamp = int(get_ist_now().timestamp())
     filename = f"interview_{interview_id}_{timestamp}.webm"
     storage_path = f"{interview_id}/{filename}"
     

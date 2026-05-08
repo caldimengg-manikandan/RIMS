@@ -3,6 +3,7 @@ import logging
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from app.core.timezone import get_ist_now
 
 
 def get_request_id(request: Any = None) -> str:
@@ -49,7 +50,7 @@ def log_json(
     Note: we emit JSON as a string to stay compatible with existing logging config.
     """
     payload: Dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": get_ist_now().isoformat(),
         "event": event,
     }
     if request_id:

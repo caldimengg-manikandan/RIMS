@@ -527,7 +527,7 @@ def list_public_jobs(
         ))
 
     s, lim = _clamp_pagination(skip=skip, limit=limit, max_limit=200)
-    jobs = query.order_by(Job.created_at.desc()).offset(s).limit(lim).all()
+    jobs = query.order_by(Job.created_at.desc(), Job.id.desc()).offset(s).limit(lim).all()
     return jobs
 
 @router.get("", response_model=list[JobResponse])
@@ -550,7 +550,7 @@ def list_jobs(
         query = query.filter(Job.status == status)
 
     s, lim = _clamp_pagination(skip=skip, limit=limit, default_limit=200, max_limit=500)
-    jobs = query.order_by(Job.created_at.desc()).offset(s).limit(lim).all()
+    jobs = query.order_by(Job.created_at.desc(), Job.id.desc()).offset(s).limit(lim).all()
     return jobs
 
 @router.get("/public/{job_id}", response_model=JobResponse)

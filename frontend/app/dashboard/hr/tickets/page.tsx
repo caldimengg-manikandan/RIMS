@@ -101,9 +101,10 @@ export default function HRTicketsPage() {
 
 
     const handleResolve = async (ticketId: number, action: 'reissue_key' | 'resolve' | 'dismissed' | 'reply') => {
-        // 'dismissed' action doesn't require a response; all others do
-        if (!hrResponse.trim() && action !== 'dismissed') {
-            toast.error("Please provide a response message for the candidate before taking this action.")
+        // Only 'reply' strictly requires a message for clarity.
+        // 'reissue_key', 'resolve' and 'dismissed' can be done without a message if the HR chooses.
+        if (!hrResponse.trim() && action === 'reply') {
+            toast.error("Please provide a response message for the candidate explaining the resolution.")
             return
         }
 
@@ -129,6 +130,17 @@ export default function HRTicketsPage() {
                         const defaultResp = { items: [], total: 0 };
                         const data = current || defaultResp;
                         
+                        // If it's a simple reply, don't remove it from the pending list
+                        if (action === 'reply' && filter === 'pending') {
+                            return {
+                                ...data,
+                                items: data.items.map((t: Ticket) => t.id === ticketId ? {
+                                    ...t,
+                                    hr_response: hrResponse || t.hr_response,
+                                } : t)
+                            };
+                        }
+
                         if (filter === 'pending') {
                             const newItems = data.items.filter((t: Ticket) => t.id !== ticketId);
                             return { ...data, items: newItems, total: data.total - (data.items.length - newItems.length) };
@@ -401,15 +413,15 @@ export default function HRTicketsPage() {
                                     <div className="space-y-1 min-w-0">
                                         <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Position & Timing</Label>
                                         <div className="flex items-center gap-2 font-bold text-xl text-foreground truncate">
-                                            {selectedTicket.job_id ? (
-                                                <Link href={`/dashboard/hr/jobs/${selectedTicket.job_id}`}>
+                                            {selectedTicket.application_id ? (
+                                                <Link href={`/dashboard/hr/applications/${selectedTicket.application_id}`}>
                                                     <Badge variant="outline" className="border-primary/30 text-primary hover:bg-primary/5 transition-colors cursor-pointer font-black px-3 py-1 truncate max-w-full text-sm">
-                                                        JOB ID: {selectedTicket.job_identifier || selectedTicket.job_id}
+                                                        CANDIDATE ID: {selectedTicket.job_identifier || selectedTicket.application_id}
                                                     </Badge>
                                                 </Link>
                                             ) : (
                                                 <Badge variant="outline" className="border-muted text-muted-foreground font-black px-3 py-1 text-sm">
-                                                    JOB ID: N/A
+                                                    CANDIDATE ID: N/A
                                                 </Badge>
                                             )}
                                         </div>

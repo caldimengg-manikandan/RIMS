@@ -72,6 +72,13 @@ interface Application {
   } | null;
 }
 
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+}
 
 
 export default function HRApplicationsPage() {
@@ -284,9 +291,9 @@ export default function HRApplicationsPage() {
 
       {/* Filters Toolbar */}
       <div className="bg-card p-2 rounded-2xl border border-border/50 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
-        <div className="flex flex-wrap gap-4 items-end">
+        <div className="flex flex-col md:flex-row flex-wrap gap-4 items-start md:items-end">
           {/* Combined Search Bar */}
-          <div className="flex-1 min-w-0">
+          <div className="w-full md:flex-1 min-w-0">
             <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Search applications</label>
             <div className="relative group flex gap-2">
               <div className="relative flex-1">
@@ -341,7 +348,7 @@ export default function HRApplicationsPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="w-[200px]">
+          <div className="w-full sm:w-[200px]">
             <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Status</label>
             <select
               className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
@@ -362,7 +369,7 @@ export default function HRApplicationsPage() {
           </div>
 
           {/* Job Filter */}
-          <div className="w-[200px]">
+          <div className="w-full sm:w-[200px]">
             <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1 shadow-sm px-1">Filter by Job</label>
             <select
               className="w-full px-4 h-11 bg-background border-2 border-input rounded-xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all text-foreground cursor-pointer"
@@ -391,7 +398,7 @@ export default function HRApplicationsPage() {
                     setJobIdFilter("all");
                     setApplicationsPage(1);
                 }}
-                className="h-11 px-4 text-muted-foreground hover:text-foreground transition-colors"
+                className="w-full sm:w-auto h-11 px-4 text-muted-foreground hover:text-foreground transition-colors mt-2 sm:mt-0"
             >
                 Clear All
             </Button>
@@ -418,24 +425,24 @@ export default function HRApplicationsPage() {
       ) : (
         <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-700">
           {/* List Header */}
-          <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-xs uppercase tracking-widest font-black text-muted-foreground">
-            <div className="col-span-2">Candidate</div>
+          <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-xs uppercase tracking-widest font-black text-muted-foreground">
+            <div className="col-span-3 xl:col-span-2">Candidate</div>
             <div className="col-span-2">Position & IDs</div>
             <div className="col-span-2">Skills Match</div>
-            <div className="col-span-2">Performance Scores</div>
-            <div className="col-span-2 text-center">Status & Date</div>
-            <div className="col-span-2 text-right">Actions</div>
+            <div className="col-span-2">Scores</div>
+            <div className="col-span-2 text-center">Status</div>
+            <div className="col-span-1 xl:col-span-2 text-right">Actions</div>
           </div>
 
-          <div className="bg-card">
+          <div className="bg-card divide-y divide-border">
             {applications.map((app, index) => (
               <div
                 key={app.id}
-                className="grid grid-cols-12 gap-6 px-8 py-5 items-center hover:bg-muted/50 transition-all cursor-pointer group border-b border-border shadow-[0_4px_12px_-4px_rgba(0,0,0,0.1)] last:border-0 dark:shadow-none dark:border-slate-800/50"
+                className="flex flex-col lg:grid lg:grid-cols-12 gap-4 lg:gap-6 px-4 sm:px-6 lg:px-6 py-4 lg:py-5 lg:items-center hover:bg-muted/50 transition-all cursor-pointer group shadow-sm dark:shadow-none"
                 onClick={() => router.push(`/dashboard/hr/applications/${app.id}`)}
               >
                 {/* Candidate Info */}
-                <div className="col-span-2 flex items-center gap-4 min-w-0">
+                <div className="col-span-3 xl:col-span-2 flex items-center gap-4 min-w-0">
                   <Avatar className="h-12 w-12 border border-border/50 shadow-sm shrink-0">
                     <AvatarImage 
                       src={app.photo_url 
@@ -456,7 +463,8 @@ export default function HRApplicationsPage() {
                 </div>
 
                 {/* Position & IDs */}
-                <div className="col-span-2 min-w-0">
+                <div className="col-span-2 min-w-0 mt-3 lg:mt-0">
+                  <div className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Position & IDs</div>
                   <div className="text-base font-semibold text-foreground truncate">{app.job.title}</div>
                   <div className="flex flex-wrap gap-2 mt-1.5">
                     {app.job.job_id && (
@@ -473,7 +481,8 @@ export default function HRApplicationsPage() {
                 </div>
 
                 {/* Skills Match */}
-                <div className="col-span-2">
+                <div className="col-span-2 mt-3 lg:mt-0">
+                  <div className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Skills Match</div>
                   <div className="flex flex-wrap gap-1.5">
                     {(() => {
                       try {
@@ -495,7 +504,8 @@ export default function HRApplicationsPage() {
                 </div>
 
                 {/* Scores */}
-                <div className="col-span-2">
+                <div className="col-span-2 mt-3 lg:mt-0">
+                  <div className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Scores</div>
                   {(app.composite_score! > 0 || app.resume_extraction) && (
                     <div className="inline-flex items-center gap-2 bg-primary/5 px-2.5 py-1 rounded border border-primary/10 mb-2">
                       <span className="text-[11px] font-black text-primary uppercase tracking-tight">Score</span>
@@ -524,8 +534,9 @@ export default function HRApplicationsPage() {
                 </div>
 
                 {/* Status & Date */}
-                <div className="col-span-2 text-center min-w-0">
-                  <div className="flex flex-col items-center gap-1.5">
+                <div className="col-span-2 text-left lg:text-center min-w-0 mt-3 lg:mt-0">
+                  <div className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Status</div>
+                  <div className="flex flex-row lg:flex-col items-center lg:justify-center gap-3 lg:gap-1.5">
                     <span className={`capsule-badge text-[10px] px-3 py-1 font-bold ${getStatusColor(app.status)}`}>
                       {app.status.replace(/_/g, " ").toUpperCase()}
                     </span>
@@ -539,8 +550,8 @@ export default function HRApplicationsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="col-span-2 text-right" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex justify-end gap-3">
+                <div className="col-span-1 xl:col-span-2 text-left lg:text-right mt-4 lg:mt-0 pt-4 lg:pt-0 border-t border-border lg:border-t-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-wrap lg:justify-end gap-2 lg:gap-3">
                     {/* Primary Actions based on status */}
                     {app.status === "applied" && (
                       <Button
@@ -612,9 +623,9 @@ export default function HRApplicationsPage() {
           </div>
         </div>
       )}
-          <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
-              <div className="flex items-center gap-3">
+          <div className="sticky bottom-0 sm:bottom-6 bg-background/80 backdrop-blur-xl border-t sm:border border-border p-4 -mx-6 sm:mx-0 sm:rounded-2xl z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-2 sm:px-6">
+              <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3">
                 <Button
                   variant="outline"
                   size="lg"

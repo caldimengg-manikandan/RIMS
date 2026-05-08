@@ -194,7 +194,8 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
       // Rule 3: Empty File Detection (BA_007)
       if (f.size === 0) {
         status = 'skipped'
-        skippedReason = 'Empty file (0 bytes)'
+        skippedReason = 'Invalid or empty file'
+        toast.error(`Invalid or empty file: ${f.name}`)
       }
 
       // Rule 4: Duplicate detection (name + size)
@@ -203,8 +204,8 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
       )
       
       if (isDuplicate) {
-        status = 'skipped'
-        skippedReason = 'Duplicate attached'
+        toast.warning(`Duplicate resume detected and removed: ${f.name}`)
+        return
       }
 
       const pFile = { id, file: f, status, skippedReason }
@@ -340,7 +341,7 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
         } catch (error: any) {
           const isRateLimit = error.message?.toLowerCase().includes('rate limit')
           if (isRateLimit) {
-            // Rate limit hit: wait 15s and re-queue for retry (up to 2 retries)
+            // ... (keep existing rate limit logic)
             const retryCount = (currentItem as any)._retryCount || 0
             if (retryCount < 2) {
               ;(currentItem as any)._retryCount = retryCount + 1
@@ -350,9 +351,14 @@ export function BatchUploadModal({ isOpen, onClose, onSuccess }: BatchUploadModa
               continue
             }
           }
-          console.error(`Failed to process ${currentItem.file.name}:`, error)
-          failedCount++
-          setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'failed', errorMessage: error.message || 'API Error' } : f))
+          
+          const isDuplicate = error.message?.toLowerCase().includes('duplicate resume entry')
+          if (isDuplicate) {
+            setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'skipped', skippedReason: 'Duplicate resume already exists' } : f))
+          } else {
+            failedCount++
+            setFiles(prev => prev.map(f => f.id === currentItem.id ? { ...f, status: 'failed', errorMessage: error.message || 'API Error' } : f))
+          }
         }
 
         // Live stats update

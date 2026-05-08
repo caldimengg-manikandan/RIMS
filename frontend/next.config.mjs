@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  allowedDevOrigins: ['127.0.0.1', 'localhost:3000'],
   basePath: '/calrims',
   trailingSlash: true,
   devIndicators: {
@@ -34,7 +35,7 @@ const nextConfig = {
     return [
       {
         source: '/api/((?!generate-pdf|health).*)',
-        destination: 'http://localhost:10000/api/:1',
+        destination: 'http://127.0.0.1:10000/api/:1',
       },
     ]
   }

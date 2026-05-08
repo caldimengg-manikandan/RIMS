@@ -7,25 +7,25 @@
     <style>
         :root {
             --primary: #0f172a;
-            --secondary: #3b82f6;
+            --secondary: #2563eb;
             --accent: #10b981;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
+            --text-main: #0f172a;
+            --text-muted: #475569;
             --bg: #ffffff;
         }
 
         @page {
-            size: 85.6mm 54mm; /* Standard ID-1 CR80 size */
+            size: 85.6mm 54mm;
             margin: 0;
         }
 
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
             background-color: white;
             -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .id-card {
@@ -40,12 +40,11 @@
             box-sizing: border-box;
         }
 
-        /* Side Strip for Branding */
         .side-strip {
             position: absolute;
             top: 0;
             left: 0;
-            width: 6mm;
+            width: 5mm;
             height: 100%;
             background: var(--primary);
             z-index: 5;
@@ -53,8 +52,8 @@
 
         .main-content {
             flex: 1;
-            margin-left: 6mm;
-            padding: 12px 15px;
+            margin-left: 5mm;
+            padding: 10px 12px;
             z-index: 10;
             display: flex;
             flex-direction: row;
@@ -67,7 +66,8 @@
             flex-direction: column;
             justify-content: space-between;
             flex: 1;
-            padding-right: 10px;
+            padding-right: 8px;
+            overflow: hidden;
         }
 
         .right-photo {
@@ -75,86 +75,102 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 32mm;
-            gap: 6px;
+            width: 30mm;
+            gap: 5px;
         }
 
         .header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 5px;
+            gap: 6px;
+            margin-bottom: 2px;
         }
 
         .logo {
-            width: 22px;
-            height: 22px;
+            width: 18px;
+            height: 18px;
             object-fit: contain;
         }
 
         .company-name {
             font-weight: 800;
-            font-size: 9pt;
-            letter-spacing: -0.3px;
+            font-size: 8pt;
+            letter-spacing: -0.2px;
             color: var(--primary);
             text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .user-details {
-            margin-top: 5px;
+            margin-top: 2px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .user-name {
-            font-size: 13pt;
-            font-weight: 800;
-            margin: 2px 0;
+            font-size: 11pt;
+            font-weight: 900;
+            margin: 1px 0;
             color: var(--primary);
             line-height: 1.1;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.4px;
+            word-break: break-word;
+            max-height: 2.2em;
+            overflow: hidden;
         }
 
         .user-role {
-            font-size: 7.5pt;
-            font-weight: 600;
+            font-size: 7pt;
+            font-weight: 700;
             color: var(--secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .info-grid {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            margin-top: 6px;
+            gap: 2px;
+            margin-top: 4px;
         }
 
         .info-item {
             display: flex;
-            gap: 8px;
-            align-items: baseline;
+            gap: 6px;
+            align-items: center;
         }
 
         .info-label {
-            font-size: 5.5pt;
+            font-size: 5pt;
             font-weight: 700;
             color: var(--text-muted);
             text-transform: uppercase;
-            min-width: 45px;
+            min-width: 35px;
         }
 
         .info-value {
-            font-size: 7pt;
-            font-weight: 600;
+            font-size: 6.5pt;
+            font-weight: 700;
             color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .photo-container {
-            width: 25mm;
-            height: 32mm;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
+            width: 24mm;
+            height: 30mm;
+            background: #f1f5f9;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 3px;
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -170,12 +186,13 @@
         .employee-id-box {
             background: var(--primary);
             color: white;
-            font-size: 7pt;
-            font-weight: 800;
-            padding: 3px 10px;
-            border-radius: 3px;
+            font-size: 6.5pt;
+            font-weight: 900;
+            padding: 3px 8px;
+            border-radius: 2px;
             text-align: center;
-            min-width: 70px;
+            width: 24mm;
+            box-sizing: border-box;
         }
 
         .status-line {
@@ -183,16 +200,17 @@
             bottom: 0;
             right: 0;
             width: 100%;
-            height: 4px;
+            height: 3px;
             background: var(--accent);
         }
 
         .watermark {
-            font-size: 4.5pt;
+            font-size: 4pt;
             color: var(--text-muted);
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
-            opacity: 0.6;
+            opacity: 0.8;
+            margin-top: 4px;
         }
     </style>
 </head>

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BatchUploadModal } from '@/components/batch-upload-modal'
+import { Badge } from '@/components/ui/badge'
 import { UploadCloud, Download, Loader2, SearchX, CalendarDays, Briefcase, Clock, Filter, FileText } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { useRouter } from 'next/navigation'
@@ -75,6 +76,10 @@ export default function BatchAnalysisPage() {
   const [exportError, setExportError] = useState('')
   const [exportCount, setExportCount] = useState<number | null>(null)
 
+  // ─── Live count (updates with filters) ───────────────────────
+  const [liveCount, setLiveCount] = useState<number | null>(null)
+  const [isCountLoading, setIsCountLoading] = useState(false)
+
   const { data: jobs, isLoading: jobsLoading } = useSWR<Job[]>(
     '/api/jobs?limit=500',
     (url: string) => fetcher<Job[]>(url),
@@ -110,6 +115,32 @@ export default function BatchAnalysisPage() {
 
   const hasFilters = fromDate || toDate || filterJobId !== 'all' || timeRange !== 'all'
 
+  // ─── Fetch live count on filter change ───────────────────────
+  useEffect(() => {
+    const fetchCount = async () => {
+      if (dateError) return
+      setIsCountLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (filterJobId !== 'all') params.append('job_id', filterJobId)
+        if (fromDate) params.append('from_date', fromDate)
+        if (toDate) params.append('to_date', toDate)
+        if (timeRange !== 'all') params.append('time_range', timeRange)
+        params.append('limit', '1000')
+        const qs = params.toString()
+        const response = await APIClient.get(`/api/applications${qs ? '?' + qs : ''}`) as any
+        const total = response?.total ?? (Array.isArray(response) ? response.length : (response?.items?.length ?? 0))
+        setLiveCount(total)
+      } catch {
+        setLiveCount(null)
+      } finally {
+        setIsCountLoading(false)
+      }
+    }
+    const timer = setTimeout(fetchCount, 400)
+    return () => clearTimeout(timer)
+  }, [fromDate, toDate, filterJobId, timeRange, dateError])
+
   const clearFilters = () => {
     setFromDate('')
     setToDate('')
@@ -138,9 +169,9 @@ export default function BatchAnalysisPage() {
       const qs = params.toString()
       const url = `/api/applications${qs ? '?' + qs : ''}`
 
-      // BA_033: Warn if no filters are applied
+      // BA_033: Hard requirement to indicate filters
       if (!hasFilters) {
-        const confirmAll = window.confirm('You are about to export ALL candidates without any filters. This may take a moment. Continue?')
+        const confirmAll = window.confirm('IMPORTANT: You have not applied any filters. This will export ALL candidates in the system (up to 1000). To download specific data, please apply a Job, Date, or Time filter first. Continue anyway?')
         if (!confirmAll) {
           setIsExporting(false)
           return
@@ -243,8 +274,11 @@ export default function BatchAnalysisPage() {
               <Filter className="h-5 w-5 text-primary" />
               Export Filtered Data
             </CardTitle>
-            <CardDescription>
-              Download candidate data filtered by date, role, or time-of-day directly as Excel (Max 1000 per export).
+            <CardDescription className="flex items-center justify-between">
+              <span>Download candidate data filtered by date, role, or time-of-day.</span>
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] h-5">
+                Max 1000
+              </Badge>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -347,11 +381,25 @@ export default function BatchAnalysisPage() {
               </p>
             )}
 
+            {/* Live Count Badge */}
+            {liveCount !== null && (
+              <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium ${
+                liveCount === 0
+                  ? 'bg-destructive/10 border-destructive/20 text-destructive'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+              }`}>
+                <span>
+                  {isCountLoading ? 'Counting...' : liveCount === 0 ? 'No candidates found for these filters' : `${liveCount} candidate${liveCount !== 1 ? 's' : ''} will be exported`}
+                </span>
+                {liveCount > 0 && <Download className="h-3.5 w-3.5 opacity-60" />}
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex gap-3 pt-2">
               <Button
                 onClick={handleFilteredExport}
-                disabled={isExporting || !!dateError}
+                disabled={isExporting || !!dateError || liveCount === 0}
                 className="flex-1 gap-2"
               >
                 {isExporting ? (

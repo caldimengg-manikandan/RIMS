@@ -145,13 +145,14 @@ export default function HRDashboard() {
     if (debouncedSearch) params.append('search', debouncedSearch)
     if (filters.date) params.append('date', filters.date)
     if (filters.status && filters.status !== 'all') params.append('status', filters.status)
+    if (jobFilter && jobFilter !== 'all') params.append('job_id', jobFilter)
     
     // Pagination params
     params.append('skip', String((currentPage - 1) * pageSize))
     params.append('limit', String(pageSize))
     
     return params.toString()
-  }, [debouncedSearch, filters.date, filters.status, currentPage, pageSize])
+  }, [debouncedSearch, filters.date, filters.status, jobFilter, currentPage, pageSize])
 
   const { data: paginatedInterviews, isValidating: isFiltering, mutate: mutateInterviews } = useSWR<{ items: any[], total: number }>(
     `/api/analytics/interviews${filterQuery ? `?${filterQuery}` : ''}`,
