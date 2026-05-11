@@ -432,13 +432,29 @@ export default function ReportsPage() {
   // Metrics
   const metrics = useMemo(() => {
     const total = reportsResponse?.total || reports.length;
-    const selectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Select').length
-    const holdCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Consider').length
-    const rejectedCount = filteredReports.filter((r: Report) => getRecommendationLabel(Number(r?.overall_score || 0)) === 'Reject').length
+    let selectedCount = 0;
+    let holdCount = 0;
+    let rejectedCount = 0;
+    let terminatedCount = 0;
+    let incompleteCount = 0;
+
+    filteredReports.forEach((r: Report) => {
+      if (r.termination_reason) {
+        terminatedCount++;
+      } else if (isInterviewNotCompleted(r as any)) {
+        incompleteCount++;
+      } else {
+        const label = getRecommendationLabel(Number(r?.overall_score || 0));
+        if (label === 'Select') selectedCount++;
+        else if (label === 'Consider') holdCount++;
+        else rejectedCount++;
+      }
+    });
+
     const avgScore = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + Number(r?.overall_score || 0), 0) / (filteredReports.length || 1)).toFixed(2) : '0.00'
     const avgQuestions = total > 0 ? (filteredReports.reduce((acc: number, r: Report) => acc + (r?.total_questions_answered || 0), 0) / (filteredReports.length || 1)).toFixed(1) : '0.0'
 
-    return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, avgScore, avgQuestions }
+    return { total, selected: selectedCount, hold: holdCount, rejected: rejectedCount, terminated: terminatedCount, incomplete: incompleteCount, avgScore, avgQuestions }
   }, [filteredReports, reportsResponse])
 
   const isAnyFilterActive = useMemo(() => {
@@ -649,6 +665,7 @@ export default function ReportsPage() {
     */
     <div className="w-full max-w-[1600px] mx-auto flex flex-col gap-4 lg:h-[calc(100vh-7.5rem)]">
 
+      
       {/* Header - Fixed at the top of the component */}
       <PageHeader
         title="Interview Reports"
@@ -894,7 +911,7 @@ export default function ReportsPage() {
                       <SelectItem value="Select">Selected</SelectItem>
                       <SelectItem value="Reject">Rejected</SelectItem>
                       <SelectItem value="Terminated">Terminated</SelectItem>
-                      <SelectItem value="Not Completed">Not completed</SelectItem>
+                      <SelectItem value="Not Completed">Incomplete</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -996,6 +1013,41 @@ export default function ReportsPage() {
                                 color: 'hsl(var(--muted-foreground))'
                               }
                             }
+                          },
+                          popper: {
+                            sx: {
+                              '& .MuiPaper-root': {
+                                backgroundColor: 'hsl(var(--background))',
+                                color: 'hsl(var(--foreground))',
+                                border: '1px solid hsl(var(--border))',
+                                backgroundImage: 'none'
+                              },
+                              '& .MuiPickersDay-root': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersDay-root:hover': {
+                                backgroundColor: 'hsl(var(--accent))',
+                              },
+                              '& .MuiPickersDay-root.Mui-selected': {
+                                backgroundColor: 'hsl(var(--primary))',
+                                color: 'hsl(var(--primary-foreground))',
+                              },
+                              '& .MuiDayCalendar-weekDayLabel': {
+                                color: 'hsl(var(--muted-foreground))',
+                              },
+                              '& .MuiPickersCalendarHeader-label': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiIconButton-root': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersYear-yearButton': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersMonth-monthButton': {
+                                color: 'hsl(var(--foreground))',
+                              }
+                            }
                           }
                         }}
                       />
@@ -1028,6 +1080,41 @@ export default function ReportsPage() {
                               },
                               '& .MuiSvgIcon-root': {
                                 color: 'hsl(var(--muted-foreground))'
+                              }
+                            }
+                          },
+                          popper: {
+                            sx: {
+                              '& .MuiPaper-root': {
+                                backgroundColor: 'hsl(var(--background))',
+                                color: 'hsl(var(--foreground))',
+                                border: '1px solid hsl(var(--border))',
+                                backgroundImage: 'none'
+                              },
+                              '& .MuiPickersDay-root': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersDay-root:hover': {
+                                backgroundColor: 'hsl(var(--accent))',
+                              },
+                              '& .MuiPickersDay-root.Mui-selected': {
+                                backgroundColor: 'hsl(var(--primary))',
+                                color: 'hsl(var(--primary-foreground))',
+                              },
+                              '& .MuiDayCalendar-weekDayLabel': {
+                                color: 'hsl(var(--muted-foreground))',
+                              },
+                              '& .MuiPickersCalendarHeader-label': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiIconButton-root': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersYear-yearButton': {
+                                color: 'hsl(var(--foreground))',
+                              },
+                              '& .MuiPickersMonth-monthButton': {
+                                color: 'hsl(var(--foreground))',
                               }
                             }
                           }
@@ -1284,7 +1371,7 @@ export default function ReportsPage() {
                                 variant="outline"
                                 className="bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"
                               >
-                                Not Completed
+                                Incomplete
                               </Badge>
                             ) : (
                               <Badge variant="outline" className={getRecommendationColor(report.overall_score)}>
@@ -1351,7 +1438,9 @@ export default function ReportsPage() {
                         <StatusChart data={[
                           { name: 'Selected', value: metrics.selected, color: '#10b981' },
                           { name: 'Hold', value: metrics.hold, color: '#f59e0b' },
-                          { name: 'Rejected', value: metrics.rejected, color: '#ef4444' }
+                          { name: 'Rejected', value: metrics.rejected, color: '#ef4444' },
+                          { name: 'Terminated', value: metrics.terminated, color: '#b91c1c' },
+                          { name: 'Incomplete', value: metrics.incomplete, color: '#f97316' }
                         ].filter(d => d.value > 0)} />
                       </div>
 
@@ -1414,7 +1503,7 @@ export default function ReportsPage() {
                       {viewingReport.candidate_profile.candidate_name || viewingReport.display_date_short}
                       {interviewNotCompleted ? (
                         <Badge className="capsule-badge border-none shadow-none text-sm bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30">
-                          Suggestion: Not Completed
+                          Suggestion: Incomplete
                         </Badge>
                       ) : (
                         <>

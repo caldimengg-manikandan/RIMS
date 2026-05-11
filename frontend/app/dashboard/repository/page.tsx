@@ -826,10 +826,10 @@ export default function RepositoryPage() {
                                         </TableCell>
                                         <TableCell className="text-right pr-6">
                                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" onClick={() => openEdit(set)}>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10" onClick={() => openEdit(set)}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget(set)}>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" onClick={() => setDeleteTarget(set)}>
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>

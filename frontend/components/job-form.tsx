@@ -142,8 +142,11 @@ interface JobFormProps {
 export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormProps) {
     const router = useRouter()
     const [isAILoading, setIsAILoading] = useState(false)
+    const [showValidationErrors, setShowValidationErrors] = useState(false)
     const [showConfirm, setShowConfirm] = useState(false)
-    const [error, setError] = useState('')
+    const [aiFillError, setAiFillError] = useState('')
+    const [questionFileError, setQuestionFileError] = useState('')
+    const [aptitudeFileError, setAptitudeFileError] = useState('')
     const [isUploadingQuestions, setIsUploadingQuestions] = useState(false)
     const [questionFileName, setQuestionFileName] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -297,7 +300,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
 
     const handleAIFill = async (file?: File) => {
         setIsAILoading(true)
-        setError('')
+        setAiFillError('')
         try {
             const data = new FormData()
             if (file) {
@@ -305,7 +308,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             } else if (formData.description) {
                 data.append('text_content', formData.description)
             } else {
-                setError('Please provide a job description or upload a file to extract details.')
+                setAiFillError('Please provide a job description or upload a file to extract details.')
                 setIsAILoading(false)
                 return
             }
@@ -351,7 +354,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             }
 
         } catch (err: any) {
-            setError(err.message || 'Error occurred during AI extraction.')
+            setAiFillError(err.message || 'Error occurred during AI extraction.')
         } fileInputRef.current && (fileInputRef.current.value = '')
         setIsAILoading(false)
     }
@@ -368,16 +371,16 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
 
         const ext = file.name.split('.').pop()?.toLowerCase()
         if (!ext || !['txt', 'pdf', 'docx'].includes(ext)) {
-            setError('Invalid file type. Only .txt, .pdf, .docx are allowed.')
+            setQuestionFileError('Invalid file type. Only .txt, .pdf, .docx are allowed.')
             return
         }
         if (file.size > MAX_QUESTION_FILE_SIZE) {
-            setError('File is too large. Maximum size is 5MB.')
+            setQuestionFileError('File is too large. Maximum size is 5MB.')
             return
         }
 
         setIsUploadingQuestions(true)
-        setError('')
+        setQuestionFileError('')
 
         try {
             const data = new FormData()
@@ -389,7 +392,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             setFormData(prev => ({ ...prev, uploaded_question_file: result.file_path }))
             setQuestionFileName(result.original_name)
         } catch (err: any) {
-            setError(err.message || 'Failed to upload question file.')
+            setQuestionFileError(err.message || 'Failed to upload question file.')
         } finally {
             setIsUploadingQuestions(false)
             if (questionFileRef.current) questionFileRef.current.value = ''
@@ -408,16 +411,16 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
 
         const ext = file.name.split('.').pop()?.toLowerCase()
         if (!ext || !['xlsx', 'xls'].includes(ext)) {
-            setError('Invalid file type. Only Excel (.xlsx, .xls) files are allowed for aptitude questions.')
+            setAptitudeFileError('Invalid file type. Only Excel (.xlsx, .xls) files are allowed for aptitude questions.')
             return
         }
         if (file.size > MAX_QUESTION_FILE_SIZE) {
-            setError('File is too large. Maximum size is 5MB.')
+            setAptitudeFileError('File is too large. Maximum size is 5MB.')
             return
         }
 
         setIsUploadingAptitude(true)
-        setError('')
+        setAptitudeFileError('')
 
         try {
             const data = new FormData()
@@ -430,7 +433,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
             setAptitudeFileName(result.original_name)
             setAptitudeQuestionCount(result.questions_count)
         } catch (err: any) {
-            setError(err.message || 'Failed to upload aptitude question file.')
+            setAptitudeFileError(err.message || 'Failed to upload aptitude question file.')
         } finally {
             setIsUploadingAptitude(false)
             if (aptitudeFileRef.current) aptitudeFileRef.current.value = ''
@@ -532,19 +535,21 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                 AI Auto-Fill
                             </Button>
                         </div>
+                        {aiFillError && <p className="text-xs text-destructive mt-2" role="alert">{aiFillError}</p>}
                     </div>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={(e) => { 
                         e.preventDefault(); 
-                        setError('');
+                        setAiFillError(''); setQuestionFileError(''); setAptitudeFileError('');
+                        if (!isFormValid) {
+                            setShowValidationErrors(true);
+                            toast.error("Please fill all the required fields correctly.");
+                            return;
+                        }
+                        setShowValidationErrors(false);
                         setShowConfirm(true); 
                     }} className="space-y-6">
-                        {error && (
-                            <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm border border-destructive/20 ">
-                                {error}
-                            </div>
-                        )}
 
                         <div>
                             <label htmlFor="title" className="block text-sm font-bold text-foreground mb-1.5 uppercase tracking-wider px-1">
@@ -561,6 +566,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                 onChange={(e) => { const v = e.target.value; setFormData({ ...formData, title: v }); validateTitle(v) }}
                             />
                             {titleError && <p className="text-xs text-destructive mt-1" role="alert">{titleError}</p>}
+                            {showValidationErrors && formData.title.trim().length < 3 && !titleError && <p className="text-xs text-destructive mt-1">Job title is missing or too short.</p>}
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-6">
@@ -589,6 +595,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                     id="domain"
                                     type="text"
                                     autoComplete="off"
+                                    required
                                     className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
                                     placeholder="Type or select a domain"
                                     value={formData.domain}
@@ -686,6 +693,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                         id="location"
                                         type="text"
                                         autoComplete="off"
+                                        required={formData.mode_of_work !== 'Remote'}
                                         className="w-full h-11 px-4 border-2 border-input rounded-xl focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary bg-background text-foreground text-base transition-all"
                                         placeholder="e.g. TN, Bangalore, India"
                                         value={formData.location}
@@ -695,6 +703,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                         }}
                                         onFocus={() => setShowSuggestions(true)}
                                     />
+                                    {showValidationErrors && formData.location.trim().length === 0 && <p className="text-xs text-destructive mt-1">Location is required for non-remote roles.</p>}
                                     {showSuggestions && locationSuggestions.length > 0 && (
                                         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                                             {locationSuggestions.map((suggestion, idx) => (
@@ -746,6 +755,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                 onChange={(e) => { const v = e.target.value; setFormData({ ...formData, description: v }); validateDescription(v) }}
                             />
                             {descError && <p className="text-xs text-destructive mt-1" role="alert">{descError}</p>}
+                            {showValidationErrors && formData.description.trim().length < 10 && !descError && <p className="text-xs text-destructive mt-1">Job description is missing or too short.</p>}
                         </div>
 
                         <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-5">
@@ -769,6 +779,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                         type="number"
                                         min="10"
                                         max="300"
+                                        required
                                         className="w-32 h-10 px-3 border-2 border-input rounded-lg focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary bg-background text-foreground transition-all"
                                         value={formData.duration_minutes}
                                         aria-invalid={Boolean(durationError)}
@@ -908,6 +919,10 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                                 )}
                                                 {isUploadingAptitude ? 'Uploading...' : 'Upload Aptitude Questions (.xlsx)'}
                                             </Button>
+                                            {aptitudeFileError && <p className="text-xs text-destructive mt-2" role="alert">{aptitudeFileError}</p>}
+                                            {showValidationErrors && !formData.aptitude_questions_file && !aptitudeRepoSetId && (
+                                                <p className="text-xs text-destructive mt-2" role="alert">An aptitude question set or Excel file must be selected.</p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1025,6 +1040,10 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                                                                                 {isUploadingQuestions ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
                                                                                 {isUploadingQuestions ? 'Uploading...' : 'Upload Question File'}
                                                                             </Button>
+                                                                            {questionFileError && <p className="text-xs text-destructive mt-2" role="alert">{questionFileError}</p>}
+                                                                            {showValidationErrors && !formData.uploaded_question_file && !technicalRepoSetId && (
+                                                                                <p className="text-xs text-destructive mt-2" role="alert">A question set or file must be selected for this interview mode.</p>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -1080,7 +1099,7 @@ export function JobForm({ mode, initialData, onSubmit, isSubmitting }: JobFormPr
                             <Button
                                 type="submit"
                                 className="bg-blue-600 hover:bg-blue-700 text-white min-w-[150px] w-full sm:w-auto shadow-lg"
-                                disabled={isSubmitting || isAILoading || !isFormValid}
+                                disabled={isSubmitting || isAILoading}
                             >
                                 {isSubmitting ? (mode === 'create' ? 'Creating...' : 'Saving...') : (mode === 'create' ? 'Review & Post Job' : 'Review & Update Job')}
                             </Button>

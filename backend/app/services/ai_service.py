@@ -219,6 +219,10 @@ def extract_years_from_level(level_str: str) -> float:
     return float(match.group(1)) if match else 0.0
 
 async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: str = "", required_experience: str = "") -> dict:
+    def calculate_exp_score(cand_exp, req_exp):
+        if req_exp <= 0: return 100 # No requirement = full score
+        return min((cand_exp / req_exp) * 100, 100)
+        
     # Detection for unreadable/scanned PDFs
     if "SCANNED_PDF_DETECTED" in resume_text:
         return {
@@ -390,9 +394,6 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         if required_exp <= 0:
             required_exp = extract_years_from_level(job_description) # Fallback to JD text search
         
-        def calculate_exp_score(cand_exp, req_exp):
-            if req_exp <= 0: return 100 # No requirement = full score
-            return min((cand_exp / req_exp) * 100, 100)
             
         exp_match_score = calculate_exp_score(experience_years, required_exp)
         
@@ -455,8 +456,8 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
         result["match_percentage"] = round(match_pct, 1)
         result["experience"] = round(exp_yrs, 1)
         
-        # Heuristic score based on match
-        result["score"] = round(max(5.0, match_pct / 10), 1)
+        # Heuristic score based strictly on match, with no artificial floor
+        result["score"] = round((match_pct * 0.7 + calculate_exp_score(exp_yrs, 3) * 0.3) / 10, 1) if job_description else round(match_pct / 10, 1)
         
         logger.info(f"Fallback Metrics: Match={match_pct}%, Exp={exp_yrs}y")
 

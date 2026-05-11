@@ -623,7 +623,7 @@ export default function HRApplicationsPage() {
           </div>
         </div>
       )}
-          <div className="sticky bottom-0 sm:bottom-6 bg-background/80 backdrop-blur-xl border-t sm:border border-border p-4 -mx-6 sm:mx-0 sm:rounded-2xl z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]">
+          <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-2 sm:px-6">
               <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3">
                 <Button
