@@ -385,7 +385,7 @@ export default function HRJobsPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="sticky bottom-6 bg-background/80 backdrop-blur-xl border-t border-border p-4 -mx-6 z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
+                <div className="sticky bottom-0 sm:bottom-6 bg-background/80 backdrop-blur-xl border-t sm:border border-border p-4 -mx-6 sm:mx-0 sm:rounded-2xl z-30 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)] mt-8">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-[1600px] mx-auto px-6">
                         <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
                             Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredJobs.length)} of {filteredJobs.length}

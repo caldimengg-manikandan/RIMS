@@ -51,7 +51,7 @@ export default function PipelinePage() {
                             className="rounded-lg h-8 px-3 text-muted-foreground"
                         >
                             <Trophy className="h-4 w-4 mr-1.5" />
-                            Ranking View
+                            Candidate Ranking
                         </Button>
                     </div>
                 </div>
