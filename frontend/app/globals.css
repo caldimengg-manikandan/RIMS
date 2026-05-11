@@ -13,11 +13,18 @@
 */
 
 @layer base {
-  html, body {
-    @apply overflow-x-hidden max-w-full;
-    width: 100%;
-    height: 100%;
-    overflow-y: hidden;
+  html {
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+  
+  body {
+    overflow: hidden !important;
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0;
+    padding: 0;
+    position: fixed; /* Extra guard against body scrolling */
   }
 }
 
@@ -220,9 +227,31 @@
     animation-delay: 4s;
   }
 
+  /* ── Scrollbar nuclear option ──────────────────────────────────────
+     Suppress native scrollbars on every layout shell element.
+     The ONLY element allowed to scroll is the dashboard content area.
+  ──────────────────────────────────────────────────────────────── */
+  [data-slot="sidebar-wrapper"],
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar"],
+  [data-slot="sidebar-inner"],
+  [data-sidebar="sidebar"] {
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* IE/Edge */
+  }
+  [data-slot="sidebar-wrapper"]::-webkit-scrollbar,
+  [data-slot="sidebar-container"]::-webkit-scrollbar,
+  [data-slot="sidebar"]::-webkit-scrollbar,
+  [data-slot="sidebar-inner"]::-webkit-scrollbar,
+  [data-sidebar="sidebar"]::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+  }
+
   /* App shell / background utilities */
   .app-shell {
-    @apply min-h-screen w-full bg-background text-foreground overflow-x-hidden relative;
+    @apply h-screen w-full bg-background text-foreground overflow-hidden relative;
   }
 
   .app-shell-gradient {
