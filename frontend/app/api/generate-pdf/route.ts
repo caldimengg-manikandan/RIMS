@@ -10,8 +10,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No HTML content provided" }, { status: 400 })
     }
 
-    // Launch puppeteer
+    // Launch puppeteer with system chromium
     browser = await puppeteer.launch({
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--font-render-hinting=none"],
       headless: true,
     })

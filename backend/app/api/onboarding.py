@@ -122,10 +122,14 @@ async def generate_pdf_via_puppeteer(html_content: str, filename: str, bucket: s
     # Call the Next.js API route we created
     # Ensure we use the correct base path even if env var is slightly misconfigured
     frontend_url = os.environ.get("FRONTEND_BASE_URL") or settings.frontend_base_url
-    if "/calrims" not in frontend_url and settings.env != "production":
-        frontend_url = f"{frontend_url.rstrip('/')}/calrims"
-        
-    pdf_service_url = f"{frontend_url.rstrip('/')}/api/generate-pdf/"
+    
+    # Internal Docker network call to avoid public Nginx/DNS/SSL issues on the VPS
+    if settings.env == "production":
+        pdf_service_url = "http://nginx/calrims/api/generate-pdf/"
+    else:
+        if "/calrims" not in frontend_url:
+            frontend_url = f"{frontend_url.rstrip('/')}/calrims"
+        pdf_service_url = f"{frontend_url.rstrip('/')}/api/generate-pdf/"
     
     start_time = time.time()
     logger.info(f"Starting Puppeteer PDF generation request to {pdf_service_url} for {filename}...")
