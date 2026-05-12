@@ -105,6 +105,10 @@ class AnalyticsService:
                 'review_later': 'Review',
                 'physical_interview': 'Physical',
                 'hired': 'Hired',
+                'pending_approval': 'Pending Approval',
+                'offer_sent': 'Offer Sent',
+                'accepted': 'Accepted',
+                'onboarded': 'Onboarded',
                 'rejected': 'Rejected'
             }
             

@@ -105,15 +105,13 @@ export default function DashboardLayout({
         shouldRetryOnError: true
       }}
     >
-      <SidebarProvider>
-        {/* SidebarProvider div uses flex-1 min-h-0 so it properly fills the flex-col parent (ScrollContainer <main>) */}
-        <div className="flex flex-1 min-h-0 w-full bg-transparent relative overflow-hidden">
-          {/* subtle inner background for dashboard content */}
-          <div className="pointer-events-none absolute inset-0 z-0 opacity-80">
-            <div className="absolute inset-0 bg-background/95" />
-          </div>
+      <SidebarProvider className="relative overflow-hidden">
+        {/* subtle inner background for dashboard content */}
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-80">
+          <div className="absolute inset-0 bg-background/95" />
+        </div>
 
-          <AppSidebar />
+        <AppSidebar />
 
           {/* Right panel: flex-1 min-h-0 so it shrinks properly; overflow-hidden clips children */}
           <div className="flex-1 min-h-0 flex flex-col relative z-10 transition-all duration-300 overflow-hidden">
@@ -124,7 +122,6 @@ export default function DashboardLayout({
               </div>
             </div>
           </div>
-        </div>
       </SidebarProvider>
     </SWRConfig>
   )

@@ -23,6 +23,8 @@ from app.core.auth import (
 )
 from app.core.ownership import validate_hr_ownership
 from app.services.email_service import send_ticket_resolved_email, send_key_reissued_email
+from app.core.timezone import get_ist_now
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/tickets", tags=["Tickets"])
 
@@ -341,6 +343,7 @@ def resolve_ticket(
         ticket.interview.access_key_hash = hash_password(new_key)
         ticket.interview.is_used = False
         ticket.interview.status = 'not_started'
+        ticket.interview.expires_at = get_ist_now() + timedelta(days=10)
         ticket.is_reissue_granted = True
         
         # Send reissue email if requested

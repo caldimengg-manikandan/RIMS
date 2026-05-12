@@ -209,7 +209,7 @@ export default function OnboardingPage() {
     }
 
     return (
-        <div className="p-6 space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-8 animate-in fade-in duration-700">
             <PageHeader
                 title="Onboarding Pipeline"
                 description="Track and manage newly hired candidates"
@@ -272,9 +272,12 @@ export default function OnboardingPage() {
                                 {candidates?.filter(c => {
                                     if (!c.joining_date) return false
                                     const jDate = new Date(c.joining_date)
-                                    const now = new Date()
-                                    const diff = jDate.getTime() - now.getTime()
-                                    return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000
+                                    jDate.setHours(0, 0, 0, 0)
+                                    const today = new Date()
+                                    today.setHours(0, 0, 0, 0)
+                                    const diff = jDate.getTime() - today.getTime()
+                                    // Include today (0) and up to 7 days in the future
+                                    return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000
                                 }).length || 0}
                             </div>
                             <p className="text-xs text-muted-foreground">Reminders sent automatically</p>

@@ -232,7 +232,7 @@ export default function HRDashboard() {
   // Metrics will fallback to zero defaults handled in useMemos.
 
   return (
-    <div className="p-4 md:p-0 space-y-8">
+    <div className="space-y-8">
       {/* Header */}
       <PageHeader 
         title="Recruitment Dashboard"

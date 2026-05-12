@@ -151,7 +151,7 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="HR Management"
         description="Manage HR access, approve requests, and deactivate accounts."
