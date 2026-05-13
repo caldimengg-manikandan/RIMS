@@ -25,7 +25,7 @@
   "backend/app/api/interviews.py",
   "backend/app/api/jobs.py",
   "backend/app/api/notifications.py",
-  "backend/app/api/onboarding.py",
+  "backend/app/api/oarding.py",
   "backend/app/api/ops_email.py",
   "backend/app/api/search.py",
   "backend/app/api/settings.py",

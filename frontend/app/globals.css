@@ -307,7 +307,8 @@
     width: 60vw;
     max-width: 600px;
     aspect-ratio: 1 / 1;
-    background-image: url("/virtual-hr-watermark.svg");
+    /* Inline data URI — avoids the Next.js /public static-file routing issue */
+    background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='200' cy='200' r='180' stroke='%23000' stroke-width='6' stroke-opacity='0.12'/%3E%3Cpath d='M110 290 L200 110 L290 290' stroke='%23000' stroke-width='8' stroke-opacity='0.18' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M145 210 L255 210' stroke='%23000' stroke-width='6' stroke-opacity='0.14' stroke-linecap='round'/%3E%3Ctext x='200' y='340' font-family='Arial%2C sans-serif' font-size='28' font-weight='700' letter-spacing='6' text-anchor='middle' fill='%23000' fill-opacity='0.15'%3EVIRTUAL HR%3C/text%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;

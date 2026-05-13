@@ -32,26 +32,39 @@ export const StatusChart = React.memo(({ data }: { data: { name: string, value: 
 
 export const DetailedMetricsChart = React.memo(({ report, showNoData }: { report: Report; showNoData?: boolean }) => {
     let sums = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
-    let count = 0;
+    let counts = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
 
     report?.question_evaluations?.forEach(q => {
         if (q?.evaluation) {
-            sums.technical += q.evaluation.technical_accuracy || 0;
-            sums.clarity += q.evaluation.clarity || 0;
-            sums.completeness += q.evaluation.completeness || 0;
-            sums.depth += q.evaluation.depth || 0;
-            sums.practicality += q.evaluation.practicality || 0;
-            count++;
+            if (q.evaluation.technical_accuracy !== undefined) {
+                sums.technical += q.evaluation.technical_accuracy;
+                counts.technical++;
+            }
+            if (q.evaluation.clarity !== undefined) {
+                sums.clarity += q.evaluation.clarity;
+                counts.clarity++;
+            }
+            if (q.evaluation.completeness !== undefined) {
+                sums.completeness += q.evaluation.completeness;
+                counts.completeness++;
+            }
+            if (q.evaluation.depth !== undefined) {
+                sums.depth += q.evaluation.depth;
+                counts.depth++;
+            }
+            if (q.evaluation.practicality !== undefined) {
+                sums.practicality += q.evaluation.practicality;
+                counts.practicality++;
+            }
         }
     });
 
-    const data = count > 0 ? [
-        { name: 'Technical', score: sums.technical / count },
-        { name: 'Clarity', score: sums.clarity / count },
-        { name: 'Completeness', score: sums.completeness / count },
-        { name: 'Depth', score: sums.depth / count },
-        { name: 'Practicality', score: sums.practicality / count }
-    ] : [];
+    const data = [];
+    if (counts.technical > 0) data.push({ name: 'Technical', score: sums.technical / counts.technical });
+    if (counts.clarity > 0) data.push({ name: 'Clarity', score: sums.clarity / counts.clarity });
+    if (counts.completeness > 0) data.push({ name: 'Completeness', score: sums.completeness / counts.completeness });
+    if (counts.depth > 0) data.push({ name: 'Depth', score: sums.depth / counts.depth });
+    if (counts.practicality > 0) data.push({ name: 'Practicality', score: sums.practicality / counts.practicality });
 
     const allMetricZeros = data.length > 0 && data.every((d) => (d.score ?? 0) === 0);
 
@@ -126,28 +139,41 @@ export const SkillProficiencyChart = React.memo(({ report }: { report: Report })
 
 export const AllReportsMetricsChart = React.memo(({ reports }: { reports: any[] }) => {
     let sums = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
-    let count = 0;
+    let counts = { technical: 0, clarity: 0, completeness: 0, depth: 0, practicality: 0 };
 
     reports?.forEach(report => {
         report?.question_evaluations?.forEach((q: any) => {
             if (q?.evaluation) {
-                sums.technical += q.evaluation.technical_accuracy || 0;
-                sums.clarity += q.evaluation.clarity || 0;
-                sums.completeness += q.evaluation.completeness || 0;
-                sums.depth += q.evaluation.depth || 0;
-                sums.practicality += q.evaluation.practicality || 0;
-                count++;
+                if (q.evaluation.technical_accuracy !== undefined) {
+                    sums.technical += q.evaluation.technical_accuracy;
+                    counts.technical++;
+                }
+                if (q.evaluation.clarity !== undefined) {
+                    sums.clarity += q.evaluation.clarity;
+                    counts.clarity++;
+                }
+                if (q.evaluation.completeness !== undefined) {
+                    sums.completeness += q.evaluation.completeness;
+                    counts.completeness++;
+                }
+                if (q.evaluation.depth !== undefined) {
+                    sums.depth += q.evaluation.depth;
+                    counts.depth++;
+                }
+                if (q.evaluation.practicality !== undefined) {
+                    sums.practicality += q.evaluation.practicality;
+                    counts.practicality++;
+                }
             }
         });
     });
 
-    const data = count > 0 ? [
-        { name: 'Technical', score: sums.technical / count },
-        { name: 'Clarity', score: sums.clarity / count },
-        { name: 'Completeness', score: sums.completeness / count },
-        { name: 'Depth', score: sums.depth / count },
-        { name: 'Practicality', score: sums.practicality / count }
-    ] : [];
+    const data = [];
+    if (counts.technical > 0) data.push({ name: 'Technical', score: sums.technical / counts.technical });
+    if (counts.clarity > 0) data.push({ name: 'Clarity', score: sums.clarity / counts.clarity });
+    if (counts.completeness > 0) data.push({ name: 'Completeness', score: sums.completeness / counts.completeness });
+    if (counts.depth > 0) data.push({ name: 'Depth', score: sums.depth / counts.depth });
+    if (counts.practicality > 0) data.push({ name: 'Practicality', score: sums.practicality / counts.practicality });
 
     return (
         <ResponsiveContainer width="100%" height="100%">

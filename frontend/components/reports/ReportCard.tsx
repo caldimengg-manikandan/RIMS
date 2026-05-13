@@ -19,7 +19,8 @@ const ReportCardImpl = ({ report, onClick }: ReportCardProps) => {
         <div className="flex flex-col md:flex-row md:items-center justify-between w-full pr-4 gap-4">
             <div className="flex flex-col items-start gap-1">
                 <div className="font-semibold text-lg flex items-center gap-2 group-hover:text-primary transition-colors">
-                    {report?.candidate_profile?.candidate_name || report?.display_date_short || "Anonymous"}
+                    <span className="truncate max-w-[200px] md:max-w-[300px]">{report?.candidate_profile?.candidate_name || "Anonymous"}</span>
+                    {report?.display_date_short && <span className="text-sm font-normal text-slate-400 ml-2 hidden sm:inline-block">{report.display_date_short}</span>}
                     {report?.status === 'Selected' && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {report?.status === 'Hold' && <AlertCircle className="h-5 w-5 text-amber-500" />}
                     {report?.status === 'Rejected' && <XCircle className="h-5 w-5 text-red-500" />}

@@ -101,8 +101,13 @@ export default function DashboardLayout({
         revalidateOnFocus: false,   // disabled: prevents refetch on every tab focus
         revalidateOnReconnect: true,
         dedupingInterval: 15_000,   // increased: reduces duplicate requests on navigation
-        errorRetryCount: 3,
-        shouldRetryOnError: true
+        errorRetryCount: 2,
+        // Don't retry on auth errors — retrying 401/403 worsens redirect loops
+        shouldRetryOnError: (error: any) => {
+          const status = error?.status ?? error?.statusCode
+          if (status === 401 || status === 403) return false
+          return true
+        }
       }}
     >
       <SidebarProvider className="relative overflow-hidden">

@@ -331,14 +331,28 @@ export default function SettingsPage() {
                                     if (win) {
                                         // Simple preview replacement for demonstration
                                         let html = settings.offer_letter_template;
+                                        const logoUrl = settings.company_logo_url || '';
                                         const mocks: Record<string, string> = {
                                             candidate_name: 'John Doe',
                                             job_role: 'Software Engineer',
+                                            department: 'Engineering',
+                                            joining_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
                                             company_name: settings.company_name || 'Acme Corp',
-                                            offer_date: new Date().toLocaleDateString()
+                                            hr_name: settings.hr_name || 'HR Manager',
+                                            hr_email: settings.hr_email || 'hr@company.com',
+                                            hr_phone: settings.hr_phone || '+91 9876543210',
+                                            company_address: settings.company_address || '123 Main St',
+                                            offer_date: new Date().toLocaleDateString(),
+                                            // Jinja2 style variables used by the backend template
+                                            logo_url: logoUrl,
+                                            logo: logoUrl,
+                                            // Mustache-style fallback
+                                            company_logo: logoUrl,
+                                            company_logo_url: logoUrl,
                                         };
+                                        // Replace both {{ var }} (Jinja2) and {{var}} (mustache) patterns
                                         Object.keys(mocks).forEach(key => {
-                                            html = html.replace(new RegExp(`{{${key}}}`, 'g'), mocks[key]);
+                                            html = html.replace(new RegExp(`{{\\s*${key}\\s*}}`, 'g'), mocks[key]);
                                         });
                                         win.document.write(html);
                                         win.document.close();
@@ -358,7 +372,7 @@ export default function SettingsPage() {
                             <span className="text-[10px] uppercase font-bold text-blue-600/50">Usage: {'{{placeholder}}'}</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            {['candidate_name', 'job_role', 'department', 'joining_date', 'company_name', 'hr_name', 'offer_date', 'hr_email', 'hr_phone'].map(p => (
+                            {['candidate_name', 'job_role', 'department', 'joining_date', 'company_name', 'hr_name', 'offer_date', 'hr_email', 'hr_phone', 'company_address', 'logo_url'].map(p => (
                                 <code key={p} className="bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border text-[10px] font-mono shadow-sm">{p}</code>
                             ))}
                         </div>

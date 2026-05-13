@@ -235,7 +235,7 @@ def login(request: Request, response: Response, credentials: UserLogin, db: Sess
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=settings.env == "production",
         max_age=settings.jwt_expiration_minutes * 60,
         expires=settings.jwt_expiration_minutes * 60
@@ -368,7 +368,7 @@ def logout(response: Response):
     response.delete_cookie(
         key="access_token",
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=settings.env == "production"
     )
     return {"message": "Logged out successfully"}

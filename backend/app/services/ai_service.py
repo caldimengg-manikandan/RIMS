@@ -115,8 +115,11 @@ def sanitize_ai_input(text: str, log_context: str = "Input") -> str:
     if any(p in text.lower() for p in suspicious_phrases):
         logger.warning(f"Potential prompt injection detected in {log_context}: {text[:100]}...")
         
-    # Strip boundary tags
-    return text.replace("<document_content>", "[redacted]").replace("</document_content>", "[redacted]")
+    # Escape XML tags to prevent tag-based prompt injection hijacking
+    sanitized = text.replace("<", "&lt;").replace(">", "&gt;")
+    
+    # Strip redacted tags if they were already escaped (best effort)
+    return sanitized.replace("&lt;document_content&gt;", "[redacted]").replace("&lt;/document_content&gt;", "[redacted]")
 
 # ============================================================================
 # Skill Mapping Layer (Tech Synonyms)

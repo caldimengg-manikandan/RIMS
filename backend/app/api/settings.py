@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.infrastructure.database import get_db
-from app.domain.models import User, GlobalSettings
+from app.domain.models import GlobalSettings, User
 from app.domain.schemas import GlobalSettingsUpdate, GlobalSettingsResponse
-from app.core.auth import get_current_user, get_current_hr
+from app.core.auth import get_current_hr
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -17,7 +17,7 @@ def ensure_global_settings_table(db: Session) -> None:
 def get_settings(
     db: Session = Depends(get_db)
 ):
-    """Fetch global settings."""
+    """Fetch global settings (public - used for branding on login/register pages)."""
     ensure_global_settings_table(db)
     settings_records = db.query(GlobalSettings).all()
     settings_dict = {s.key: s.value for s in settings_records}

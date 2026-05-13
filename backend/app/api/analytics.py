@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, contains_eager
 from sqlalchemy import func, and_
 from typing import List, Dict, Any, Optional
 from app.infrastructure.database import get_db
@@ -96,6 +96,7 @@ def get_interview_reports(
     OR Applications that are in 'review_later'.
     """
     try:
+        logger.info(f"[REPORTS] Fetching reports: job_id={job_id}, status={status}, exp={experience}, skill={skill}, from={from_date}, to={to_date}, search={search}")
         from sqlalchemy import or_
         # Source of truth is Application, joined with Interview
         query = db.query(Application)\
@@ -136,6 +137,8 @@ def get_interview_reports(
                 query = query.filter(or_(Interview.overall_score <= 4, InterviewReport.overall_score <= 4))
             elif status_lower == "not completed":
                 query = query.filter(or_(Interview.id == None, Interview.status != "completed"))
+            elif status_lower == "default":
+                pass
             else:
                 # Direct application status match
                 query = query.filter(Application.status == status)
@@ -149,11 +152,14 @@ def get_interview_reports(
                     ResumeExtraction.experience_level.ilike("mid-level")
                 )))
             else:
-                query = query.filter(Application.resume_extraction.has(ResumeExtraction.experience_level.ilike(exp_val)))
+                query = query.filter(Application.resume_extraction.has(ResumeExtraction.experience_level.ilike(f"%{exp_val}%")))
 
         if skill and skill != "All":
             from app.domain.models import ResumeExtraction
-            query = query.filter(Application.resume_extraction.has(ResumeExtraction.extracted_skills.ilike(f"%{skill}%")))
+            query = query.filter(or_(
+                Application.resume_extraction.has(ResumeExtraction.extracted_skills.ilike(f"%{skill}%")),
+                Interview.locked_skill.ilike(f"%{skill}%")
+            ))
 
         if search:
             term = f"%{search}%"
@@ -195,13 +201,14 @@ def get_interview_reports(
                 InterviewReport.overall_score <= score_max
             ))
 
-        total = query.count()
+        total = query.with_entities(func.count(Application.id.distinct())).scalar() or 0
+        logger.info(f"[REPORTS] Query total: {total}")
         applications = query.options(
-            joinedload(Application.interview).joinedload(Interview.report),
+            contains_eager(Application.interview).contains_eager(Interview.report),
+            contains_eager(Application.job),
             joinedload(Application.hiring_decision),
             joinedload(Application.hr),
-            joinedload(Application.resume_extraction),
-            joinedload(Application.job)
+            joinedload(Application.resume_extraction)
         ).order_by(Application.applied_at.desc()).offset(skip).limit(limit).all()
 
         logger.info(f"[REPORTS] Found {len(applications)} applications for HR {current_user.id}")

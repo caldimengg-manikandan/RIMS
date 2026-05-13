@@ -205,6 +205,8 @@ class JobUpdate(BaseModel):
     aptitude_repo_set_id: Optional[int] = None
     technical_repo_set_id: Optional[int] = None
     behavioural_repo_set_id: Optional[int] = None
+    behavioral_role: Optional[str] = None
+    aptitude_mode: Optional[str] = None
 
     @field_validator('title')
     def validate_title(cls, v):

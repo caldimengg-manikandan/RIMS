@@ -60,10 +60,10 @@ import { Download, FileText, Filter, Search, AlertCircle, CheckCircle2, XCircle,
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/app/dashboard/lib/utils'
 
-import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
 import { StatusChart, DetailedMetricsChart, SkillProficiencyChart } from '@/components/reports/Charts'
 import { MetricCard } from '@/components/reports/MetricCard'
 import { ReportCard } from '@/components/reports/ReportCard'
+import { CategoryScoreCard } from '@/components/reports/CategoryScoreCard'
 import {
   isAnswerEmpty,
   getDisplayedQuestionScore,
@@ -207,6 +207,14 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState(urlSearch || '')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery)
 
+  // Debounce search query
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const [fromDate, setFromDate] = useState<Dayjs | null>(null)
   const [toDate, setToDate] = useState<Dayjs | null>(null)
 
@@ -224,12 +232,6 @@ export default function ReportsPage() {
   })
 
 
-
-  const commitSearch = React.useCallback(() => {
-    // Search is now part of the manual apply flow if needed, 
-    // but we can keep the local debounced state for internal use if preferred.
-    // For now, let's keep it simple.
-  }, [])
 
   // Construct API URL with server-side filters
   const reportsApiUrl = useMemo(() => {
@@ -366,18 +368,9 @@ export default function ReportsPage() {
   // ONLY show the full page spinner on the very FIRST load when we have no data at all.
   // Subsequent re-fetches (filters) will show the existing data while loading in the background (SWR behavior).
   const isInitialLoading = isSWRDashboardLoading && !reportsResponse
-  const [errorState, setError] = useState<string | null>(null) // renamed to avoid conflict with error from useSWR
-
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionEvaluation | null>(null)
   const [viewingReport, setViewingReport] = useState<Report | null>(null)
   const [reportView, setReportView] = useState<'technical' | 'aptitude' | 'behavioral'>('technical');
-
-  // Reset to first page when filters change
-  React.useEffect(() => {
-    setReportsPage(1);
-  }, [statusFilter, jobFilter, skillFilter, experienceFilter, debouncedSearchQuery, dateFilter, scoreRange, fromDate, toDate]);
-
-
 
   // Effect to auto-open report if reportId is in URL
   React.useEffect(() => {
@@ -867,7 +860,10 @@ export default function ReportsPage() {
                           className="pl-8"
                           value={searchQuery}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') commitSearch()
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              applyFilters();
+                            }
                           }}
                           onChange={(e) => {
                             setSearchQuery(e.target.value)
@@ -882,13 +878,13 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-0 space-y-2">
-                <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Filter by Job</Label>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 space-y-2">
+                <Label htmlFor="job-filter" className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Filter by Job</Label>
                 <Select value={jobFilter} onValueChange={setJobFilter}>
-                  <SelectTrigger className="w-full h-9 text-sm">
+                  <SelectTrigger id="job-filter" className="w-full h-9 text-sm rounded-lg bg-background/50 border-border/40">
                     <SelectValue placeholder="All Jobs" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="All">All Jobs</SelectItem>
                     {allJobsData?.map((job: any) => (
                       <SelectItem key={job.id} value={String(job.id)}>{job.title}</SelectItem>
@@ -900,13 +896,13 @@ export default function ReportsPage() {
               {/* Grouped Status/Exp/Skill Filters */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {/* Status Filter */}
-                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
-                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Status</Label>
+                <div className="space-y-1.5 p-2 rounded-xl border border-border/50 bg-muted/25">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full h-8 text-xs">
+                    <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-background/40 border-border/30">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="Default">Default</SelectItem>
                       <SelectItem value="Select">Selected</SelectItem>
                       <SelectItem value="Reject">Rejected</SelectItem>
@@ -917,13 +913,13 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Experience Filter */}
-                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
-                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Exp.</Label>
+                <div className="space-y-1.5 p-2 rounded-xl border border-border/50 bg-muted/25">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Exp.</Label>
                   <Select value={experienceFilter} onValueChange={setExperienceFilter}>
-                    <SelectTrigger className="w-full h-8 text-xs">
+                    <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-background/40 border-border/30">
                       <SelectValue placeholder="Exp." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-lg">
                       <SelectItem value="All">All Levels</SelectItem>
                       {uniqueExperiences.map((exp, idx) => (
                         <SelectItem key={idx} value={exp}>{exp}</SelectItem>
@@ -933,13 +929,13 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Skill Filter */}
-                <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/20">
-                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Skills</Label>
+                <div className="space-y-1.5 p-2 rounded-xl border border-border/50 bg-muted/25">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Skills</Label>
                   <Select value={skillFilter} onValueChange={setSkillFilter}>
-                    <SelectTrigger className="w-full h-8 text-xs">
+                    <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-background/40 border-border/30">
                       <SelectValue placeholder="Skills" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-lg max-h-[300px]">
                       <SelectItem value="All">All Skills</SelectItem>
                       {SKILL_CATEGORIES.map((skill, idx) => (
                         <SelectItem key={idx} value={skill}>
@@ -954,9 +950,9 @@ export default function ReportsPage() {
 
 
               {/* Score Range */}
-              <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 ">
+              <div className="space-y-1.5 p-3 rounded-xl border border-border/60 bg-muted/30">
                 <div className="flex justify-between items-center">
-                  <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Score Range</Label>
+                  <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Score Range</Label>
                   <span className="text-[13px] font-sembold text-primary">{pendingScoreRange[0]} - {pendingScoreRange[1]}</span>
                 </div>
                 <Slider
@@ -975,15 +971,16 @@ export default function ReportsPage() {
 
               {/* Calendar */}
               <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20">
-                  <div className="space-y-1">
-                    <Label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider  pb-4">Date Range</Label>
+                <div className="space-y-3 p-3 rounded-xl border border-border/60 bg-muted/30">
+                  <div className="space-y-2">
+                    <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest pb-1">Date Range</Label>
                     <div className="grid grid-cols-2 gap-1.5">
                       <DatePicker
                         label="From"
                         value={fromDate}
                         minDate={dayjs('1900-01-01')}
                         maxDate={toDate || dayjs()}
+                        disableFuture
                         onChange={(newValue) => {
                           setFromDate(newValue)
                           if (toDate && newValue && newValue.isAfter(toDate, 'day')) {
@@ -1016,37 +1013,17 @@ export default function ReportsPage() {
                           },
                           popper: {
                             sx: {
-                              '& .MuiPaper-root': {
-                                backgroundColor: 'hsl(var(--background))',
-                                color: 'hsl(var(--foreground))',
-                                border: '1px solid hsl(var(--border))',
-                                backgroundImage: 'none'
-                              },
-                              '& .MuiPickersDay-root': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersDay-root:hover': {
-                                backgroundColor: 'hsl(var(--accent))',
-                              },
-                              '& .MuiPickersDay-root.Mui-selected': {
-                                backgroundColor: 'hsl(var(--primary))',
-                                color: 'hsl(var(--primary-foreground))',
-                              },
-                              '& .MuiDayCalendar-weekDayLabel': {
-                                color: 'hsl(var(--muted-foreground))',
-                              },
-                              '& .MuiPickersCalendarHeader-label': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiIconButton-root': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersYear-yearButton': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersMonth-monthButton': {
-                                color: 'hsl(var(--foreground))',
-                              }
+                              zIndex: 10000,
+                            }
+                          },
+                          desktopPaper: {
+                            sx: {
+                              backgroundColor: 'hsl(var(--card)) !important',
+                              backgroundImage: 'none !important',
+                              opacity: '1 !important',
+                              border: '1px solid hsl(var(--border))',
+                              boxShadow: 'var(--shadow-xl)',
+                              borderRadius: '12px',
                             }
                           }
                         }}
@@ -1056,6 +1033,7 @@ export default function ReportsPage() {
                         value={toDate}
                         minDate={fromDate || dayjs('1900-01-01')}
                         maxDate={dayjs()}
+                        disableFuture
                         onChange={(newValue) => {
                           setToDate(newValue)
                           if (dateFilter) setDateFilter(undefined)
@@ -1085,37 +1063,17 @@ export default function ReportsPage() {
                           },
                           popper: {
                             sx: {
-                              '& .MuiPaper-root': {
-                                backgroundColor: 'hsl(var(--background))',
-                                color: 'hsl(var(--foreground))',
-                                border: '1px solid hsl(var(--border))',
-                                backgroundImage: 'none'
-                              },
-                              '& .MuiPickersDay-root': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersDay-root:hover': {
-                                backgroundColor: 'hsl(var(--accent))',
-                              },
-                              '& .MuiPickersDay-root.Mui-selected': {
-                                backgroundColor: 'hsl(var(--primary))',
-                                color: 'hsl(var(--primary-foreground))',
-                              },
-                              '& .MuiDayCalendar-weekDayLabel': {
-                                color: 'hsl(var(--muted-foreground))',
-                              },
-                              '& .MuiPickersCalendarHeader-label': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiIconButton-root': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersYear-yearButton': {
-                                color: 'hsl(var(--foreground))',
-                              },
-                              '& .MuiPickersMonth-monthButton': {
-                                color: 'hsl(var(--foreground))',
-                              }
+                              zIndex: 10000,
+                            }
+                          },
+                          desktopPaper: {
+                            sx: {
+                              backgroundColor: 'hsl(var(--card)) !important',
+                              backgroundImage: 'none !important',
+                              opacity: '1 !important',
+                              border: '1px solid hsl(var(--border))',
+                              boxShadow: 'var(--shadow-xl)',
+                              borderRadius: '12px',
                             }
                           }
                         }}
@@ -1152,6 +1110,8 @@ export default function ReportsPage() {
                       )}
                     </div>
                     <Box sx={{
+                      position: 'relative',
+                      zIndex: 1,
                       bgcolor: 'hsl(var(--muted) / 0.3)',
                       borderRadius: '12px',
                       border: '1px solid hsl(var(--border))',
@@ -1161,10 +1121,8 @@ export default function ReportsPage() {
                       '& .MuiDateCalendar-root': {
                         width: '100%',
                         height: 'auto',
-                        maxWidth: '400px',
-                        transform: 'scale(0.95)',
-                        transformOrigin: 'top center',
-                        margin: '-10px 0 -25px 0',
+                        maxWidth: '100%',
+                        margin: '0',
                       },
                       '& .MuiPickersDay-root': {
                         width: '32px',
@@ -1189,6 +1147,8 @@ export default function ReportsPage() {
                     }}>
                       <DateCalendar
                         value={dateFilter ? dayjs(dateFilter) : null}
+                        maxDate={dayjs()}
+                        disableFuture
                         onChange={(newValue) => {
                           setDateFilter(newValue?.toDate())
                           if (newValue) {
@@ -1396,31 +1356,42 @@ export default function ReportsPage() {
 
             {/* Common Pagination Controls for Detailed and Table views */}
             {activeTab !== 'analytics' && totalPages > 1 && (
-              <div className="flex items-center justify-between bg-card p-1 px-2 rounded-xl border border-border/50 shadow-sm mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-sm text-muted-foreground px-4">
-                  Page <span className="font-bold text-foreground">{reportsPage}</span> of {totalPages}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border">
+                  <div className="text-sm text-muted-foreground font-medium">
+                    Showing <span className="font-semibold text-foreground/80">{Math.min(reportsPerPage, totalCount)}</span> of <span className="font-semibold text-foreground/80">{totalCount}</span> reports
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-6">
+                    <div className="text-sm font-medium text-muted-foreground">
+                      Page <span className="text-foreground/80 font-semibold">{reportsPage}</span> of {totalPages}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReportsPage(prev => prev - 1)}
+                        disabled={reportsPage <= 1}
+                        className="h-8 px-4 rounded-xl font-bold bg-background dark:bg-muted border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReportsPage(prev => prev + 1)}
+                        disabled={reportsPage >= totalPages}
+                        className="h-8 px-4 rounded-xl font-bold bg-background dark:bg-muted border-border transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                      >
+                        Next
+                      </Button>
+                    </div>
+
+                    <div className="text-sm font-semibold text-foreground/80 uppercase tracking-widest hidden lg:block border-l pl-6 border-border">
+                      Total {totalCount} Reports
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={reportsPage <= 1}
-                    onClick={() => setReportsPage(prev => prev - 1)}
-                    className="rounded-lg h-9"
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={reportsPage >= totalPages}
-                    onClick={() => setReportsPage(prev => prev + 1)}
-                    className="rounded-lg h-9"
-                  >
-                    Next <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
             )}
 
             <TabsContent value="analytics" className="animate-in fade-in zoom-in-95 duration-300">

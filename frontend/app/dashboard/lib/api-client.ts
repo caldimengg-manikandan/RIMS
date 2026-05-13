@@ -175,14 +175,30 @@ export class APIClient {
       const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown API error')
 
       if (typeof window !== 'undefined' && [401, 403, 500].includes(response.status)) {
-        toast.error(`Error ${response.status}: ${errorMessage}`)
+        // Don't toast for background SWR polling endpoints — they fail silently on logout
+        const isSilentEndpoint = response.url?.includes('/api/settings') ||
+          response.url?.includes('/api/notifications') ||
+          response.url?.includes('/api/analytics/dashboard')
+        if (!isSilentEndpoint) {
+          toast.error(`Error ${response.status}: ${errorMessage}`)
+        }
       }
 
-      if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
-        if (response.status === 401) {
-          localStorage.removeItem('auth_token')
-          if (!window.location.pathname.includes('/interview')) {
-             window.location.href = '/calrims/'
+      if (response.status === 401 && typeof window !== 'undefined') {
+        const currentPath = window.location.pathname
+        // Only redirect if NOT already on an auth/public page (prevents loop)
+        const isAuthPage = currentPath.includes('/auth/') ||
+          currentPath.includes('/calrims') ||
+          currentPath.includes('/interview') ||
+          currentPath === '/'
+        if (!isAuthPage) {
+          // Debounce: only redirect once every 3s to prevent looping
+          const lastRedirect = parseInt(sessionStorage.getItem('_auth_redirect_ts') || '0')
+          const now = Date.now()
+          if (now - lastRedirect > 3000) {
+            sessionStorage.setItem('_auth_redirect_ts', String(now))
+            localStorage.removeItem('auth_token')
+            window.location.href = '/calrims/'
           }
         }
       }

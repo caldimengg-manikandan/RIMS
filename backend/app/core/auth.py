@@ -97,12 +97,15 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """Dependency to get current authenticated user"""
-    token = request.cookies.get("access_token")
+    token = request.cookies.get("access_token") or request.cookies.get("hr_token")
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
             
+    if not token:
+        token = request.query_params.get("token")
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
