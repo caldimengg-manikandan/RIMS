@@ -245,6 +245,23 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
 
     sanitized_resume = sanitize_ai_input(resume_text, "Resume Upload")
     
+    # If text is too short after stripping, it's effectively unreadable
+    if len(sanitized_resume.strip()) < 50:
+         return {
+            "is_resume": False,
+            "candidate_name": None,
+            "email": None,
+            "phone_number": None,
+            "skills": ["Empty / Short Document"],
+            "experience": 0,
+            "experience_level": "N/A",
+            "summary": "The extracted text from this document is too short for a meaningful AI analysis. Verify if the document is a valid resume or a scanned image.",
+            "score": 0.0,
+            "match_percentage": 0,
+            "extraction_degraded": True,
+            "reasoning": "Extracted text length below minimum threshold for analysis."
+        }
+    
     prompt = f"""
     Analyze this document as an expert HR professional. Extract all relevant candidate information and evaluate their fit for the role.
     

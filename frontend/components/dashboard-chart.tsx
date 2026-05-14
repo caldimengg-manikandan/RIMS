@@ -33,9 +33,10 @@ export function DashboardChart({ data }: DashboardChartProps) {
                 <XAxis
                     dataKey="name"
                     stroke="var(--foreground)"
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                     axisLine={false}
+                    interval={0}
                 />
                 <YAxis
                     stroke="var(--foreground)"

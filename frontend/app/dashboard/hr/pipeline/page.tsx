@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface Job {
     id: number
@@ -36,17 +37,33 @@ interface Job {
 }
 
 export default function PipelineIndexPage() {
+    const router = useRouter()
     const { data: jobs, isLoading } = useSWR<Job[]>('/api/jobs?limit=500', fetcher)
     const [currentPage, setCurrentPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
+    const [searchTerm, setSearchTerm] = useState('')
+
+    const filteredJobs = useMemo(() => {
+        if (!jobs) return []
+        return jobs.filter(job => 
+            (job.status === 'open' || job.status === 'on_hold') && // Show only active/on-hold roles, not closed
+            (job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            job.job_id?.toLowerCase().includes(searchTerm.toLowerCase()))
+        )
+    }, [jobs, searchTerm])
+
+    // Calculated derived metrics based on filtered active roles
+    const activeRolesCount = useMemo(() => {
+        if (!jobs) return 0
+        return jobs.filter(j => j.status === 'open').length
+    }, [jobs])
 
     const paginatedJobs = useMemo(() => {
-        if (!jobs) return []
         const start = (currentPage - 1) * pageSize
-        return jobs.slice(start, start + pageSize)
-    }, [jobs, currentPage, pageSize])
+        return filteredJobs.slice(start, start + pageSize)
+    }, [filteredJobs, currentPage, pageSize])
 
-    const totalPages = Math.ceil((jobs?.length || 0) / pageSize)
+    const totalPages = Math.ceil((filteredJobs.length) / pageSize)
 
     if (isLoading) return (
         <div className="p-8 flex justify-center items-center h-64">
@@ -63,9 +80,23 @@ export default function PipelineIndexPage() {
             >
                 <div className="flex items-center gap-2 bg-primary/10 dark:bg-white/5 px-6 py-4 rounded-2xl border border-primary/20 dark:border-white/10 shadow-sm">
                     <Layers className="h-5 w-5 text-primary dark:text-slate-200" />
-                    <span className="text-l font-black text-primary dark:text-white tabular-nums">{jobs?.length || 0} Active Roles</span>
+                    <span className="text-l font-black text-primary dark:text-white tabular-nums">{activeRolesCount} Active Roles</span>
                 </div>
             </PageHeader>
+
+            <div className="relative group max-w-md">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <input
+                    type="text"
+                    placeholder="Search by job title or ID..."
+                    className="w-full pl-11 pr-4 py-3 rounded-2xl bg-muted/30 border border-border/50 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all font-medium"
+                    value={searchTerm}
+                    onChange={(e) => {
+                        setSearchTerm(e.target.value)
+                        setCurrentPage(1)
+                    }}
+                />
+            </div>
 
             <Card className="border-border/50 shadow-sm overflow-hidden">
                 <Table>
@@ -79,7 +110,11 @@ export default function PipelineIndexPage() {
                     </TableHeader>
                     <TableBody>
                         {paginatedJobs.map((job) => (
-                            <TableRow key={job.id} className="hover:bg-primary/5 transition-colors group">
+                            <TableRow 
+                                key={job.id} 
+                                className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                                onClick={() => router.push(`/dashboard/hr/pipelines/${job.id}`)}
+                            >
                                 <TableCell className="py-4">
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
@@ -105,12 +140,17 @@ export default function PipelineIndexPage() {
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right pr-6">
-                                    <Link href={`/dashboard/hr/pipelines/${job.id}`}>
-                                        <Button variant="ghost" className="h-9 gap-2 font-bold text-primary group-hover:translate-x-1 transition-transform">
-                                            Open Pipeline
-                                            <ArrowRight className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
+                                    <Button 
+                                        variant="ghost" 
+                                        className="h-9 gap-2 font-bold text-primary group-hover:translate-x-1 transition-transform"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(`/dashboard/hr/pipelines/${job.id}`);
+                                        }}
+                                    >
+                                        Open Pipeline
+                                        <ArrowRight className="h-4 w-4" />
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -119,14 +159,20 @@ export default function PipelineIndexPage() {
 
 
 
-                {jobs?.length === 0 && (
+                {filteredJobs.length === 0 && (
                     <div className="text-center py-20">
                         <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">No active jobs found</h3>
-                        <p className="text-muted-foreground mt-2">Create a job posting to start building your pipeline</p>
-                        <Link href="/dashboard/hr/jobs/create" className="mt-6 inline-block">
-                            <Button className="rounded-xl px-8 font-bold">Create Your First Job</Button>
-                        </Link>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                            {searchTerm ? 'No matching pipelines found' : 'No active jobs found'}
+                        </h3>
+                        <p className="text-muted-foreground mt-2">
+                            {searchTerm ? 'Try adjusting your search terms' : 'Create a job posting to start building your pipeline'}
+                        </p>
+                        {!searchTerm && (
+                            <Link href="/dashboard/hr/jobs/create" className="mt-6 inline-block">
+                                <Button className="rounded-xl px-8 font-bold">Create Your First Job</Button>
+                            </Link>
+                        )}
                     </div>
                 )}
             </Card>
@@ -134,7 +180,7 @@ export default function PipelineIndexPage() {
             {totalPages > 1 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border">
                     <div className="text-sm text-muted-foreground font-medium">
-                            Showing <span className="font-semibold text-foreground/80">{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, jobs?.length || 0)}</span> of <span className="font-semibold text-foreground/80">{jobs?.length || 0}</span> pipelines
+                            Showing <span className="font-semibold text-foreground/80">{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredJobs.length)}</span> of <span className="font-semibold text-foreground/80">{filteredJobs.length}</span> pipelines
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-6">

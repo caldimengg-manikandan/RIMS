@@ -103,6 +103,7 @@ class AnalyticsService:
             # Map of internal status -> Display Name
             status_map = {
                 'applied': 'Applied',
+                'screened': 'Screened',
                 'aptitude_round': 'Aptitude',
                 'ai_interview': 'AI Interview',
                 'ai_interview_completed': 'Completed',
@@ -229,8 +230,9 @@ class AnalyticsService:
         Get count of candidates in each stage for a specific job (Point 12).
         """
         stages = [
-            'applied', 'aptitude_round', 'ai_interview', 'ai_interview_completed',
-            'review_later', 'physical_interview', 'hired', 'rejected'
+            'applied', 'screened', 'aptitude_round', 'ai_interview', 'interview_completed',
+            'review_later', 'physical_interview', 'pending_approval', 'offer_sent', 
+            'accepted', 'hired', 'onboarded', 'rejected'
         ]
         # Calculate all stage counts in a single GROUP BY query
         results = self.db.query(
