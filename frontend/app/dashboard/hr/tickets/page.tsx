@@ -488,16 +488,7 @@ export default function HRTicketsPage() {
                                             <p className="text-xs text-muted-foreground">This response will be sent to the candidate's email.</p>
                                         </div>
 
-                                        <div className="flex items-center space-x-2 bg-primary/5 p-3 rounded-xl border border-primary/10">
-                                            <Switch
-                                                id="send-email"
-                                                checked={sendEmail}
-                                                onCheckedChange={setSendEmail}
-                                            />
-                                            <Label htmlFor="send-email" className="text-sm font-bold text-primary cursor-pointer leading-none">
-                                                Send email notification to candidate
-                                            </Label>
-                                        </div>
+
                                     </div>
                                 ) : (
                                     <div className="space-y-4 min-w-0">

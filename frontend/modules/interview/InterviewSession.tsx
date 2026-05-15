@@ -46,6 +46,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
   const interviewId = sessionId;
 
   // ── session state ──
+  const [isStarted, setIsStarted] = useState(false);  // candidate clicked start
   const [isReady, setIsReady] = useState(false);       // questions loaded
   const [isLoading, setIsLoading] = useState(true);    // first load spinner
   const [isFinished, setIsFinished] = useState(false);
@@ -320,6 +321,8 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
 
   // ─── PROCTORING SETUP ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!isStarted) return;
+
     const setup = async () => {
       try {
         await tf.ready();
@@ -368,7 +371,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         videoRecorderRef.current.stop();
       }
     };
-  }, [handleStrike, uploadVideo]);
+  }, [isStarted, handleStrike, uploadVideo]);
 
   // ─── RENDERS ───────────────────────────────────────────────────────────────
   if (isTerminated) {
@@ -390,6 +393,42 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         <Loader2 className="w-12 h-12 animate-spin text-primary" />
         <h2 className="text-2xl font-black text-slate-800 tracking-tight">Initializing AI Board...</h2>
         <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Preparing Your Questions</p>
+      </div>
+    );
+  }
+
+  if (!isStarted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-6">
+        <Card className="max-w-3xl w-full bg-white shadow-2xl border-primary/20 rounded-3xl overflow-hidden animate-in zoom-in duration-500">
+          <div className="h-2 bg-primary w-full" />
+          <CardHeader className="text-center p-12 pb-6">
+            <BrainCircuit className="w-20 h-20 text-primary mx-auto mb-6" />
+            <CardTitle className="text-4xl font-black text-slate-900">Ready to Begin?</CardTitle>
+            <p className="text-xl text-slate-500 font-medium mt-4 italic">"True intelligence is the ability to adapt to change."</p>
+          </CardHeader>
+          <CardContent className="px-12 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-3">Proctoring Active</h3>
+                <p className="text-sm text-slate-500 font-medium leading-relaxed">System will monitor your face and window focus. 4 strikes will terminate the session.</p>
+              </div>
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <h3 className="font-black text-slate-800 uppercase tracking-widest text-xs mb-3">Session Recording</h3>
+                <p className="text-sm text-slate-500 font-medium leading-relaxed">Video and audio will be recorded for HR review. Ensure a quiet, well-lit environment.</p>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-4 pt-4">
+              <Button
+                className="w-full h-16 rounded-2xl font-black text-xl shadow-xl shadow-primary/20"
+                onClick={() => setIsStarted(true)}
+              >
+                Enter Interview Board
+              </Button>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">By clicking, you agree to the assessment monitoring protocol</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

@@ -268,7 +268,11 @@ export default function OnboardingPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-black">{candidates?.filter(c => !c.offer_sent).length || 0}</div>
+                            <div className="text-2xl font-black">
+                                {candidates?.filter(c => 
+                                    (c.status === 'hired' || c.status === 'pending_approval') && !c.offer_sent
+                                ).length || 0}
+                            </div>
                             <p className="text-xs text-muted-foreground">Action required: send letters</p>
                         </CardContent>
                     </Card>
@@ -283,20 +287,26 @@ export default function OnboardingPage() {
                             <div className="text-2xl font-black">
                                 {candidates?.filter(c => {
                                     if (!c.joining_date || c.status === 'onboarded') return false
-                                    // Robust check: only count candidates who have actually accepted
+                                    // Accepted candidates who haven't finished onboarding
                                     if (c.status !== 'accepted' && c.offer_response_status !== 'accept' && c.offer_response_status !== 'accepted') return false
                                     
-                                    const jDate = new Date(c.joining_date)
+                                    // Parse date manually to avoid timezone shifting
+                                    const [y, m, d] = c.joining_date.split('T')[0].split('-').map(Number);
+                                    const jDate = new Date(y, m - 1, d);
                                     jDate.setHours(0, 0, 0, 0)
+                                    
                                     const today = new Date()
                                     today.setHours(0, 0, 0, 0)
+                                    
                                     const diff = jDate.getTime() - today.getTime()
-                                    // Window of next 7 days (including today)
                                     const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000
-                                    return diff >= 0 && diff <= sevenDaysInMs
+                                    
+                                    // Include overdue candidates (diff < 0) as they are still in 'accepted' status
+                                    // but haven't been onboarded yet.
+                                    return diff <= sevenDaysInMs
                                 }).length || 0}
                             </div>
-                            <p className="text-xs text-muted-foreground">Reminders sent automatically</p>
+                            <p className="text-xs text-muted-foreground">Includes overdue joinings</p>
                         </CardContent>
                     </Card>
                     <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
