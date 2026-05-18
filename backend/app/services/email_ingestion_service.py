@@ -179,7 +179,10 @@ async def run_batch_resume_processing(db: Session):
     Finds all unprocessed resumes from the email ingestion database,
     automatically creates target Job Applications for them, and triggers the AI analysis pipeline.
     """
-    unprocessed = db.query(AttachmentResume).filter(AttachmentResume.processed == False).all()
+    # Process in sequential batches of 30 to respect system limits and distribute workload
+    unprocessed = db.query(AttachmentResume).filter(
+        AttachmentResume.processed == False
+    ).order_by(AttachmentResume.id.asc()).limit(30).all()
     
     if not unprocessed:
         return {"message": "No new resumes to process.", "count": 0}
@@ -197,20 +200,45 @@ async def run_batch_resume_processing(db: Session):
             continue
             
         try:
-            # 1. Map to target Job
+            # 1. Map to target Job strictly by Job Code (JOB-XXXXXX) or Job ID
             target_job = None
-            subject_lower = resume.subject.lower() if resume.subject else ""
-            body_lower = resume.email_body.lower() if resume.email_body else ""
-            combined_text = f"{subject_lower} {body_lower}"
+            subject_str = resume.subject or ""
+            body_str = resume.email_body or ""
+            combined_text_raw = f"{subject_str} {body_str}"
+            combined_text_lower = combined_text_raw.lower()
             
-            for job in open_jobs:
-                if job.title.lower() in combined_text:
-                    target_job = job
-                    break
-                    
+            # Pattern A: Match Job Code (e.g., JOB-BVFUPH)
+            job_code_match = re.search(r'JOB-[A-Z0-9]{6}', combined_text_raw, re.IGNORECASE)
+            if job_code_match:
+                extracted_code = job_code_match.group(0).upper().strip()
+                target_job = db.query(Job).filter(Job.job_id == extracted_code, Job.status == 'open').first()
+                if target_job:
+                    logger.info(f"Successfully mapped emailed resume {resume.id} to Job Code {extracted_code}")
+            
+            # Pattern B: Match numeric Job ID (e.g. "job id: 3", "job id - 3", "job id 3")
             if not target_job:
-                # Fallback: assign to first open job
-                target_job = open_jobs[0]
+                numeric_id_match = re.search(r'job\s*(?:id|code)?\s*[:\-\#]?\s*([0-9]+)', combined_text_lower)
+                if numeric_id_match:
+                    extracted_id = int(numeric_id_match.group(1).strip())
+                    target_job = db.query(Job).filter(Job.id == extracted_id, Job.status == 'open').first()
+                    if target_job:
+                        logger.info(f"Successfully mapped emailed resume {resume.id} to Job ID {extracted_id}")
+            
+            # Pattern C: Fallback to matching Role Title in the email text
+            if not target_job:
+                for job in open_jobs:
+                    if job.title.lower() in combined_text_lower:
+                        target_job = job
+                        logger.info(f"Successfully mapped emailed resume {resume.id} to Job Title '{job.title}'")
+                        break
+                        
+            if not target_job:
+                logger.warning(
+                    f"Emailed resume {resume.id} skipped: No matching open Job ID, Code, or Role Title found in email "
+                    f"(Subject: '{resume.subject}')."
+                )
+                resume.processed = True
+                continue
                 
             # 2. Extract Candidate Information
             sender_str = resume.sender_email or ""
