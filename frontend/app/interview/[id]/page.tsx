@@ -364,17 +364,16 @@ export default function InterviewPage() {
     }
 
     const initOverallRecording = async () => {
-        if (overallMediaRecorderRef.current || streamRef.current) {
-            // Even if stream exists, ensure UI state is synced
-            if (streamRef.current?.active) {
-                setIsCameraActive(true);
-            }
+        if (overallMediaRecorderRef.current) {
             return
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true })
-            streamRef.current = stream
+            let stream = streamRef.current;
+            if (!stream) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true })
+                streamRef.current = stream
+            }
             setIsCameraActive(true)
 
             // Standard Video Recording
@@ -599,7 +598,7 @@ export default function InterviewPage() {
                 ? 'Navigation away from the assessment tab is strictly prohibited.'
                 : 'Attention lost from the assessment window. Please focus on the test.'
 
-            toast.error(`Proctoring Warning (${newWarnings}/3): ${toastMsg}`, {
+            toast.error(`Proctoring Warning: ${toastMsg}`, {
                 duration: 6000,
                 position: 'top-center',
             })
@@ -681,10 +680,10 @@ export default function InterviewPage() {
             } else {
                 const violationType = document.hidden ? "Tab switch" : "Focus loss"
                 const toastMsg = violationType === 'Tab switch'
-                    ? 'Tab switch detected! Please remain on the active test tab.'
-                    : 'Window focus lost! Please keep the test window active.'
+                    ? 'Navigation away from the assessment tab is strictly prohibited.'
+                    : 'Attention lost from the assessment window. Please focus on the test.'
 
-                toast.error(`${toastMsg} Warning #${newWarnings}/4.`, { duration: 5000 })
+                toast.error(`Proctoring Warning: ${toastMsg}`, { duration: 5000 })
                 setViolationModalType(violationType)
                 setViolationModalWarnings(newWarnings)
                 setShowViolationModal(true)
@@ -739,7 +738,21 @@ export default function InterviewPage() {
     }, [isCameraActive, isLoading, interviewStatus])
 
     useEffect(() => {
-        if (interviewStatus === 'active') {
+        if (interviewStatus === 'ready') {
+            // Pre-request permissions so the user doesn't get blocked at 'START INTERVIEW' and 
+            // 'Camera / Mic Not Detected' shows correctly vs 'Ready'.
+            if (!streamRef.current) {
+                navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: true })
+                    .then(stream => {
+                        streamRef.current = stream;
+                        setIsCameraActive(true);
+                    })
+                    .catch(err => {
+                        console.warn("Pre-request camera failed:", err);
+                        setIsCameraActive(false);
+                    });
+            }
+        } else if (interviewStatus === 'active') {
             initOverallRecording()
         } else if (interviewStatus === 'completed') {
             stopOverallRecording()
@@ -1568,21 +1581,13 @@ export default function InterviewPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {/* Proctoring Strikes Counter — numbers hidden from user */}
+                        {/* Proctoring Status Indicator */}
                         {interviewStatus === 'active' && (
                             <div className="bg-white border-2 border-slate-100 px-4 py-2 rounded-2xl flex items-center gap-2.5 shadow-sm select-none">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Proctoring</span>
                                 <div className="flex gap-1.5 items-center">
-                                    {[1, 2, 3, 4].map((s) => (
-                                        <div 
-                                            key={s}
-                                            className={`w-3 h-3 rounded-full border transition-all ${
-                                                warnings >= s 
-                                                    ? 'bg-red-500 border-red-500 shadow-sm shadow-red-200 animate-pulse' 
-                                                    : 'bg-slate-100 border-slate-200'
-                                            }`}
-                                        />
-                                    ))}
+                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-200 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Active</span>
                                 </div>
                             </div>
                         )}
@@ -1847,27 +1852,13 @@ export default function InterviewPage() {
                         </div>
                         
                         {/* Visual Warning Steps */}
+                        {/* Visual Warning Alert */}
                         <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col items-center gap-3">
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Warning Progress</span>
-                            <div className="flex gap-2">
-                                {[1, 2, 3].map((s) => (
-                                    <div 
-                                        key={s} 
-                                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-black transition-all ${
-                                            violationModalWarnings >= s 
-                                                ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200 animate-pulse' 
-                                                : 'bg-white border-slate-200 text-slate-400'
-                                        }`}
-                                    >
-                                        {s}
-                                    </div>
-                                ))}
-                                <div className="w-8 h-8 rounded-full border-2 border-dashed border-red-400 bg-red-50 flex items-center justify-center text-xs font-black text-red-500 animate-pulse">
-                                    4
-                                </div>
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center shadow-inner">
+                                <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
                             </div>
-                            <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
-                                {violationModalWarnings === 3 ? 'CRITICAL: Next strike terminates test!' : `${violationModalWarnings} of 3 warnings used`}
+                            <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider text-center leading-relaxed">
+                                Violation Logged.<br/>Further violations may result in automatic test termination.
                             </span>
                         </div>
 
