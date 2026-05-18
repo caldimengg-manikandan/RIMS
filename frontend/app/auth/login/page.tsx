@@ -76,84 +76,15 @@ function LoginContent() {
     }
   }
 
-  if (isAuthenticated && user) {
-    return (
-      <div className="h-[calc(100vh-4rem)] flex-1 w-full flex flex-col lg:flex-row bg-background selection:bg-primary/20 relative overflow-hidden">
-        {/* LEFT COLUMN: Hero Imagery */}
-        <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-950">
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
-            style={{ backgroundImage: 'url(/calrims/auth-bg-1.png)' }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-          <div className="absolute top-10 left-12 z-20">
-            <div className="flex flex-col gap-5 w-full max-w-[55rem]">
-              <h2 className="text-4xl lg:text-[2.75rem] font-light uppercase tracking-[0.15em] leading-[1.3] text-white/90">
-                Recruitment Intelligence & <br /> Management System
-              </h2>
-            </div>
-          </div>
-        </div>
+  useEffect(() => {
+    // Enforce strict security: navigating to the login page terminates any active session.
+    // This ensures HR must explicitly authenticate every time they want to access the system.
+    if (isAuthenticated) {
+      logout()
+    }
+  }, [isAuthenticated, logout])
 
-        {/* RIGHT COLUMN: Active Session Card */}
-        <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 sm:p-12 lg:p-16 xl:p-24 relative overflow-y-auto lg:min-h-0 bg-background/95">
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-             <div className="absolute top-[0%] right-[0%] w-[300px] h-[300px] bg-primary/5 rounded-full blur-[100px]" />
-             <div className="absolute bottom-[0%] left-[0%] w-[300px] h-[300px] bg-accent/5 rounded-full blur-[100px]" />
-          </div>
-
-          <div className="w-full max-w-md relative z-10 text-center space-y-8">
-            <div className="w-20 h-20 bg-primary/10 border border-primary/20 rounded-3xl flex items-center justify-center mx-auto text-primary animate-pulse">
-              <ShieldCheck className="w-10 h-10" />
-            </div>
-
-            <div className="space-y-3">
-              <h2 className="text-3xl font-extrabold tracking-tight text-foreground">Active Session Detected</h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                You are currently authenticated in this browser. You can proceed directly to your dashboard or sign out to use a different account.
-              </p>
-            </div>
-
-            {/* User Profile Card */}
-            <div className="bg-slate-50 border border-slate-100 dark:bg-slate-900/50 dark:border-slate-800 rounded-3xl p-6 flex flex-col items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-lg uppercase">
-                {user.full_name ? user.full_name[0] : user.email[0]}
-              </div>
-              <div className="text-center">
-                <h4 className="font-extrabold text-foreground">{user.full_name || 'Active User'}</h4>
-                <p className="text-xs text-muted-foreground font-medium">{user.email}</p>
-                <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary">
-                  {user.role}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Button
-                onClick={() => {
-                  if (user.role === 'candidate') {
-                    router.push('/jobs')
-                  } else {
-                    router.push('/dashboard/hr')
-                  }
-                }}
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center"
-              >
-                Go to Dashboard
-              </Button>
-              <Button
-                onClick={() => logout()}
-                variant="outline"
-                className="w-full h-12 border-border/70 hover:bg-muted text-foreground font-bold rounded-xl transition-all flex items-center justify-center"
-              >
-                Sign Out & Switch Accounts
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Removed the Active Session Detected UI to enforce manual login.
 
   return (
     <div className="h-[calc(100vh-4rem)] flex-1 w-full flex flex-col lg:flex-row bg-background selection:bg-primary/20 relative overflow-hidden">
