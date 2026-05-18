@@ -1157,45 +1157,102 @@ export default function InterviewPage() {
 
     if (interviewStatus === 'ready') {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-                <div className="max-w-2xl w-full bg-white rounded-[3.5rem] p-16 shadow-2xl border border-blue-100 flex flex-col items-center">
-                    <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mb-10 shadow-xl shadow-blue-500/20 rotate-3 transition-transform hover:rotate-0">
-                        <ShieldCheck className="w-12 h-12 text-white" />
-                    </div>
-                    <h1 className="text-4xl font-black text-slate-900 mb-6 tracking-tight uppercase">Ready to Begin?</h1>
-                    <div className="flex justify-center w-full mb-10">
-                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left min-w-[200px]">
-                            <Clock className="w-6 h-6 text-blue-600 mb-3" />
-                            <h3 className="font-black text-xs uppercase text-slate-400 mb-1">Duration</h3>
-                            <p className="font-bold text-slate-900">{interviewData?.duration_minutes || 60} Minutes</p>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+                <div className="max-w-xl w-full bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/80 border border-slate-100 overflow-hidden">
+
+                    {/* Header Banner */}
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-10 pt-10 pb-8 text-center">
+                        <div className="w-20 h-20 bg-white/20 backdrop-blur rounded-[1.5rem] flex items-center justify-center mx-auto mb-5 border-2 border-white/30">
+                            <ShieldCheck className="w-10 h-10 text-white" />
                         </div>
+                        <h1 className="text-3xl font-black text-white tracking-tight">Ready to Begin?</h1>
+                        <p className="text-blue-100 font-semibold mt-2 text-sm">Complete the checklist below before starting</p>
                     </div>
-                    <div className="bg-blue-50/50 p-8 rounded-[2rem] border border-blue-100 w-full mb-10 text-left space-y-4">
-                        <h4 className="font-black text-[10px] text-blue-600 uppercase tracking-widest flex items-center gap-2">
-                            <Lock className="w-3 h-3" /> Integrity Requirements
-                        </h4>
-                        <ul className="space-y-2">
-                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
-                                Keep camera & mic active at all times
-                            </li>
-                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
-                                No tab switching or browser resizing
-                            </li>
-                            <li className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
-                                Stay in fullscreen throughout the session
-                            </li>
-                        </ul>
+
+                    <div className="px-8 py-8 space-y-5">
+
+                        {/* Duration Info */}
+                        <div className="flex items-center gap-4 bg-slate-50 rounded-2xl px-5 py-4 border border-slate-100">
+                            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                                <Clock className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration</p>
+                                <p className="font-black text-slate-800">{interviewData?.duration_minutes || 60} Minutes</p>
+                            </div>
+                        </div>
+
+                        {/* Camera / Mic Status Card */}
+                        <div className={`flex items-start gap-4 rounded-2xl px-5 py-4 border-2 transition-all ${
+                            isCameraActive
+                                ? 'bg-emerald-50/50 border-emerald-200'
+                                : 'bg-amber-50/50 border-amber-200'
+                        }`}>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                                isCameraActive ? 'bg-emerald-100' : 'bg-amber-100'
+                            }`}>
+                                {isCameraActive
+                                    ? <Camera className="w-5 h-5 text-emerald-600" />
+                                    : <CameraOff className="w-5 h-5 text-amber-600" />}
+                            </div>
+                            <div className="text-left flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <p className={`text-[10px] font-black uppercase tracking-widest ${
+                                        isCameraActive ? 'text-emerald-600' : 'text-amber-600'
+                                    }`}>
+                                        {isCameraActive ? 'Camera & Mic Ready' : 'Camera / Mic Not Detected'}
+                                    </p>
+                                    {isCameraActive && (
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                    )}
+                                </div>
+                                {isCameraActive ? (
+                                    <p className="text-xs text-emerald-700 font-semibold leading-relaxed">
+                                        Your camera and microphone are active. Full proctoring is enabled for this session.
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-amber-700 font-semibold leading-relaxed">
+                                        Camera or microphone access was denied or unavailable. You can still take the test — voice and tab monitoring will be used. To enable full proctoring, allow browser camera permissions and refresh.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Rules */}
+                        <div className="bg-slate-50 rounded-2xl px-5 py-4 border border-slate-100 space-y-3">
+                            <h4 className="font-black text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <Lock className="w-3 h-3" /> Integrity Rules
+                            </h4>
+                            {[
+                                'Do not switch tabs or minimize the browser window',
+                                'Stay in fullscreen mode throughout the entire session',
+                                'No external help, notes, or communication during the test',
+                                'Each violation is recorded and may lead to disqualification',
+                            ].map((rule, i) => (
+                                <div key={i} className="flex items-start gap-3">
+                                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-1.5 shrink-0"></div>
+                                    <span className="text-xs font-semibold text-slate-600 leading-relaxed">{rule}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* CTA */}
+                        <Button
+                            size="lg"
+                            className="w-full h-16 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-lg shadow-xl shadow-blue-500/30 transition-all hover:-translate-y-0.5 active:scale-95"
+                            onClick={startInterviewManual}
+                        >
+                            <Play className="w-5 h-5 mr-2" /> START INTERVIEW
+                        </Button>
+                        {!isCameraActive && (
+                            <p className="text-center text-xs text-slate-400 font-semibold">
+                                Proceeding without camera — voice &amp; tab monitoring still active
+                            </p>
+                        )}
                     </div>
-                    <Button
-                        size="lg"
-                        className="w-full h-20 rounded-3xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xl shadow-2xl shadow-blue-500/40 transition-all hover:-translate-y-1 active:scale-95"
-                        onClick={startInterviewManual}
-                    >
-                        START INTERVIEW NOW
-                    </Button>
                 </div>
             </div>
         )
@@ -1532,23 +1589,20 @@ export default function InterviewPage() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {/* Proctoring Strikes Counter */}
-                        {interviewStatus === 'active' && isCameraActive && (
-                            <div className="bg-white border-2 border-slate-100 px-5 py-2 rounded-2xl flex items-center gap-3 shadow-sm select-none">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Strikes</span>
-                                <div className="flex gap-1.5 h-3.5 items-center">
+                        {/* Proctoring Strikes Counter — numbers hidden from user */}
+                        {interviewStatus === 'active' && (
+                            <div className="bg-white border-2 border-slate-100 px-4 py-2 rounded-2xl flex items-center gap-2.5 shadow-sm select-none">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Proctoring</span>
+                                <div className="flex gap-1.5 items-center">
                                     {[1, 2, 3, 4].map((s) => (
                                         <div 
-                                            key={s} 
-                                            title={warnings >= s ? 'Violation recorded' : 'Secure'}
-                                            className={`w-4 h-4 rounded-full border flex items-center justify-center text-[7px] font-black transition-all ${
+                                            key={s}
+                                            className={`w-3 h-3 rounded-full border transition-all ${
                                                 warnings >= s 
-                                                    ? 'bg-red-500 border-red-500 text-white shadow-sm shadow-red-200 animate-pulse' 
-                                                    : 'bg-slate-50 border-slate-200 text-slate-300'
+                                                    ? 'bg-red-500 border-red-500 shadow-sm shadow-red-200 animate-pulse' 
+                                                    : 'bg-slate-100 border-slate-200'
                                             }`}
-                                        >
-                                            {s}
-                                        </div>
+                                        />
                                     ))}
                                 </div>
                             </div>
