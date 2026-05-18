@@ -104,6 +104,8 @@ export default function InterviewPage() {
     const transcribeSeqRef = useRef(0)
     const questionsPrepAttemptsRef = useRef(0)
     const evalPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const loadedIndexRef = useRef(0)
+    const speechRecognitionRef = useRef<any>(null)
 
     // Derived Sections
     const aptitudeQuestions = useMemo(() => questions.filter(q => q.question_type === 'aptitude'), [questions])
@@ -173,7 +175,7 @@ export default function InterviewPage() {
         }
     }, [])
 
-    const startRecording = async () => {
+    const startMediaRecordingFallback = async () => {
         try {
             let stream = streamRef.current
             
@@ -181,8 +183,6 @@ export default function InterviewPage() {
             if (stream && (!stream.active || stream.getAudioTracks().length === 0)) {
                 stream = null
             }
-
-            const isSharedStream = !!stream
 
             if (!stream) {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -207,7 +207,7 @@ export default function InterviewPage() {
                 options = { mimeType: '' } 
             }
             
-            console.log(`Using MediaRecorder options:`, options)
+            console.log(`Using MediaRecorder options (fallback):`, options)
 
             const mediaRecorder = new MediaRecorder(audioStream, options)
             mediaRecorderRef.current = mediaRecorder
@@ -237,13 +237,81 @@ export default function InterviewPage() {
             mediaRecorder.start(500)
             setIsListening(true)
         } catch (err) {
-            console.error("Mic access failed", err)
+            console.error("Mic access failed in fallback", err)
             toast.error("Could not access microphone. Please check permissions.")
         }
     }
 
+    const startRecording = async () => {
+        const baseAnswerText = answerRef.current || '';
+        try {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+            if (SpeechRecognition) {
+                console.log("Using browser-native SpeechRecognition")
+                const recognition = new SpeechRecognition()
+                recognition.continuous = true
+                recognition.interimResults = true
+                recognition.lang = 'en-US'
+
+                recognition.onresult = (event: any) => {
+                    let finalTranscript = ''
+                    let interimTranscript = ''
+                    
+                    for (let i = 0; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            finalTranscript += event.results[i][0].transcript + ' '
+                        } else {
+                            interimTranscript += event.results[i][0].transcript
+                        }
+                    }
+                    
+                    const combined = (finalTranscript + interimTranscript).trim()
+                    if (combined) {
+                        const newAnswer = baseAnswerText ? `${baseAnswerText} ${combined}` : combined;
+                        setAnswer(newAnswer)
+                        answerRef.current = newAnswer
+                    }
+                }
+
+                recognition.onerror = (err: any) => {
+                    console.error("SpeechRecognition error, falling back to MediaRecorder", err)
+                    recognition.onend = null; // Prevent recursion on fallback
+                    try {
+                        recognition.stop()
+                    } catch {}
+                    speechRecognitionRef.current = null
+                    void startMediaRecordingFallback()
+                }
+
+                recognition.onend = () => {
+                    setIsListening(false)
+                    speechRecognitionRef.current = null
+                }
+
+                speechRecognitionRef.current = recognition
+                recognition.start()
+                setIsListening(true)
+                return
+            } else {
+                console.log("Native SpeechRecognition not supported, falling back to MediaRecorder")
+                await startMediaRecordingFallback()
+            }
+        } catch (err) {
+            console.error("Native SpeechRecognition init failed, falling back to MediaRecorder", err)
+            await startMediaRecordingFallback()
+        }
+    }
+
     const stopRecording = () => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        if (speechRecognitionRef.current) {
+            try {
+                speechRecognitionRef.current.stop()
+            } catch (err) {
+                console.error("Error stopping SpeechRecognition:", err)
+            }
+            speechRecognitionRef.current = null
+            setIsListening(false)
+        } else if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop()
             setIsListening(false)
         }
@@ -671,11 +739,35 @@ export default function InterviewPage() {
         }
     }, [currentIndex, interviewId, interviewStatus]);
 
+    // Load existing/draft answer when question changes
     useEffect(() => {
-        if (interviewStatus === 'active' && answer) {
-            localStorage.setItem(`rims_draft_answer_${interviewId}_${currentIndex}`, answer);
-        } else if (interviewStatus === 'active' && !answer) {
-            localStorage.removeItem(`rims_draft_answer_${interviewId}_${currentIndex}`);
+        if (interviewStatus === 'active' && questions && questions[currentIndex]) {
+            const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${currentIndex}`);
+            if (savedDraft !== null) {
+                setAnswer(savedDraft);
+                answerRef.current = savedDraft;
+            } else if (questions[currentIndex].is_answered && questions[currentIndex].answer_text) {
+                setAnswer(questions[currentIndex].answer_text);
+                answerRef.current = questions[currentIndex].answer_text;
+            } else {
+                setAnswer('');
+                answerRef.current = '';
+            }
+            loadedIndexRef.current = currentIndex;
+        }
+    }, [currentIndex, interviewId, interviewStatus, questions]);
+
+    useEffect(() => {
+        if (interviewStatus === 'active') {
+            if (loadedIndexRef.current !== currentIndex) {
+                // Skip saving draft since we are loading/transitioning between questions
+                return;
+            }
+            if (answer) {
+                localStorage.setItem(`rims_draft_answer_${interviewId}_${currentIndex}`, answer);
+            } else {
+                localStorage.removeItem(`rims_draft_answer_${interviewId}_${currentIndex}`);
+            }
         }
     }, [answer, currentIndex, interviewId, interviewStatus]);
 
@@ -898,14 +990,24 @@ export default function InterviewPage() {
 
         setIsSubmitting(true)
         try {
-            await APIClient.postWithRequestId(
-                `/api/interviews/${interviewId}/submit-answer`,
-                {
-                    question_id: currentQuestion.id,
-                    answer_text: currentAnswer
-                },
-                `rims-${interviewId}-submit-${currentQuestion.id}`,
-            )
+            let retries = 3
+            while (retries > 0) {
+                try {
+                    await APIClient.postWithRequestId(
+                        `/api/interviews/${interviewId}/submit-answer`,
+                        {
+                            question_id: currentQuestion.id,
+                            answer_text: currentAnswer
+                        },
+                        `rims-${interviewId}-submit-${currentQuestion.id}-${4 - retries}`,
+                    )
+                    break
+                } catch (err: any) {
+                    retries -= 1
+                    if (retries === 0) throw err
+                    await new Promise(r => setTimeout(r, 1000))
+                }
+            }
 
             // Update local state
             setQuestions(prev => prev.map(q =>
@@ -1164,14 +1266,6 @@ export default function InterviewPage() {
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        if (!q.is_answered) {
-                                            const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${idx}`)
-                                            setAnswer(savedDraft || '')
-                                            answerRef.current = savedDraft || ''
-                                        } else {
-                                            setAnswer('')
-                                            answerRef.current = ''
-                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1201,14 +1295,6 @@ export default function InterviewPage() {
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        if (!q.is_answered) {
-                                            const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${idx}`)
-                                            setAnswer(savedDraft || '')
-                                            answerRef.current = savedDraft || ''
-                                        } else {
-                                            setAnswer(q.answer_text || '')
-                                            answerRef.current = q.answer_text || ''
-                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1238,14 +1324,6 @@ export default function InterviewPage() {
                                     onClick={() => {
                                         const idx = questions.findIndex(item => item.id === q.id)
                                         setCurrentIndex(idx)
-                                        if (!q.is_answered) {
-                                            const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${idx}`)
-                                            setAnswer(savedDraft || '')
-                                            answerRef.current = savedDraft || ''
-                                        } else {
-                                            setAnswer(q.answer_text || '')
-                                            answerRef.current = q.answer_text || ''
-                                        }
                                     }}
                                     className={`w-9 h-9 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${questionNavButtonClass(
                                         q,
@@ -1533,16 +1611,7 @@ export default function InterviewPage() {
                                         className="h-12 px-6 rounded-2xl text-slate-400 font-bold hover:bg-slate-50 hover:text-slate-900"
                                         onClick={() => {
                                             if (currentIndex > 0) {
-                                                const prevIdx = currentIndex - 1
-                                                setCurrentIndex(prevIdx)
-                                                if (!questions[prevIdx].is_answered) {
-                                                    const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${prevIdx}`)
-                                                    setAnswer(savedDraft || '')
-                                                    answerRef.current = savedDraft || ''
-                                                } else {
-                                                    setAnswer('')
-                                                    answerRef.current = ''
-                                                }
+                                                setCurrentIndex(currentIndex - 1)
                                             }
                                         }}
                                         disabled={currentIndex === 0}
@@ -1555,16 +1624,7 @@ export default function InterviewPage() {
                                         className="h-12 px-6 rounded-2xl text-slate-900 font-bold hover:bg-slate-50"
                                         onClick={() => {
                                             if (currentIndex < totalQuestions - 1) {
-                                                const nextIdx = currentIndex + 1
-                                                setCurrentIndex(nextIdx)
-                                                if (!questions[nextIdx].is_answered) {
-                                                    const savedDraft = localStorage.getItem(`rims_draft_answer_${interviewId}_${nextIdx}`)
-                                                    setAnswer(savedDraft || '')
-                                                    answerRef.current = savedDraft || ''
-                                                } else {
-                                                    setAnswer('')
-                                                    answerRef.current = ''
-                                                }
+                                                setCurrentIndex(currentIndex + 1)
                                             }
                                         }}
                                         disabled={currentIndex === totalQuestions - 1 || isSubmitting}

@@ -401,13 +401,12 @@ def get_current_interview_any_status(
         # Check for hard expiration timestamp even for "any status" (read-only)
         if interview.expires_at:
             exp_at = interview.expires_at
-            if exp_at < get_ist_now() and interview.status != "completed":
-                # If completed, we might still want to allow viewing the report/thank you page
+            if exp_at < get_ist_now() and interview.status not in ["completed", "terminated", "cancelled", "expired"]:
+                # If completed/terminated/cancelled/expired, we allow viewing the report/thank you/violation page
                 logger.warning(f"Interview auth failed (any status): Session {interview_id} expired at {exp_at}. Marking as expired.")
                 try:
-                    if interview.status not in ["completed", "expired"]:
-                        interview.status = "expired"
-                        db.commit()
+                    interview.status = "expired"
+                    db.commit()
                 except Exception as e:
                     db.rollback()
                 

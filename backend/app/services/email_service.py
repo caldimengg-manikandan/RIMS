@@ -62,6 +62,37 @@ def _is_gmail_quota_error(error: BaseException | str) -> bool:
 
 def _send_via_smtp(to_email: str, subject: str, html_body: str, attachments: list = None) -> dict:
     """Core SMTP sending logic using Gmail with a single attempt."""
+    # Local development helper: log HTML preview and reroute mock emails to developer's inbox
+    if getattr(settings, "env", "development") == "development":
+        try:
+            import time
+            debug_dir = os.path.join(str(settings.base_dir), "debug_emails")
+            os.makedirs(debug_dir, exist_ok=True)
+            safe_subject = "".join(c for c in subject if c.isalnum() or c in (" ", "-", "_")).rstrip()
+            safe_subject = safe_subject.replace(" ", "_")[:50]
+            filename = f"email_{int(time.time())}_{safe_subject}.html"
+            filepath = os.path.join(debug_dir, filename)
+            
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(f"<!--\nTo: {to_email}\nSubject: {subject}\n-->\n")
+                f.write(html_body)
+            logger.info(f"[DEV EMAIL LOGGED] HTML preview saved locally to: {filepath}")
+        except Exception as dev_err:
+            logger.warning(f"[DEV EMAIL LOGGING FAILED] {dev_err}")
+
+        # Reroute mock/test domain recipients to developer's real configured inbox (SMTP_USER/SMTP_FROM)
+        mock_suffixes = [
+            "example.com", "test.com"
+        ]
+        to_email_lower = to_email.lower().strip()
+        is_mock = any(to_email_lower.endswith(suffix) for suffix in mock_suffixes)
+        
+        dev_recipient = settings.smtp_from or settings.smtp_user
+        if is_mock and dev_recipient:
+            logger.info(f"[DEV EMAIL REDIRECT] Rerouting mock email '{to_email}' to developer's inbox '{dev_recipient}'")
+            subject = f"[DEV][to: {to_email}] {subject}"
+            to_email = dev_recipient
+
     try:
         msg = MIMEMultipart()
         msg["Subject"] = subject

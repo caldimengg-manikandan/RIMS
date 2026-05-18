@@ -1,8 +1,10 @@
 
 import os
+import pytest
 
 def test_ui_ux_responsive_audit():
-    path = "c:/Users/user/Desktop/RIMS/rims/frontend/app/dashboard/onboarding/page.tsx"
+    # Use relative path to work in any workspace directory layout
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../frontend/app/dashboard/onboarding/page.tsx"))
     if not os.path.exists(path):
         pytest.skip("Frontend source not found")
         
@@ -15,3 +17,4 @@ def test_ui_ux_responsive_audit():
     assert "overflow-x-auto" in content
     # Check for professional fonts (inherited from layout but used in components)
     assert "font-black" in content or "font-bold" in content
+

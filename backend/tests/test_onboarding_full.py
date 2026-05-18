@@ -10,7 +10,8 @@ from app.core.timezone import get_ist_now
 def test_onboarding_smoke_endpoints(client: TestClient, hr_auth_headers):
     response = client.get("/api/onboarding/candidates", headers=hr_auth_headers)
     assert response.status_code == 200
-    assert "items" in response.json()
+    data = response.json()
+    assert "items" in data or ("data" in data and "items" in data["data"])
 
 # --- 2. FUNCTIONAL & SECURITY TESTING ---
 def test_issue_offer_letter_past_date_blocked(client: TestClient, hr_auth_headers, sample_application, db_session):

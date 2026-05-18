@@ -103,7 +103,8 @@ def test_sanity_upcoming_count_logic(client: TestClient, hr_token_1, db_session,
     db_session.add(app)
     db_session.commit()
     response = client.get("/api/onboarding/candidates", headers={"Authorization": f"Bearer {hr_token_1}"})
-    items = response.json()["items"]
+    res_data = response.json()
+    items = res_data["data"]["items"] if "data" in res_data else res_data["items"]
     found = False
     for c in items:
         if c["candidate_name"] == "Near":

@@ -881,17 +881,18 @@ async def access_interview(
                 session_age = timedelta(0) # Assume just started if null
             
             # Allow re-entry ONLY if session is in_progress and started within last 4 hours
-            if not is_active or session_age > timedelta(hours=4):
+            # OR if status is terminal (completed, terminated, cancelled, expired) so they can enter the dynamic page to see the final state.
+            if (not is_active or session_age > timedelta(hours=4)) and (interview.status not in ["completed", "terminated", "cancelled", "expired"]):
                 logger.warning(f"Access denied: Session {interview.id} is {interview.status} and {session_age} old.")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, 
                     detail="This interview link has already been used and the session is no longer active."
                 )
-            logger.info(f"Resuming active session {interview.id} for {email_clean}")
+            logger.info(f"Resuming or viewing session {interview.id} for {email_clean} (status: {interview.status})")
             
         # Link Expiry Validation
         expires_at = to_naive_ist(interview.expires_at)
-        if not expires_at or expires_at < current_time:
+        if (not expires_at or expires_at < current_time) and (interview.status not in ["completed", "terminated", "cancelled", "expired"]):
             logger.warning(f"Access link expired for interview {interview.id}. Expires at: {expires_at}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, 
