@@ -628,7 +628,7 @@ export default function Home() {
                 <div className="h-12 w-[220px] bg-slate-800/50 rounded-md animate-pulse border border-slate-700/50"></div>
                 <div className="h-12 w-[160px] bg-slate-800/50 rounded-md animate-pulse border border-slate-700/50"></div>
               </div>
-            ) : !isAuthenticated && (
+            ) : (
               <div
                 className="flex flex-col sm:flex-row gap-4 items-center justify-center mt-6"
                 style={{ marginLeft: "-280px" }}
