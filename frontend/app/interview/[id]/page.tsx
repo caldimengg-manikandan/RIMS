@@ -596,8 +596,8 @@ export default function InterviewPage() {
             const toastMsg = type === 'Fullscreen Exited'
                 ? 'Fullscreen exited! Please remain in fullscreen mode.'
                 : type === 'Tab switch'
-                ? 'Tab switch detected! Please remain on the active test tab.'
-                : 'Window focus lost! Please keep the test window active.'
+                ? 'Navigation away from the assessment tab is strictly prohibited.'
+                : 'Attention lost from the assessment window. Please focus on the test.'
 
             toast.error(`Proctoring Warning (${newWarnings}/3): ${toastMsg}`, {
                 duration: 6000,
@@ -959,13 +959,13 @@ export default function InterviewPage() {
     }
 
     const startInterviewManual = async () => {
-        // Step 1: Try to init camera/mic ΓÇö but don't block the interview if it fails
+        // Step 1: Try to init camera/mic - mandatory for entry
         try {
             await initOverallRecording()
         } catch (err: any) {
-            console.warn("Media recording unavailable, continuing without it:", err)
-            // Show a softer warning ΓÇö the interview will still start
-            toast.warning("Camera/mic access was denied. Proctoring will be limited, but you may still proceed.", { duration: 6000 })
+            console.error("Media recording unavailable:", err)
+            toast.error("Camera and microphone access are strictly required to begin the interview. Please allow permissions and try again.", { duration: 6000 })
+            return
         }
 
         // Step 2: Try fullscreen ΓÇö non-blocking
@@ -1119,7 +1119,7 @@ export default function InterviewPage() {
         return 'bg-blue-50 border-blue-200 text-blue-600'
     }
 
-    if (isLoading) {
+    if (isLoading || interviewStatus === 'preparing') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-6">
                 <div className="relative">
@@ -1129,27 +1129,6 @@ export default function InterviewPage() {
                 <div className="text-center">
                     <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Initializing Session</h2>
                     <p className="text-slate-500 font-bold text-sm">Please wait while we prepare your environment...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (interviewStatus === 'preparing') {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-                <div className="max-w-md w-full bg-white rounded-[3rem] p-12 shadow-2xl border border-blue-100 flex flex-col items-center">
-                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-8 border border-blue-100 relative">
-                        <div className="absolute inset-0 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                        <Cpu className="w-10 h-10 text-blue-600" />
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Generating Questions</h2>
-                    <p className="text-slate-600 font-bold mb-8 leading-relaxed">
-                        Our AI is tailoring questions based on the required skills. This usually takes 30-60 seconds...
-                    </p>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
-                        <div className="bg-blue-600 h-full animate-progress-indeterminate"></div>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Processing Intelligence</p>
                 </div>
             </div>
         )
@@ -1862,8 +1841,8 @@ export default function InterviewPage() {
                                 {violationModalType === 'Fullscreen Exited'
                                     ? 'You exited fullscreen mode. You must remain in fullscreen mode at all times to ensure complete focus and interview integrity.'
                                     : violationModalType === 'Tab switch'
-                                    ? 'You switched tabs or minimized the browser. Navigating away from the active test screen tab is strictly monitored and flagged.'
-                                    : 'You clicked outside the active browser window, switched screens, or opened another application. The test window must remain in focus and active at all times.'}
+                                    ? 'A tab switch or background navigation was detected. Leaving the active test tab is strictly prohibited and flags your session.'
+                                    : 'Attention loss or window change detected. The test window must remain active and in focus at all times.'}
                             </p>
                         </div>
                         
