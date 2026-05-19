@@ -349,7 +349,11 @@ export default function HRTicketsPage() {
                                 </div>
                                 <div className="col-span-2 flex md:justify-center">
                                     {ticket.status === 'pending' && (
-                                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 border font-bold text-xs">Pending</Badge>
+                                        ticket.hr_response ? (
+                                            <Badge className="bg-blue-100 text-blue-700 border-blue-200 border font-bold text-xs">Replied</Badge>
+                                        ) : (
+                                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 border font-bold text-xs">Pending</Badge>
+                                        )
                                     )}
                                     {ticket.status === 'resolved' && (
                                         <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border font-bold text-xs">{ticket.is_reissue_granted ? '🔑 Re-issued' : '✓ Resolved'}</Badge>
@@ -436,9 +440,24 @@ export default function HRTicketsPage() {
                         <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">
                             Ticket Details
                             {selectedTicket && (
-                                <Badge variant="outline" className={`capitalize ${getIssueTypeBadge(selectedTicket.issue_type)}`}>
-                                    {selectedTicket.issue_type.replace('_', ' ')}
-                                </Badge>
+                                <>
+                                    <Badge variant="outline" className={`capitalize ${getIssueTypeBadge(selectedTicket.issue_type)}`}>
+                                        {selectedTicket.issue_type.replace('_', ' ')}
+                                    </Badge>
+                                    {selectedTicket.status === 'pending' && (
+                                        selectedTicket.hr_response ? (
+                                            <Badge className="bg-blue-100 text-blue-700 border-blue-200 border font-bold text-xs">Replied</Badge>
+                                        ) : (
+                                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 border font-bold text-xs">Pending</Badge>
+                                        )
+                                    )}
+                                    {selectedTicket.status === 'resolved' && (
+                                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 border font-bold text-xs">{selectedTicket.is_reissue_granted ? '🔑 Re-issued' : '✓ Resolved'}</Badge>
+                                    )}
+                                    {selectedTicket.status === 'dismissed' && (
+                                        <Badge className="bg-slate-100 text-slate-500 border-slate-200 border font-bold text-xs">Dismissed</Badge>
+                                    )}
+                                </>
                             )}
                         </DialogTitle>
                         <DialogDescription>
