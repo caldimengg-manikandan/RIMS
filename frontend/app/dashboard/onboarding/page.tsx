@@ -287,8 +287,8 @@ export default function OnboardingPage() {
                             <div className="text-2xl font-black">
                                 {candidates?.filter(c => {
                                     if (!c.joining_date || c.status === 'onboarded') return false
-                                    // Accepted candidates who haven't finished onboarding
-                                    if (c.status !== 'accepted' && c.offer_response_status !== 'accept' && c.offer_response_status !== 'accepted') return false
+                                    // Candidates who are in the active final pipeline but not yet onboarded
+                                    if (c.status !== 'accepted' && c.status !== 'offer_sent' && c.offer_response_status !== 'accept' && c.offer_response_status !== 'accepted') return false
                                     
                                     // Parse date manually to avoid timezone shifting
                                     const [y, m, d] = c.joining_date.split('T')[0].split('-').map(Number);
