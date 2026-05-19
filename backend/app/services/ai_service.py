@@ -344,6 +344,15 @@ async def parse_resume_with_ai(resume_text: str, job_id: int, job_description: s
             raise ValueError("ai_unavailable")
         data = json.loads(clean_json(response))
         result = data
+        
+        # Check if the response contains the expected keys to protect against prompt injection/hijacking.
+        required_keys = ["skills", "score", "summary"]
+        is_valid_schema = all(k in data for k in required_keys)
+        summary_val = data.get("summary") or ""
+        skills_val = data.get("skills") or []
+        if not is_valid_schema or not summary_val or (isinstance(skills_val, list) and not skills_val):
+            raise ValueError("Invalid JSON schema or hijacked LLM response detected.")
+
         # No longer triggering extraction_degraded solely on is_resume as we want to be more inclusive
         if result.get("is_resume") is False:
             logger.info("AI flagged document as non-standard resume, but continuing with best-effort extraction.")

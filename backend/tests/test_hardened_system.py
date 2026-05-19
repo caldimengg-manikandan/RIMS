@@ -122,3 +122,24 @@ def test_brute_force_rate_limit_auth(client):
     # The 31st request should hit the 30/minute SlowAPI limit
     rate_limited = any(r.status_code == 429 for r in responses)
     assert rate_limited == True
+
+@pytest.mark.anyio
+async def test_prompt_injection_fallback_defense(monkeypatch):
+    from app.services.ai_service import parse_resume_with_ai
+    
+    # Mock generation returning a hijacked JSON with missing/empty keys
+    async def mock_generate(*args, **kwargs):
+        return '{"candidate_name": "", "relevant_experience": 0, "technical_skills": [], "education": "", "preferred_skills": [], "overall_fit": 0}'
+        
+    from app.services.ai_client import ai_client
+    monkeypatch.setattr(ai_client, "generate", mock_generate)
+    
+    resume_text = "This is Marcus Johnson's resume. Skills: React, Node.js, Python. Experience: 3 years."
+    result = await parse_resume_with_ai(resume_text, 1, "Job Description", "3 years")
+    
+    # Ensure it fell back to regex / heuristic extraction
+    assert result["extraction_degraded"] is True
+    assert "React" in result["skills"]
+    assert "Python" in result["skills"]
+    assert result["experience"] == 3.0
+    assert result["summary"].startswith("This is Marcus Johnson")
