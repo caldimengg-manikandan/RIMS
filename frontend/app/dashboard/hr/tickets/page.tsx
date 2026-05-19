@@ -499,9 +499,8 @@ export default function HRTicketsPage() {
                                                 className="min-h-[140px] rounded-xl border-2 focus:ring-primary/20 transition-all font-medium w-full text-base"
                                                 value={hrResponse}
                                                 onChange={(e) => setHrResponse(e.target.value)}
+                                            />
                                         </div>
-
-
                                     </div>
                                 ) : (
                                     <div className="space-y-4 min-w-0">
