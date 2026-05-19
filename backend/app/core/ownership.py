@@ -23,7 +23,7 @@ def validate_hr_ownership(resource, current_user, *, resource_name: str = "resou
     Centralized ownership guard for all non-admin users.
     Checks both direct assignment (hr_id) and job-level ownership.
     """
-    if current_user.role.lower() == "super_admin":
+    if current_user.role.lower() in ("super_admin", "hr"):
         return
 
     # Check Direct Ownership (Resource assigned to this HR)
