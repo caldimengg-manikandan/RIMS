@@ -156,7 +156,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cors_aware_rate_limit_handler)
 
 
-from app.core.middleware import PerformanceLoggingMiddleware
+from app.core.middleware import PerformanceLoggingMiddleware, SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(PerformanceLoggingMiddleware)
 
 allowed_origins = list(set(settings.get_allowed_origins()))
@@ -347,8 +348,14 @@ async def imap_polling_loop():
     while True:
         try:
             db = SessionLocal()
-            # Fetch automatically
-            fetch_resume_attachments(db, 'caldiminternship@gmail.com', 'jaesbucnsfnlediv')
+            # Fetch automatically using settings
+            imap_email = settings.imap_email or 'caldiminternship@gmail.com'
+            imap_password = settings.imap_password or 'jaesbucnsfnlediv'
+
+            if settings.env == "production" and imap_email == 'caldiminternship@gmail.com':
+                logger.warning("SECURITY WARNING: Using default hardcoded IMAP credentials in production. Configure IMAP_EMAIL and IMAP_PASSWORD.")
+
+            fetch_resume_attachments(db, imap_email, imap_password)
             from app.services.email_ingestion_service import run_batch_resume_processing
             await run_batch_resume_processing(db)
             db.close()

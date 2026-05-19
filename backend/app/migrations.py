@@ -286,11 +286,14 @@ def run_startup_migrations(engine: Engine):
                 """))
                 
                 # Promote specific user to super_admin
+                from app.core.config import get_settings
+                settings = get_settings()
+                admin_email = (settings.super_admin_email or 'caldiminternship@gmail.com').lower().strip()
                 conn.execute(text("""
                     UPDATE users 
                     SET role = 'super_admin', approval_status = 'approved'
-                    WHERE email = 'caldiminternship@gmail.com'
-                """))
+                    WHERE email = :email
+                """), {"email": admin_email})
                 
                 # Ensure existing staff are approved
                 conn.execute(text("""

@@ -252,13 +252,33 @@ async def run_batch_resume_processing(db: Session):
                         target_job = job
                         logger.info(f"Successfully mapped emailed resume {resume.id} to Job Title '{job.title}'")
                         break
+
+            # Pattern D: Smart token-based fuzzy keyword matching
+            if not target_job:
+                stopwords = {"and", "or", "the", "for", "with", "a", "an", "in", "of", "to", "at", "by", "from", "on", "role", "position", "job", "application", "opportunity", "hiring", "pvt", "ltd", "engineering", "technologies", "recruitment", "engineer", "designer", "developer", "modeller", "modeler", "specialist"}
+                best_match = None
+                max_score = 0
+                for job in open_jobs:
+                    # Tokenize job title and filter stopwords
+                    job_tokens = set(re.findall(r'[a-z0-9]+', job.title.lower())) - stopwords
+                    if not job_tokens:
+                        continue
+                    # Check how many tokens match the email subject/body
+                    matches = sum(1 for token in job_tokens if token in combined_text_lower)
+                    score = matches / len(job_tokens)
+                    if matches > 0 and score > max_score and score >= 0.4:
+                        max_score = score
+                        best_match = job
+                if best_match:
+                    target_job = best_match
+                    logger.info(f"Successfully fuzzy mapped emailed resume {resume.id} to Job '{best_match.title}' (score={max_score:.2f})")
                         
             if not target_job:
                 logger.warning(
                     f"Emailed resume {resume.id} skipped: No matching open Job ID, Code, or Role Title found in email "
                     f"(Subject: '{resume.subject}')."
                 )
-                resume.processed = True
+                resume.processed = False
                 continue
                 
             # 2. Extract Candidate Information
@@ -339,14 +359,17 @@ async def run_batch_resume_processing(db: Session):
             
             # 5. Trigger the Background AI Analysis Pipeline
             from app.api.applications import process_application_background
+            import asyncio
             
-            # Since process_application_background is an async task, we await it directly
-            await process_application_background(
-                new_application.id,
-                target_job.id,
-                new_application.resume_file_path,
-                raw_email,
-                candidate_name
+            # Run the heavy AI analysis in an isolated background task so a parsing error/conflict does not block or roll back other applications in the batch
+            asyncio.create_task(
+                process_application_background(
+                    new_application.id,
+                    target_job.id,
+                    new_application.resume_file_path,
+                    raw_email,
+                    candidate_name
+                )
             )
             
             resume.processed = True

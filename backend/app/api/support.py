@@ -199,21 +199,37 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
                 detail="Support requests can only be created after an interview is completed or terminated.",
             )
 
-    # Prevent duplicate active tickets for same interview.
-    existing_pending = (
-        db.query(InterviewIssue)
-        .filter(
-            InterviewIssue.interview_id == interview.id,
-            InterviewIssue.status == "pending",
+    # Prevent duplicate active tickets.
+    if interview:
+        existing_pending = (
+            db.query(InterviewIssue)
+            .filter(
+                InterviewIssue.interview_id == interview.id,
+                InterviewIssue.status == "pending",
+            )
+            .order_by(InterviewIssue.created_at.desc())
+            .first()
         )
-        .order_by(InterviewIssue.created_at.desc())
-        .first()
-    )
-    if existing_pending:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An active support request for this interview is already under review.",
+        if existing_pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An active support request for this interview is already under review.",
+            )
+    else:
+        existing_pending = (
+            db.query(InterviewIssue)
+            .filter(
+                InterviewIssue.application_id == application.id,
+                InterviewIssue.status == "pending",
+            )
+            .order_by(InterviewIssue.created_at.desc())
+            .first()
         )
+        if existing_pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An active support request for this application is already under review.",
+            )
 
     # Attach metadata (clean, structured, separable from candidate message)
     application = getattr(interview, "application", None)
@@ -239,7 +255,7 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
     # Avoid dumping all internals while preserving consistent metadata.
     structured_context = [
         "[System Context]",
-        f"interview_id={interview.id}",
+        f"interview_id={interview.id if interview else 'N/A'}",
         f"candidate_name={candidate_name or ''}",
         f"job_role={job_role or ''}",
         f"interview_status={interview.status if interview else 'N/A'}",
