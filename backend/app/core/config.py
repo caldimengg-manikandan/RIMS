@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
+
+    # IMAP Email Configuration
+    imap_email: str = ""
+    imap_password: str = ""
     
     # Resend API
     resend_api_key: str = ""
@@ -155,6 +159,8 @@ class Settings(BaseSettings):
             # Gmail "App Passwords" are often pasted with spaces; SMTP AUTH requires the raw token.
             object.__setattr__(self, "smtp_password", (self.smtp_password or "").strip())
             object.__setattr__(self, "smtp_from", (self.smtp_from or "").strip())
+            object.__setattr__(self, "imap_email", (self.imap_email or "").strip())
+            object.__setattr__(self, "imap_password", (self.imap_password or "").strip())
             object.__setattr__(self, "resend_api_key", (self.resend_api_key or "").strip())
             object.__setattr__(self, "resend_from", (self.resend_from or "").strip())
             object.__setattr__(self, "frontend_base_url", (self.frontend_base_url or "").strip())
@@ -203,6 +209,12 @@ class Settings(BaseSettings):
             error_msg = f"FATAL CONFIG ERROR: Missing mandatory environment variables: {', '.join(missing_fatal)}. The server cannot start."
             logger.critical(error_msg)
             raise ValueError(error_msg)
+
+        if self.jwt_secret and len(self.jwt_secret) < 32:
+            logger.warning(
+                "SECURITY WARNING: 'JWT_SECRET' is too short (less than 32 characters). "
+                "For production, please generate a strong 256-bit key (e.g., using 'openssl rand -hex 32')."
+            )
 
         # 2. Critical Settings (Warn in dev, fatal in production)
         critical_required = {

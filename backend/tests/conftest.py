@@ -68,6 +68,10 @@ app.api.interviews.settings = TEST_SETTINGS
 import app.main
 app.main.settings = TEST_SETTINGS
 
+async def dummy_imap_polling_loop():
+    pass
+app.main.imap_polling_loop = dummy_imap_polling_loop
+
 # Now import the app's database module — it will use our mocked_create_engine
 import app.infrastructure.database as db_mod
 from app.infrastructure.database import Base, engine, SessionLocal

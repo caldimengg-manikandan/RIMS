@@ -709,7 +709,8 @@ async def process_application_background(application_id: int, job_id: int, abs_f
             # Download from storage
             # Assuming 'resumes' bucket
             bucket_name = settings.supabase_bucket_resumes
-            response = supabase.storage.from_(bucket_name).download(abs_file_path)
+            from app.core.storage import download_file
+            response = download_file(bucket_name, abs_file_path)
             if not response:
                 raise Exception(f"Failed to download resume from {abs_file_path}")
             
@@ -830,8 +831,9 @@ async def process_application_background(application_id: int, job_id: int, abs_f
         duplicate_app_id = None
         
         # Check for placeholder status BEFORE any updates
-        email_is_placeholder = application.candidate_email and "@batch." in application.candidate_email
-        name_is_placeholder = not application.candidate_name or len(application.candidate_name.split()) < 2
+        is_emailed_app = application.hr_notes == "Ingested automatically from Email Recruiter Channel."
+        email_is_placeholder = (application.candidate_email and "@batch." in application.candidate_email) or is_emailed_app
+        name_is_placeholder = not application.candidate_name or len(application.candidate_name.split()) < 2 or is_emailed_app
         
         # 1. Duplicate Detection via Extracted Email (Point 1: Prevent Clashes)
         if extracted_email:
@@ -1256,6 +1258,253 @@ def download_resume(
         media_type='application/octet-stream'
     )
 
+
+
+# --- Email Ingestion API Endpoints (Phase 2) ---
+from app.services.email_ingestion_service import fetch_resume_attachments, run_batch_resume_processing
+from pydantic import BaseModel
+
+class EmailIngestRequest(BaseModel):
+    imap_user: str
+    imap_pass: str
+
+from app.domain.models import AttachmentResume
+
+@router.post("/ingest-emails")
+async def ingest_email_resumes(req: EmailIngestRequest, db: Session = Depends(get_db)):
+    """
+    Trigger manual email ingestion via IMAP and map/analyze them immediately
+    """
+    result = fetch_resume_attachments(db, req.imap_user, req.imap_pass)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    
+    # Process the batch immediately so it reflects in the dashboard
+    batch_result = await run_batch_resume_processing(db)
+    
+    return {
+        "message": "Ingestion complete and resumes processed", 
+        "saved_count": result.get("count"),
+        "mapped_count": batch_result.get("count", 0)
+    }
+
+@router.get("/ingested-emails")
+def get_ingested_emails(
+    limit: int = 10,
+    skip: int = 0,
+    search: str = None,
+    processed: bool = None,
+    current_user: User = Depends(get_current_hr),
+    db: Session = Depends(get_db)
+):
+    """
+    List all ingested email resumes (HR only)
+    """
+    query = db.query(AttachmentResume)
+    if processed is not None:
+        query = query.filter(AttachmentResume.processed == processed)
+    if search:
+        query = query.filter(
+            or_(
+                AttachmentResume.sender_email.ilike(f"%{search}%"),
+                AttachmentResume.subject.ilike(f"%{search}%"),
+                AttachmentResume.file_name.ilike(f"%{search}%")
+            )
+        )
+    total = query.count()
+    items = query.order_by(AttachmentResume.received_at.desc()).offset(skip).limit(limit).all()
+    
+    results = []
+    for item in items:
+        # Extract candidate's raw email from sender email
+        sender_str = item.sender_email or ""
+        match = re.search(r'<([^>]+)>', sender_str)
+        raw_email = match.group(1).lower().strip() if match else sender_str.lower().strip()
+
+        # Match application strictly by unique Supabase storage path first to prevent generic filename collisions
+        app = None
+        if item.file_url:
+            bucket_path = item.file_url.split("/MAIL_ATTACHMENTS/")[-1].split("?")[0]
+            app = db.query(Application).filter(
+                Application.resume_file_path.like(f"%{bucket_path}%")
+            ).first()
+            
+        # Fallback to matching strictly by candidate's email and job code/most recent application (prevents generic filename collisions)
+        if not app and raw_email:
+            # Check subject and email body for target Job Code (e.g. JOB-C1HWQZ)
+            combined_text = f"{item.subject or ''} {item.email_body or ''}"
+            job_code_match = re.search(r'JOB-[A-Z0-9]{6}', combined_text, re.IGNORECASE)
+            
+            if job_code_match:
+                extracted_code = job_code_match.group(0).upper().strip()
+                from app.domain.models import Job
+                app = db.query(Application).join(Job).filter(
+                    Application.candidate_email.ilike(raw_email),
+                    Job.job_id == extracted_code
+                ).order_by(Application.applied_at.desc()).first()
+                
+            if not app:
+                # Safe fallback: find candidate's most recent application across the platform
+                app = db.query(Application).filter(
+                    Application.candidate_email.ilike(raw_email)
+                ).order_by(Application.applied_at.desc()).first()
+
+        candidate_email_to_check = app.candidate_email if app else raw_email
+        
+        is_duplicate = False
+        if candidate_email_to_check:
+            dup_query = db.query(Application).filter(
+                Application.candidate_email.ilike(candidate_email_to_check)
+            )
+            if app:
+                dup_query = dup_query.filter(Application.id != app.id)
+            is_duplicate = dup_query.count() > 0
+        
+        results.append({
+            "id": item.id,
+            "sender_email": item.sender_email,
+            "subject": item.subject,
+            "file_name": item.file_name,
+            "file_url": item.file_url,
+            "received_at": item.received_at,
+            "processed": item.processed,
+            "application_id": app.id if app else None,
+            "job_title": app.job.title if app and app.job else None,
+            "job_code": app.job.job_id if app and app.job else None,
+            "is_duplicate": is_duplicate
+        })
+        
+    return {
+        "items": results,
+        "total": total,
+        "page": (skip // limit) + 1,
+        "size": limit,
+        "pages": (total + limit - 1) // limit
+    }
+
+class AssignResumeRequest(BaseModel):
+    job_id: int
+
+@router.post("/ingested-emails/{resume_id}/assign")
+async def assign_ingested_email(
+    resume_id: int,
+    req: AssignResumeRequest,
+    current_user: User = Depends(get_current_hr),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually assign an unmapped email resume to a specific job (HR only)
+    """
+    resume = db.query(AttachmentResume).filter(AttachmentResume.id == resume_id).first()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Ingested resume not found")
+        
+    job = db.query(Job).filter(Job.id == req.job_id, Job.status == 'open').first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Target open job not found")
+        
+    # Extract sender details
+    sender_str = resume.sender_email or ""
+    name_match = re.search(r'^([^<]+)', sender_str)
+    candidate_name = name_match.group(1).strip() if name_match else "Emailed Candidate"
+    if not candidate_name or candidate_name.lower() == "emailed candidate":
+        email_match = re.search(r'<([^>]+)>', sender_str)
+        raw_email = email_match.group(1).lower().strip() if email_match else sender_str.lower().strip()
+        candidate_name = raw_email.split('@')[0].replace('.', ' ').title()
+    else:
+        email_match = re.search(r'<([^>]+)>', sender_str)
+        raw_email = email_match.group(1).lower().strip() if email_match else sender_str.lower().strip()
+        
+    # Extract phone if present
+    body_lower = (resume.email_body or "").lower()
+    phone_matches = re.findall(r'[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]', body_lower)
+    candidate_phone_normalized = None
+    candidate_phone_hash = None
+    candidate_phone_raw = None
+    if phone_matches:
+        candidate_phone_raw = phone_matches[0]
+        norm_p, _ = normalize_phone_digits(candidate_phone_raw)
+        if norm_p and len(norm_p) >= 10:
+            candidate_phone_normalized = norm_p
+            candidate_phone_hash = compute_phone_hash(norm_p)
+
+    # Check duplicate application for this job
+    from sqlalchemy import or_
+    filters = [Application.candidate_email == raw_email]
+    if candidate_phone_hash:
+        filters.append(Application.candidate_phone_hash == candidate_phone_hash)
+        
+    existing_app = db.query(Application).filter(
+        Application.job_id == job.id,
+        or_(*filters)
+    ).first()
+    if existing_app:
+        raise HTTPException(status_code=400, detail="Candidate already has an application for this job")
+        
+
+            
+    # Storage path
+    resume_file_path = None
+    if resume.file_url and "/MAIL_ATTACHMENTS/" in resume.file_url:
+        bucket_path = resume.file_url.split("/MAIL_ATTACHMENTS/")[-1].split("?")[0]
+        resume_file_path = f"MAIL_ATTACHMENTS/{bucket_path}"
+        
+    # Download file for hash
+    content = b""
+    if resume.file_url:
+        import requests
+        try:
+            response = requests.get(resume.file_url)
+            if response.status_code == 200:
+                content = response.content
+        except Exception as e:
+            logger.error(f"Failed to download resume file from URL: {e}")
+            
+    import hashlib
+    resume_hash = hashlib.sha256(content).hexdigest() if content else "dummy_hash_" + str(resume.id)
+    
+    # Create application
+    new_application = Application(
+        job_id=job.id,
+        hr_id=job.hr_id,
+        candidate_name=candidate_name,
+        candidate_email=raw_email,
+        candidate_phone_normalized=candidate_phone_normalized,
+        candidate_phone_raw=candidate_phone_raw,
+        candidate_phone_hash=candidate_phone_hash,
+        resume_file_name=resume.file_name,
+        resume_hash=resume_hash,
+        resume_file_path=resume_file_path,
+        status="applied",
+        applied_at=get_ist_now(),
+        resume_status="pending",
+        hr_notes="Manually assigned from Ingested Email Recruiter Channel."
+    )
+    
+    db.add(new_application)
+    resume.processed = True
+    db.commit()
+    db.refresh(new_application)
+    
+    # Trigger background AI analysis
+    from app.api.applications import process_application_background
+    import asyncio
+    asyncio.create_task(
+        process_application_background(
+            new_application.id,
+            job.id,
+            new_application.resume_file_path,
+            raw_email,
+            candidate_name
+        )
+    )
+    
+    return {
+        "status": "success",
+        "message": "Resume successfully assigned to job and AI analysis triggered.",
+        "application_id": new_application.id
+    }
+
 @router.get("/{application_id}", response_model=ApplicationDetailResponse)
 def get_application(
     application_id: int,
@@ -1277,6 +1526,31 @@ def get_application(
             detail="Application not found"
         )
     validate_hr_ownership(application, current_user, resource_name="application")
+    
+    # Automatic Self-Healing for Incompatible/Mismatched Encryption Keys
+    if application.resume_extraction and application.resume_file_path:
+        ext_text = application.resume_extraction.extracted_text
+        if ext_text in ("[UNREADABLE]", "[DECRYPTION_ERROR]") or not ext_text or ext_text.strip() == "":
+            logger.warning(f"Decryption mismatch or missing text detected for Application ID {application_id}. Triggering automatic self-healing re-parse.")
+            
+            application.resume_status = "parsing"
+            db.commit()
+            db.refresh(application)
+            
+            import threading
+            import asyncio
+            def run_healing():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(retry_application_background(application_id, application.job_id, application.resume_file_path))
+                except Exception as ex:
+                    logger.error(f"Error in self-healing thread: {ex}")
+                finally:
+                    loop.close()
+                    
+            t = threading.Thread(target=run_healing)
+            t.start()
     
     # Sanitize paths
     if application.candidate_photo_path and ":" in application.candidate_photo_path:
@@ -1319,9 +1593,10 @@ async def retry_application_background(application_id: int, job_id: int, bucket_
         resume_text = ""
         try:
             from io import BytesIO
-            from app.core.storage import get_supabase_client
-            supabase = get_supabase_client()
-            response = supabase.storage.from_(settings.supabase_bucket_resumes).download(bucket_path)
+            from app.core.storage import download_file
+            response = download_file(settings.supabase_bucket_resumes, bucket_path)
+            if not response:
+                raise Exception("Failed to download resume content")
             file_stream = BytesIO(response)
             file_ext = bucket_path.lower().split('_')[-1].split('.')[-1] if '.' in bucket_path else 'pdf'
 
@@ -1662,6 +1937,33 @@ async def update_application_status(
             )
             db.add(decision)
 
+    if action in (TransitionAction.HIRE, TransitionAction.ACCEPT_OFFER):
+        # Auto-withdraw other active duplicate applications of the same candidate
+        candidate_email = application.candidate_email
+        if candidate_email:
+            from app.domain.constants import CandidateState
+            active_duplicates = db.query(Application).filter(
+                Application.candidate_email == candidate_email,
+                Application.id != application.id,
+                Application.status.notin_([
+                    CandidateState.REJECTED.value,
+                    CandidateState.ONBOARDED.value
+                ])
+            ).all()
+            
+            for dup in active_duplicates:
+                try:
+                    fsm.transition(
+                        application=dup,
+                        action=TransitionAction.REJECT,
+                        user_id=current_user.id,
+                        notes=f"Auto-withdrawn: Candidate accepted another offer (App ID: {application.id})",
+                        is_critical=False,
+                        background_tasks=background_tasks
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to auto-withdraw duplicate App {dup.id}: {e}")
+
     if action == TransitionAction.REJECT:
         from app.domain.models import HiringDecision, Notification
         existing = db.query(HiringDecision).filter(
@@ -1918,3 +2220,4 @@ async def extract_basic_info(resume_file: UploadFile = File(...)):
         "name": info.get("name") if isinstance(info, dict) else "",
         "phone": info.get("phone") if isinstance(info, dict) else "",
     }
+

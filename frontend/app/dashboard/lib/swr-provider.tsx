@@ -8,10 +8,10 @@ export const SWRProvider = ({ children }: { children: React.ReactNode }) => {
     <SWRConfig 
       value={{
         fetcher,
-        refreshInterval: 0,        // disabled: was 5000ms — was hammering remote Supabase DB constantly
-        revalidateOnFocus: false,  // disabled: was re-fetching every time tab regained focus
+        refreshInterval: 0,        // disabled: no background polling — manual refresh only
+        revalidateOnFocus: true,   // enabled: re-fetch when tab regains focus (keeps data fresh)
         revalidateOnReconnect: true,
-        dedupingInterval: 15000    // increased: was 2000ms — prevents rapid re-fetches on navigation
+        dedupingInterval: 2000     // 2s: prevents duplicate requests but doesn't suppress forced revalidations
       }}
     >
       {children}

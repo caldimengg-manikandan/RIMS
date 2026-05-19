@@ -206,8 +206,8 @@ export function FeedbackDialog({ open, onOpenChange, interviewId }: FeedbackDial
                                 >
                                     <Star
                                         className={`h-10 w-10 transition-colors ${(hoverRating || rating) >= star
-                                                ? "fill-primary text-primary"
-                                                : "text-muted-foreground/30"
+                                            ? "fill-primary text-primary"
+                                            : "text-muted-foreground/30"
                                             }`}
                                     />
                                 </button>

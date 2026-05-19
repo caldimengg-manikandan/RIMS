@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from app.domain.models import User, Application, Job, AuditLog, GlobalSettings
 from app.core.timezone import get_ist_now
+import json
 
 # --- FIXTURES ---
 
@@ -112,3 +113,32 @@ def test_sanity_upcoming_count_logic(client: TestClient, hr_token_1, db_session,
             if (jd - today).days <= 7:
                 found = True
     assert found
+
+def test_resend_offer_success_and_audit(client, db_session, hr_user_1, test_job_1, hr_token_1, setup_settings):
+    app = Application(
+        candidate_name="Resend Candidate",
+        candidate_email="resend@test.com",
+        status="offer_sent",
+        offer_sent=True,
+        offer_token_expiry=get_ist_now() - timedelta(days=1),
+        hr_id=hr_user_1.id,
+        job_id=test_job_1.id
+    )
+    db_session.add(app)
+    db_session.commit()
+
+    new_joining = (get_ist_now() + timedelta(days=10)).date().isoformat()
+    response = client.post(
+        f"/api/onboarding/applications/{app.id}/send-offer?joining_date={new_joining}&auto_approve=true",
+        headers={"Authorization": f"Bearer {hr_token_1}"}
+    )
+    assert response.status_code == 200
+    
+    db_session.refresh(app)
+    assert app.offer_token_expiry > get_ist_now() + timedelta(days=6)
+    
+    from app.domain.models import AuditLog
+    audit = db_session.query(AuditLog).filter(AuditLog.resource_id == app.id, AuditLog.action == "OFFER_RESENT").first()
+    assert audit is not None
+    details = json.loads(audit.details)
+    assert "resent" in details["message"]

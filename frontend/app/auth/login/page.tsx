@@ -79,11 +79,21 @@ function LoginContent() {
     }
   }
 
+  const hasLoggedOutOnMount = React.useRef(false)
+
   useEffect(() => {
     // Enforce strict security: navigating to the login page terminates any active session.
     // This ensures HR must explicitly authenticate every time they want to access the system.
+<<<<<<< HEAD
     if (isAuthenticated && !hasSubmitted.current) {
       logout()
+=======
+    if (!hasLoggedOutOnMount.current) {
+      hasLoggedOutOnMount.current = true
+      if (isAuthenticated) {
+        logout()
+      }
+>>>>>>> 59c9494f1365c2fcb436868657d3b2b91bee0096
     }
   }, [isAuthenticated, logout])
 

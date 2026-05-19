@@ -114,15 +114,15 @@ export default function OnboardingPage() {
             
             if (orderA !== orderB) return orderA - orderB
             
-            // Then by joining date
+            // Then by joining date (latest first)
             if (a.joining_date && b.joining_date) {
-                return new Date(a.joining_date).getTime() - new Date(b.joining_date).getTime()
+                return new Date(b.joining_date).getTime() - new Date(a.joining_date).getTime()
             }
             if (a.joining_date) return -1
             if (b.joining_date) return 1
             
-            // Then by name
-            return a.candidate_name.localeCompare(b.candidate_name)
+            // Then by newest entry
+            return b.id - a.id
         })
     }, [candidates])
 
@@ -162,7 +162,7 @@ export default function OnboardingPage() {
         try {
             await APIClient.post(`/api/onboarding/applications/${candidate.id}/approve-offer`, {})
             toast.success("Offer letter approved and sent to candidate")
-            mutate()
+            mutate(undefined, { revalidate: true })
             setIsApproveOpen(false)
         } catch (error: any) {
             toast.error(error.message || "Failed to approve offer letter.")
@@ -173,7 +173,7 @@ export default function OnboardingPage() {
         try {
             await APIClient.post(`/api/onboarding/applications/${id}/onboard`, {})
             toast.success("Candidate marked as onboarded")
-            mutate()
+            mutate(undefined, { revalidate: true })
             setActiveCaptureId(id)
             setIsCaptureOpen(true)
         } catch (error: unknown) {
@@ -187,7 +187,7 @@ export default function OnboardingPage() {
         try {
             const res = await APIClient.post(`/api/onboarding/applications/${id}/generate-id-card`, {}) as any
             toast.success(`ID Card generated. Employee ID: ${res.employee_id}`)
-            mutate()
+            mutate(undefined, { revalidate: true })
         } catch (error: any) {
             toast.error(error.message || "Failed to generate ID card")
         }
@@ -239,7 +239,7 @@ export default function OnboardingPage() {
                         variant="outline" 
                         className="gap-2 h-11 px-5 rounded-xl border-border font-bold hover:bg-muted/50" 
                         onClick={() => {
-                            mutate();
+                            mutate(undefined, { revalidate: true });
                             toast.info("Refreshing candidate data...");
                         }}
                     >
@@ -287,8 +287,8 @@ export default function OnboardingPage() {
                             <div className="text-2xl font-black">
                                 {candidates?.filter(c => {
                                     if (!c.joining_date || c.status === 'onboarded') return false
-                                    // Accepted candidates who haven't finished onboarding
-                                    if (c.status !== 'accepted' && c.offer_response_status !== 'accept' && c.offer_response_status !== 'accepted') return false
+                                    // Candidates who are in the active final pipeline but not yet onboarded
+                                    if (c.status !== 'accepted' && c.status !== 'offer_sent' && c.offer_response_status !== 'accept' && c.offer_response_status !== 'accepted') return false
                                     
                                     // Parse date manually to avoid timezone shifting
                                     const [y, m, d] = c.joining_date.split('T')[0].split('-').map(Number);
@@ -301,12 +301,11 @@ export default function OnboardingPage() {
                                     const diff = jDate.getTime() - today.getTime()
                                     const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000
                                     
-                                    // Include overdue candidates (diff < 0) as they are still in 'accepted' status
-                                    // but haven't been onboarded yet.
-                                    return diff <= sevenDaysInMs
+                                    // Only include candidates joining in the next 7 days (from today onwards)
+                                    return diff >= 0 && diff <= sevenDaysInMs
                                 }).length || 0}
                             </div>
-                            <p className="text-xs text-muted-foreground">Includes overdue joinings</p>
+                            <p className="text-xs text-muted-foreground">Upcoming in next 7 days</p>
                         </CardContent>
                     </Card>
                     <Card className="border-border/50 bg-gradient-to-br from-emerald-500/5 to-emerald-600/5">
@@ -387,37 +386,37 @@ export default function OnboardingPage() {
                                                         {candidate.candidate_name[0]}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <div>
+                                                <div className="flex flex-col">
                                                     <Link href={`/dashboard/hr/applications/${candidate.id}`} className="font-bold text-sm text-foreground hover:text-primary hover:underline transition-colors block">
                                                         {candidate.candidate_name}
                                                     </Link>
-                                                    <Badge variant="outline" className="text-[10px] h-4 font-normal mt-1 opacity-70">
-                                                        {candidate.job?.title || 'Unknown Role'}
-                                                    </Badge>
+                                                    <span className="text-xs text-muted-foreground block mt-0.5">
+                                                        {candidate.candidate_email}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div>
                                                 <div className="text-sm font-medium">{candidate.job?.title || 'Unknown Role'}</div>
-                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1">
+                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1 font-semibold">
                                                     <Calendar className="h-3 w-3 opacity-60" />
-                                                    {candidate.joining_date ? new Date(candidate.joining_date).toLocaleDateString() : 'Date TBD'}
+                                                    Joining: {candidate.joining_date ? new Date(candidate.joining_date).toLocaleDateString() : 'TBD'}
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <div className="flex flex-col items-center gap-1.5">
                                                  {(() => {
-                                                    if (candidate.status === 'onboarded') return <Badge className="bg-emerald-500 hover:bg-emerald-600 text-[10px] uppercase">🏁 Onboarded</Badge>;
-                                                    if (candidate.status === 'accepted' || candidate.offer_response_status === 'accept' || candidate.offer_response_status === 'accepted') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">✅ Accepted</Badge>;
-                                                    if (candidate.status === 'rejected' || candidate.offer_response_status === 'reject' || candidate.offer_response_status === 'rejected') return <Badge variant="destructive" className="text-[10px] uppercase">❌ Rejected</Badge>;
+                                                    if (candidate.status === 'onboarded') return <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Onboarded</span>;
+                                                    if (candidate.status === 'accepted' || candidate.offer_response_status === 'accept' || candidate.offer_response_status === 'accepted') return <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Accepted</span>;
+                                                    if (candidate.status === 'rejected' || candidate.offer_response_status === 'reject' || candidate.offer_response_status === 'rejected') return <span className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Rejected</span>;
                                                     
-                                                    if (candidate.status === 'offer_sent') return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] uppercase">✉️ Sent - Awaiting</Badge>;
-                                                    if (candidate.status === 'pending_approval') return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] uppercase animate-pulse">⏳ Approval Pending</Badge>;
-                                                    if (candidate.status === 'hired') return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] uppercase">🎉 Hired</Badge>;
+                                                    if (candidate.status === 'offer_sent') return <span className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Sent - Awaiting</span>;
+                                                    if (candidate.status === 'pending_approval') return <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5 animate-pulse">Approval Pending</span>;
+                                                    if (candidate.status === 'hired') return <span className="bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Hired</span>;
                                                     
-                                                    return <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">📄 Staging</Badge>;
+                                                    return <span className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 text-[10px] uppercase tracking-wider font-semibold rounded-full px-2.5 py-0.5">Staging</span>;
                                                 })()}
                                                 
                                                 {(() => {
@@ -427,7 +426,7 @@ export default function OnboardingPage() {
                                                     return (
                                                         <>
                                                             {isExpired && (
-                                                                <span className="text-[9px] text-destructive font-bold uppercase tracking-tighter bg-destructive/5 px-2 py-0.5 rounded-full mt-1 border border-destructive/20">Link Expired</span>
+                                                                <span className="text-[9px] text-rose-500 font-bold uppercase tracking-tighter bg-rose-500/5 px-2 py-0.5 rounded-full mt-1 border border-rose-500/20">Link Expired</span>
                                                             )}
                                                         </>
                                                     )
@@ -448,7 +447,7 @@ export default function OnboardingPage() {
                                                     <SendOfferDialog 
                                                         applicationId={candidate.id}
                                                         candidateName={candidate.candidate_name}
-                                                        onSuccess={() => mutate()}
+                                                        onSuccess={() => mutate(undefined, { revalidate: true })}
                                                         trigger={
                                                             <Button size="sm" className="h-8 gap-1.5 text-xs font-black shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
                                                                 <Send className="h-3.5 w-3.5" />
@@ -460,12 +459,12 @@ export default function OnboardingPage() {
                                                 {candidate.status === 'offer_sent' &&
                                                     candidate.offer_token_expiry &&
                                                     new Date(candidate.offer_token_expiry) < new Date() &&
-                                                    candidate.offer_response_status === 'pending' && (
+                                                    (candidate.offer_response_status === 'pending' || !candidate.offer_response_status) && (
                                                     <SendOfferDialog 
                                                          applicationId={candidate.id}
                                                          candidateName={candidate.candidate_name}
                                                          initialDate={candidate.joining_date}
-                                                         onSuccess={() => mutate()}
+                                                         onSuccess={() => mutate(undefined, { revalidate: true })}
                                                          trigger={
                                                              <Button
                                                                  size="sm"
@@ -618,7 +617,7 @@ export default function OnboardingPage() {
                     isOpen={isCaptureOpen}
                     onOpenChange={setIsCaptureOpen}
                     applicationId={activeCaptureId}
-                    onSuccess={() => mutate()}
+                    onSuccess={() => mutate(undefined, { revalidate: true })}
                 />
             )}
 

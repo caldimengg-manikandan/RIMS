@@ -86,6 +86,8 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
         raise HTTPException(status_code=400, detail="Please provide a short description (minimum 10 characters).")
     if len(description) > 5000:
         raise HTTPException(status_code=400, detail="Description is too long.")
+    if "[system context]" in description.lower():
+        raise HTTPException(status_code=400, detail="Invalid characters or system tags in description.")
 
     request_id_header = request.headers.get("X-Request-ID")
     if settings.enable_request_id_idempotency and is_duplicate_request(
@@ -132,17 +134,6 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
     application = None
     
     # Try finding an interview first (standard flow)
-    interviews = (
-        db.query(Interview)
-        .join(Application)
-        .filter(Application.candidate_email == email)
-        .options(
-            joinedload(Interview.application).joinedload(Application.job),
-            joinedload(Interview.report),
-        )
-        .order_by(Interview.created_at.desc())
-        .all()
-    )
     
     for inv in interviews:
         try:
@@ -175,45 +166,37 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
             detail="Invalid credentials. Use the access key from your email.",
         )
 
-    # Ensure support applies only to valid states (if interview exists)
+    # Prevent duplicate active tickets.
     if interview:
-        report = getattr(interview, "report", None)
-        termination_reason = getattr(report, "termination_reason", None) if report else None
-        valid_states = {"completed", "cancelled"}
-        if interview.status not in valid_states and not termination_reason:
-            log_json(
-                logger,
-                "support_ticket_rejected",
-                request_id=get_request_id(request),
-                endpoint="/api/support/ticket",
-                status=400,
-                level="warning",
-                extra={
-                    "reason": "invalid_interview_state",
-                    "email_hash": safe_hash(email),
-                    "interview_id": interview.id,
-                },
+        existing_pending = (
+            db.query(InterviewIssue)
+            .filter(
+                InterviewIssue.interview_id == interview.id,
+                InterviewIssue.status == "pending",
             )
+            .order_by(InterviewIssue.created_at.desc())
+            .first()
+        )
+        if existing_pending:
             raise HTTPException(
-                status_code=400,
-                detail="Support requests can only be created after an interview is completed or terminated.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An active support request for this interview is already under review.",
             )
-
-    # Prevent duplicate active tickets for same interview.
-    existing_pending = (
-        db.query(InterviewIssue)
-        .filter(
-            InterviewIssue.interview_id == interview.id,
-            InterviewIssue.status == "pending",
+    else:
+        existing_pending = (
+            db.query(InterviewIssue)
+            .filter(
+                InterviewIssue.application_id == application.id,
+                InterviewIssue.status == "pending",
+            )
+            .order_by(InterviewIssue.created_at.desc())
+            .first()
         )
-        .order_by(InterviewIssue.created_at.desc())
-        .first()
-    )
-    if existing_pending:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An active support request for this interview is already under review.",
-        )
+        if existing_pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An active support request for this application is already under review.",
+            )
 
     # Attach metadata (clean, structured, separable from candidate message)
     application = getattr(interview, "application", None)
@@ -235,11 +218,13 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
     }
     issue_type = issue_type_map.get(grievance_type, grievance_type.lower() or "other")
 
+    termination_reason = getattr(getattr(interview, "report", None), "termination_reason", None) if interview else None
+
     # Keep candidate input separate from system context.
     # Avoid dumping all internals while preserving consistent metadata.
     structured_context = [
         "[System Context]",
-        f"interview_id={interview.id}",
+        f"interview_id={interview.id if interview else 'N/A'}",
         f"candidate_name={candidate_name or ''}",
         f"job_role={job_role or ''}",
         f"interview_status={interview.status if interview else 'N/A'}",
@@ -272,7 +257,7 @@ def create_support_ticket(payload: dict, request: Request, db: Session = Depends
         level="info",
         extra={
             "ticket_id": ticket.id,
-            "interview_id": interview.id,
+            "interview_id": interview.id if interview else None,
             "issue_type": issue_type,
             "email_hash": safe_hash(email),
         },

@@ -14,6 +14,22 @@ class UserRegister(BaseModel):
     password: str
     full_name: str
 
+    @field_validator('password')
+    @classmethod
+    def validate_password_robust(cls, v):
+        password = v
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if not any(c.isupper() for c in password):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.islower() for c in password):
+            raise ValueError("Password must contain at least one lowercase letter.")
+        if not any(c.isdigit() for c in password):
+            raise ValueError("Password must contain at least one digit.")
+        if not any(c in "!@#$%^&*()_+-=[]{}|;':\",./<>?`~" for c in password):
+            raise ValueError("Password must contain at least one special character.")
+        return password
+
     @field_validator('email')
     def validate_email_robust(cls, v):
         from app.core.config import get_settings
@@ -98,6 +114,11 @@ class ResetPasswordRequest(BaseModel):
     email: str
     otp: str
     new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_robust(cls, v):
+        return UserRegister.validate_password_robust(v)
     
     @field_validator('email')
     @classmethod
@@ -801,6 +822,13 @@ class InterviewFeedbackCreate(BaseModel):
     interview_id: int
     ui_ux_rating: int
     feedback_text: Optional[str] = None
+
+    @field_validator('ui_ux_rating')
+    @classmethod
+    def validate_rating(cls, v):
+        if v < 1 or v > 5:
+            raise ValueError("Rating must be between 1 and 5")
+        return v
 
 class InterviewFeedbackResponse(BaseModel):
     id: int

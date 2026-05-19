@@ -22,6 +22,7 @@ export default function SupportPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isSubmitted, setIsSubmitted] = useState(false)
     const [formError, setFormError] = useState('')
+    const [submittedTicketId, setSubmittedTicketId] = useState<number | null>(null)
 
     const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
     const descriptionTrimmed = description.trim()
@@ -61,12 +62,15 @@ export default function SupportPage() {
 
         try {
             setIsSubmitting(true)
-            await APIClient.post('/api/support/ticket', {
+            const response = await APIClient.post<any>('/api/support/ticket', {
                 email,
                 access_key: accessKey,
                 grievance_type: issueType,
                 description: descriptionTrimmed,
             })
+            if (response && response.id) {
+                setSubmittedTicketId(response.id)
+            }
             setIsSubmitted(true)
             toast.success("Your support request has been recorded and sent to HR.")
         } catch (err: any) {
@@ -108,7 +112,7 @@ export default function SupportPage() {
                             RETURN TO PORTAL
                         </Button>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">
-                            ID: {Math.random().toString(36).substring(7).toUpperCase()}
+                            ID: {submittedTicketId ? `#${submittedTicketId}` : 'PROCESSING'}
                         </p>
                     </CardFooter>
                 </Card>
@@ -195,7 +199,7 @@ export default function SupportPage() {
                                     {[
                                         { id: 'technical', label: 'Technical Glitch', desc: 'Audio, Video, or UI issues' },
                                         { id: 'interruption', label: 'Session Interrupted', desc: 'Browser crash or exit' },
-                                        { id: 'misconduct', label: 'Misconduct Appeal', desc: 'Appeal a proctoring warning' },
+                                        { id: 'misconduct_appeal', label: 'Misconduct Appeal', desc: 'Appeal a proctoring warning' },
                                         { id: 'other', label: 'Other Issue', desc: 'Process or scheduling' }
                                     ].map((opt) => (
                                         <label key={opt.id} htmlFor={opt.id} className={`relative flex flex-col p-5 rounded-2xl border-2 transition-all cursor-pointer group ${issueType === opt.id

@@ -156,7 +156,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cors_aware_rate_limit_handler)
 
 
-from app.core.middleware import PerformanceLoggingMiddleware
+from app.core.middleware import PerformanceLoggingMiddleware, SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(PerformanceLoggingMiddleware)
 
 allowed_origins = list(set(settings.get_allowed_origins()))
@@ -336,3 +337,35 @@ async def general_exception_handler(request: FastAPIRequest, exc: Exception):
 # Note:
 # This module must NOT start a server itself.
 # Entrypoint is enforced via `start.ps1` and `BACKEND_START_MODE=script`.
+
+
+import asyncio
+from app.services.email_ingestion_service import fetch_resume_attachments
+from app.infrastructure.database import SessionLocal
+import os
+
+async def imap_polling_loop():
+    while True:
+        try:
+            db = SessionLocal()
+            # Fetch automatically using settings
+            imap_email = settings.imap_email or 'caldiminternship@gmail.com'
+            imap_password = settings.imap_password or 'jaesbucnsfnlediv'
+
+            if settings.env == "production" and imap_email == 'caldiminternship@gmail.com':
+                logger.warning("SECURITY WARNING: Using default hardcoded IMAP credentials in production. Configure IMAP_EMAIL and IMAP_PASSWORD.")
+
+            fetch_resume_attachments(db, imap_email, imap_password)
+            from app.services.email_ingestion_service import run_batch_resume_processing
+            await run_batch_resume_processing(db)
+            db.close()
+        except Exception as e:
+            logger.error(f"IMAP Polling Error: {e}")
+        
+        # Sleep for 60 seconds (1 minute) to avoid getting blocked by Google IMAP limits.
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup_event():
+    # Start the continuous email ingestion loop
+    asyncio.create_task(imap_polling_loop())

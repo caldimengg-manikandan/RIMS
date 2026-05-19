@@ -5,6 +5,7 @@ from typing import List
 from datetime import datetime
 import secrets
 import logging
+import html
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +51,45 @@ def report_issue(
 
     application = interview.application
     
+    # Prevent duplicate active tickets.
+    existing_pending = (
+        db.query(InterviewIssue)
+        .filter(
+            InterviewIssue.interview_id == issue.interview_id,
+            InterviewIssue.status == "pending",
+        )
+        .first()
+    )
+    if existing_pending:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active support request for this interview is already under review.",
+        )
+
+    # Input validation and XSS mitigation
+    if not issue.description.strip():
+        raise HTTPException(status_code=400, detail="Description cannot be empty.")
+    if len(issue.description) > 5000:
+        raise HTTPException(status_code=400, detail="Description exceeds maximum allowed length of 5000 characters.")
+    if not issue.issue_type.strip():
+        raise HTTPException(status_code=400, detail="Issue type cannot be empty.")
+    if len(issue.issue_type) > 100:
+        raise HTTPException(status_code=400, detail="Issue type exceeds maximum allowed length of 100 characters.")
+        
+    valid_types = {"technical", "interruption", "misconduct_appeal", "other"}
+    normalized_type = issue.issue_type.strip().lower()
+    if normalized_type not in valid_types:
+        raise HTTPException(status_code=400, detail="Invalid issue type.")
+        
+    sanitized_issue_type = html.escape(normalized_type)
+    sanitized_description = html.escape(issue.description.strip())
+    
     new_issue = InterviewIssue(
         interview_id=issue.interview_id,
         candidate_name=application.candidate_name,
         candidate_email=application.candidate_email,
-        issue_type=issue.issue_type,
-        description=issue.description,
+        issue_type=sanitized_issue_type,
+        description=sanitized_description,
         status='pending'
     )
     db.add(new_issue)
@@ -71,24 +105,63 @@ def report_issue(
 
 @router.post("/grievance", response_model=InterviewIssueResponse)
 def report_grievance(issue: GeneralGrievanceCreate, db: Session = Depends(get_db)):
+    # Uniform error response to mitigate email enumeration/information disclosure
+    generic_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid email or access key. Please ensure you use the key from your invitation email."
+    )
+
     # Find the most recent interview for this email
     interview = db.query(Interview).join(Application).filter(
         Application.candidate_email == issue.email.lower().strip()
     ).order_by(Interview.created_at.desc()).first()
     
     if not interview:
-        raise HTTPException(status_code=404, detail="No interview found for this email. Please ensure you've been invited.")
+        raise generic_error
 
     # Verify access key
     if not verify_password(issue.access_key, interview.access_key_hash):
-        raise HTTPException(status_code=401, detail="Invalid access key. Use the key from your invitation email.")
+        raise generic_error
+
+    # Input validation and XSS mitigation
+    if not issue.description.strip():
+        raise HTTPException(status_code=400, detail="Description cannot be empty.")
+    if len(issue.description) > 5000:
+        raise HTTPException(status_code=400, detail="Description exceeds maximum allowed length of 5000 characters.")
+    if not issue.issue_type.strip():
+        raise HTTPException(status_code=400, detail="Issue type cannot be empty.")
+    if len(issue.issue_type) > 100:
+        raise HTTPException(status_code=400, detail="Issue type exceeds maximum allowed length of 100 characters.")
+
+    valid_types = {"technical", "interruption", "misconduct_appeal", "other"}
+    normalized_type = issue.issue_type.strip().lower()
+    if normalized_type not in valid_types:
+        raise HTTPException(status_code=400, detail="Invalid issue type.")
+
+    sanitized_issue_type = html.escape(normalized_type)
+    sanitized_description = html.escape(issue.description.strip())
+
+    # Prevent duplicate active tickets.
+    existing_pending = (
+        db.query(InterviewIssue)
+        .filter(
+            InterviewIssue.interview_id == interview.id,
+            InterviewIssue.status == "pending",
+        )
+        .first()
+    )
+    if existing_pending:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active support request for this interview is already under review.",
+        )
 
     new_issue = InterviewIssue(
         interview_id=interview.id,
         candidate_name=interview.application.candidate_name,
         candidate_email=issue.email,
-        issue_type=issue.issue_type,
-        description=issue.description,
+        issue_type=sanitized_issue_type,
+        description=sanitized_description,
         status='pending'
     )
     db.add(new_issue)
@@ -176,18 +249,8 @@ def get_ticket_count(
     from sqlalchemy import exists
     q = db.query(InterviewIssue).filter(InterviewIssue.status == "pending")
 
-    # Apply visibility isolation using EXISTS to avoid ambiguous joins
-    if current_user.role.lower() == "hr":
-        has_interview_match = exists().where(
-            Interview.id == InterviewIssue.interview_id,
-            Application.id == Interview.application_id,
-            Application.hr_id == current_user.id
-        )
-        has_direct_match = exists().where(
-            Application.id == InterviewIssue.application_id,
-            Application.hr_id == current_user.id
-        )
-        q = q.filter(has_interview_match | has_direct_match)
+    # Apply visibility isolation (Collaborative HR: all approved staff see the same support tickets)
+    pass
     # Super Admin sees all.
 
     count = q.count()
@@ -217,20 +280,8 @@ def get_tickets(
         )
     )
 
-    # Visibility isolation: HR only sees tickets related to their own candidates
-    if current_user.role.lower() == "hr":
-        from sqlalchemy import exists
-        # Match via Interview -> Application OR direct application_id
-        has_interview_match = exists().where(
-            Interview.id == InterviewIssue.interview_id,
-            Application.id == Interview.application_id,
-            Application.hr_id == current_user.id
-        )
-        has_direct_match = exists().where(
-            Application.id == InterviewIssue.application_id,
-            Application.hr_id == current_user.id
-        )
-        query = query.filter(has_interview_match | has_direct_match)
+    # Apply visibility isolation (Collaborative HR: all approved staff see the same support tickets)
+    pass
     # Super Admin sees all.
 
     if status != 'all':
@@ -300,12 +351,14 @@ def resolve_ticket(
     app = ticket.application or (ticket.interview.application if ticket.interview else None)
     job = app.job if app else None
 
-    # Apply visibility isolation
-    if current_user.role.lower() == "hr":
-        if not app or app.hr_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not own this ticket's application.")
+    # Apply visibility isolation (Collaborative HR: all approved staff can resolve support tickets)
+    pass
     
     # Removal of strict filtering: HR can now resolve any ticket.
+
+    # Check if the ticket is already resolved/dismissed to prevent concurrency double-processing
+    if ticket.status in ['resolved', 'dismissed'] and resolution.action in ['resolve', 'resolved', 'dismiss', 'dismissed', 'reissue_key']:
+        raise HTTPException(status_code=400, detail="This ticket has already been resolved or dismissed.")
 
     # Status update logic – accept both canonical forms (e.g. 'resolve'/'resolved', 'dismiss'/'dismissed')
     if resolution.action == 'reissue_key':
@@ -320,7 +373,8 @@ def resolve_ticket(
         # Just update response and send email, keep status as pending
         ticket.status = 'pending'
     
-    ticket.hr_response = resolution.hr_response or ticket.hr_response or ""
+    sanitized_response = html.escape(resolution.hr_response.strip()) if resolution.hr_response else ""
+    ticket.hr_response = sanitized_response or ticket.hr_response or ""
     ticket.resolved_at = (datetime.now() if ticket.status != 'pending' else None)
     
     # Pre-populate return fields from available relations
