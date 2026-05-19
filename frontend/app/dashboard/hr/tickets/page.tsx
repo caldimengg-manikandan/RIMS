@@ -87,7 +87,6 @@ export default function HRTicketsPage() {
     const [hrResponse, setHrResponse] = useState('')
     const [isResolving, setIsResolving] = useState(false)
     const [filter, setFilter] = useState<'pending' | 'all' | 'feedback'>('pending')
-    const [sendEmail, setSendEmail] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const [pageSize, setPageSize] = useState(10)
 
@@ -127,8 +126,7 @@ export default function HRTicketsPage() {
 
         const actionFn = () => APIClient.put(`/api/tickets/${ticketId}/resolve`, {
             hr_response: hrResponse || (action === 'dismissed' ? "Issue dismissed by HR." : "Issue resolved by HR."),
-            action: canonicalAction,
-            send_email: sendEmail
+            action: canonicalAction
         })
 
         const successMsgs: Record<string, string> = {
@@ -501,19 +499,6 @@ export default function HRTicketsPage() {
                                                 className="min-h-[140px] rounded-xl border-2 focus:ring-primary/20 transition-all font-medium w-full text-base"
                                                 value={hrResponse}
                                                 onChange={(e) => setHrResponse(e.target.value)}
-                                            />
-                                            <p className="text-xs text-muted-foreground">This response will be sent to the candidate's email.</p>
-                                            
-                                            <div className="flex items-center space-x-2 mt-4 bg-muted/40 p-3 rounded-xl border border-border/40 w-fit">
-                                                <Switch
-                                                    id="send-email-toggle"
-                                                    checked={sendEmail}
-                                                    onCheckedChange={setSendEmail}
-                                                />
-                                                <Label htmlFor="send-email-toggle" className="text-sm font-bold text-foreground/80 cursor-pointer">
-                                                    Send email notification to candidate
-                                                </Label>
-                                            </div>
                                         </div>
 
 
