@@ -1521,6 +1521,31 @@ def get_application(
         )
     validate_hr_ownership(application, current_user, resource_name="application")
     
+    # Automatic Self-Healing for Incompatible/Mismatched Encryption Keys
+    if application.resume_extraction and application.resume_file_path:
+        ext_text = application.resume_extraction.extracted_text
+        if ext_text in ("[UNREADABLE]", "[DECRYPTION_ERROR]") or not ext_text or ext_text.strip() == "":
+            logger.warning(f"Decryption mismatch or missing text detected for Application ID {application_id}. Triggering automatic self-healing re-parse.")
+            
+            application.resume_status = "parsing"
+            db.commit()
+            db.refresh(application)
+            
+            import threading
+            import asyncio
+            def run_healing():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(retry_application_background(application_id, application.job_id, application.resume_file_path))
+                except Exception as ex:
+                    logger.error(f"Error in self-healing thread: {ex}")
+                finally:
+                    loop.close()
+                    
+            t = threading.Thread(target=run_healing)
+            t.start()
+    
     # Sanitize paths
     if application.candidate_photo_path and ":" in application.candidate_photo_path:
         idx = application.candidate_photo_path.find("uploads")
