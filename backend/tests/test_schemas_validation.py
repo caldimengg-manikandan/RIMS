@@ -380,13 +380,18 @@ class TestTicketSchemas:
 
     def test_valid_issue_resolve(self):
         from app.domain.schemas import InterviewIssueResolve
-        obj = InterviewIssueResolve(hr_response="We will reschedule.", action="resolve")
+        obj = InterviewIssueResolve(hr_response="We will reschedule.", action="resolve", send_email=True)
         assert obj.action == "resolve"
 
     def test_resolve_without_hr_response_defaults_empty(self):
         from app.domain.schemas import InterviewIssueResolve
         obj = InterviewIssueResolve(action="dismiss")
         assert obj.hr_response == ""
+
+    def test_send_email_defaults_true(self):
+        from app.domain.schemas import InterviewIssueResolve
+        obj = InterviewIssueResolve(action="resolve")
+        assert obj.send_email is True
 
 
 # ══════════════════════════════════════════════════════════════════════════════

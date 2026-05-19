@@ -112,17 +112,21 @@ def test_collaborative_hr_ticket_resolution_flow(
     assert list_resp.status_code == 200
     assert len(list_resp.json()["items"]) > 0
 
+    # 2. Test action: reply (status remains pending)
     reply_resp = client.put(f"/api/tickets/{ticket.id}/resolve", json={
         "action": "reply",
-        "hr_response": "We are investigating."
+        "hr_response": "We are investigating.",
+        "send_email": False
     }, headers=hr_auth_headers)
     assert reply_resp.status_code == 200
     assert reply_resp.json()["status"] == "pending"
     assert "We are investigating" in reply_resp.json()["hr_response"]
 
+    # 3. Test action: dismiss (status becomes dismissed)
     dismiss_resp = client.put(f"/api/tickets/{ticket.id}/resolve", json={
         "action": "dismiss",
-        "hr_response": "Dismissed interruption."
+        "hr_response": "Dismissed interruption.",
+        "send_email": False
     }, headers=hr_auth_headers)
     assert dismiss_resp.status_code == 200
     assert dismiss_resp.json()["status"] == "dismissed"
@@ -131,9 +135,11 @@ def test_collaborative_hr_ticket_resolution_flow(
     ticket.status = "pending"
     db_session.commit()
 
+    # 4. Test action: resolve (status becomes resolved)
     resolve_resp = client.put(f"/api/tickets/{ticket.id}/resolve", json={
         "action": "resolve",
-        "hr_response": "Resolved issue."
+        "hr_response": "Resolved issue.",
+        "send_email": False
     }, headers=hr_auth_headers)
     assert resolve_resp.status_code == 200
     assert resolve_resp.json()["status"] == "resolved"
@@ -142,9 +148,11 @@ def test_collaborative_hr_ticket_resolution_flow(
     ticket.status = "pending"
     db_session.commit()
 
+    # 5. Test action: reissue_key (resets interview session & generates new key)
     reissue_resp = client.put(f"/api/tickets/{ticket.id}/resolve", json={
         "action": "reissue_key",
-        "hr_response": "Access key regenerated."
+        "hr_response": "Access key regenerated.",
+        "send_email": False
     }, headers=hr_auth_headers)
     assert reissue_resp.status_code == 200
     assert reissue_resp.json()["status"] == "resolved"

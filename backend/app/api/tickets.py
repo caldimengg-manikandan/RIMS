@@ -399,6 +399,28 @@ def resolve_ticket(
         ticket.interview.status = 'not_started'
         ticket.interview.expires_at = get_ist_now() + timedelta(days=10)
         ticket.is_reissue_granted = True
+        
+        # Send reissue email if requested
+        if resolution.send_email:
+            final_response = resolution.hr_response or "Your interview access key has been reissued due to the reported technical issue. You can now resume your assessment."
+            background_tasks.add_task(
+                send_key_reissued_email,
+                to_email=ticket.candidate_email,
+                job_title=job_title,
+                new_key=new_key,
+                hr_response=final_response
+            )
+            logger.info(f"RE-ISSUED KEY queued for {ticket.candidate_email}")
+    else:
+        # Send resolution/dismissal email if requested
+        if resolution.send_email and resolution.hr_response:
+            background_tasks.add_task(
+                send_ticket_resolved_email,
+                to_email=ticket.candidate_email,
+                issue_type=ticket.issue_type,
+                hr_response=resolution.hr_response,
+                job_title=job_title
+            )
 
     db.commit()
     db.refresh(ticket)

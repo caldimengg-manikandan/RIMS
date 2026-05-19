@@ -773,6 +773,7 @@ class GeneralGrievanceCreate(BaseModel):
 class InterviewIssueResolve(BaseModel):
     hr_response: Optional[str] = ""  # Optional for 'dismiss' action; required for reply/resolve
     action: str  # 'reissue_key', 'dismiss', 'dismissed', 'resolve', 'resolved', 'reply'
+    send_email: bool = True
 
 class InterviewIssueResponse(BaseModel):
     id: int
