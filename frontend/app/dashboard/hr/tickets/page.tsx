@@ -103,6 +103,14 @@ export default function HRTicketsPage() {
         dedupingInterval: 4000,
     })
     
+    const { data: pendingCountResp } = useSWR<any>('/api/tickets?status=pending&limit=1', { refreshInterval: 8000 })
+    const { data: allCountResp } = useSWR<any>('/api/tickets?status=all&limit=1', { refreshInterval: 8000 })
+    const { data: feedbackCountResp } = useSWR<any>('/api/tickets/feedback?limit=1', { refreshInterval: 8000 })
+
+    const pendingCount = pendingCountResp?.total ?? 0
+    const allCount = allCountResp?.total ?? 0
+    const feedbackCount = feedbackCountResp?.total ?? 0
+    
     const tickets = (filter === 'feedback' ? [] : (resp?.items || [])) as Ticket[]
     const feedbacks = (filter === 'feedback' ? (resp?.items || []) : []) as Feedback[]
 
@@ -170,8 +178,8 @@ export default function HRTicketsPage() {
                         }
                     },
                     successMessage: successMsgs[action] || 'Done.',
-                    // Invalidate sidebar badge + analytics
-                    invalidateKeys: ['/api/tickets/count', '/api/analytics/dashboard']
+                    // Invalidate sidebar badge + analytics + tab counts
+                    invalidateKeys: ['/api/tickets', '/api/tickets/feedback', '/api/tickets/count', '/api/analytics/dashboard']
                 }
             )
             setSelectedTicket(null)
@@ -197,30 +205,46 @@ export default function HRTicketsPage() {
                 description="Manage candidate issues and interruption reports."
                 icon={LifeBuoy}
             >
-                <div className="flex bg-muted p-1 rounded-xl border border-border/50">
+                <div className="flex bg-muted p-1 rounded-xl border border-border/50 gap-1">
                     <Button
                         variant={filter === 'pending' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setFilter('pending')}
-                        className="rounded-lg font-bold"
+                        className="rounded-lg font-bold flex items-center gap-2"
                     >
-                        Pending
+                        <span>Pending</span>
+                        <Badge 
+                            variant={filter === 'pending' ? 'secondary' : 'outline'} 
+                            className={`px-1.5 py-0 text-[10px] font-black tracking-normal transition-all rounded-md ${
+                                filter !== 'pending' && pendingCount > 0 
+                                    ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400' 
+                                    : ''
+                            }`}
+                        >
+                            {pendingCount}
+                        </Badge>
                     </Button>
                     <Button
                         variant={filter === 'all' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setFilter('all')}
-                        className="rounded-lg font-bold"
+                        className="rounded-lg font-bold flex items-center gap-2"
                     >
-                        All History
+                        <span>All History</span>
+                        <Badge variant={filter === 'all' ? 'secondary' : 'outline'} className="px-1.5 py-0 text-[10px] font-black tracking-normal transition-all rounded-md">
+                            {allCount}
+                        </Badge>
                     </Button>
                     <Button
                         variant={filter === 'feedback' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setFilter('feedback')}
-                        className="rounded-lg font-bold"
+                        className="rounded-lg font-bold flex items-center gap-2"
                     >
-                        Feedback
+                        <span>Feedback</span>
+                        <Badge variant={filter === 'feedback' ? 'secondary' : 'outline'} className="px-1.5 py-0 text-[10px] font-black tracking-normal transition-all rounded-md">
+                            {feedbackCount}
+                        </Badge>
                     </Button>
                 </div>
             </PageHeader>
