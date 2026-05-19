@@ -399,9 +399,9 @@ export default function OnboardingPage() {
                                         <TableCell>
                                             <div>
                                                 <div className="text-sm font-medium">{candidate.job?.title || 'Unknown Role'}</div>
-                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1">
+                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1 font-semibold">
                                                     <Calendar className="h-3 w-3 opacity-60" />
-                                                    {candidate.joining_date ? new Date(candidate.joining_date).toLocaleDateString() : 'Date TBD'}
+                                                    Joining: {candidate.joining_date ? new Date(candidate.joining_date).toLocaleDateString() : 'TBD'}
                                                 </div>
                                             </div>
                                         </TableCell>
