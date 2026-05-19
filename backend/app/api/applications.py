@@ -1318,6 +1318,10 @@ def get_ingested_emails(
     
     results = []
     for item in items:
+        # Extract candidate's raw email from sender email
+        match = re.search(r'<([^>]+)>', item.sender_email)
+        raw_email = match.group(1).lower().strip() if match else item.sender_email.lower().strip()
+
         # Match application strictly by unique Supabase storage path first to prevent generic filename collisions
         app = None
         if item.file_url:
@@ -1326,15 +1330,26 @@ def get_ingested_emails(
                 Application.resume_file_path.like(f"%{bucket_path}%")
             ).first()
             
-        # Fallback to filename matching only if storage path lookup finds nothing
-        if not app:
-            app = db.query(Application).filter(
-                Application.resume_file_name == item.file_name
-            ).first()
-        
-        # Check if candidate has already applied (Duplicate Profile Detection)
-        match = re.search(r'<([^>]+)>', item.sender_email)
-        raw_email = match.group(1).lower().strip() if match else item.sender_email.lower().strip()
+        # Fallback to matching strictly by candidate's email and job code/most recent application (prevents generic filename collisions)
+        if not app and raw_email:
+            # Check subject and email body for target Job Code (e.g. JOB-C1HWQZ)
+            combined_text = f"{item.subject or ''} {item.email_body or ''}"
+            job_code_match = re.search(r'JOB-[A-Z0-9]{6}', combined_text, re.IGNORECASE)
+            
+            if job_code_match:
+                extracted_code = job_code_match.group(0).upper().strip()
+                from app.domain.models import Job
+                app = db.query(Application).join(Job).filter(
+                    Application.candidate_email.ilike(raw_email),
+                    Job.job_id == extracted_code
+                ).order_by(Application.applied_at.desc()).first()
+                
+            if not app:
+                # Safe fallback: find candidate's most recent application across the platform
+                app = db.query(Application).filter(
+                    Application.candidate_email.ilike(raw_email)
+                ).order_by(Application.applied_at.desc()).first()
+
         candidate_email_to_check = app.candidate_email if app else raw_email
         
         is_duplicate = False
