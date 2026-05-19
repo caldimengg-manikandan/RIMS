@@ -400,6 +400,20 @@ def resolve_ticket(
         ticket.interview.expires_at = get_ist_now() + timedelta(days=10)
         ticket.is_reissue_granted = True
         
+        # Reset interview stage if it was completed/terminated early
+        if not ticket.interview.interview_stage or ticket.interview.interview_stage in ('completed', 'terminated'):
+            if getattr(ticket.interview, 'aptitude_completed', False) or not (job and job.aptitude_enabled):
+                ticket.interview.interview_stage = 'first_level'
+            else:
+                ticket.interview.interview_stage = 'aptitude'
+                
+        # Move application out of terminal 'rejected' state if it was rejected due to this session
+        if app and app.status == 'rejected':
+            if ticket.interview.interview_stage == 'first_level':
+                app.status = 'ai_interview'
+            else:
+                app.status = 'aptitude_round'
+        
         # Send reissue email if requested
         if resolution.send_email:
             final_response = resolution.hr_response or "Your interview access key has been reissued due to the reported technical issue. You can now resume your assessment."

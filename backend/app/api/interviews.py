@@ -1933,7 +1933,7 @@ async def report_security_violation(
     if not interview:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
 
-    if interview.status in ("terminated", "completed", "cancelled"):
+    if interview.status in ("terminated", "completed", "cancelled") or interview.interview_stage == STAGE_COMPLETED:
         return {"ok": True, "already_ended": True, "status": interview.status}
 
     _set_interview_status(interview, "terminated")
@@ -2004,6 +2004,21 @@ async def _finalize_interview_and_report_internal(db: Session, interview_id: int
         _set_interview_status(interview, "completed")
     if not interview.ended_at:
         interview.ended_at = get_ist_now()
+
+    # Auto-resolve any pending support tickets for this interview upon successful completion
+    if interview.status == "completed":
+        try:
+            from app.domain.models import InterviewIssue
+            pending_tickets = db.query(InterviewIssue).filter(
+                InterviewIssue.interview_id == interview_id,
+                InterviewIssue.status == "pending"
+            ).all()
+            for ticket in pending_tickets:
+                ticket.status = "resolved"
+                ticket.resolved_at = get_ist_now()
+                ticket.hr_response = "Resolved automatically upon successful interview completion."
+        except Exception as e:
+            logger.error(f"Failed to auto-resolve pending tickets for interview {interview_id}: {e}")
     
     # 2. Calculate scores
     questions = db.query(InterviewQuestion).filter(
@@ -2376,7 +2391,7 @@ async def abandon_interview(
 
     interview = db.query(Interview).filter(Interview.id == interview_id).first()
     
-    if interview.status != "in_progress":
+    if interview.status != "in_progress" or interview.interview_stage == STAGE_COMPLETED:
         return {"success": True, "message": f"Interview is already in {interview.status} state."}
 
     try:
