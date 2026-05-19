@@ -1319,8 +1319,9 @@ def get_ingested_emails(
     results = []
     for item in items:
         # Extract candidate's raw email from sender email
-        match = re.search(r'<([^>]+)>', item.sender_email)
-        raw_email = match.group(1).lower().strip() if match else item.sender_email.lower().strip()
+        sender_str = item.sender_email or ""
+        match = re.search(r'<([^>]+)>', sender_str)
+        raw_email = match.group(1).lower().strip() if match else sender_str.lower().strip()
 
         # Match application strictly by unique Supabase storage path first to prevent generic filename collisions
         app = None
@@ -1416,14 +1417,6 @@ async def assign_ingested_email(
         email_match = re.search(r'<([^>]+)>', sender_str)
         raw_email = email_match.group(1).lower().strip() if email_match else sender_str.lower().strip()
         
-    # Check duplicate application for this job
-    existing_app = db.query(Application).filter(
-        Application.job_id == job.id,
-        Application.candidate_email == raw_email
-    ).first()
-    if existing_app:
-        raise HTTPException(status_code=400, detail="Candidate already has an application for this job")
-        
     # Extract phone if present
     body_lower = (resume.email_body or "").lower()
     phone_matches = re.findall(r'[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]', body_lower)
@@ -1436,6 +1429,21 @@ async def assign_ingested_email(
         if norm_p and len(norm_p) >= 10:
             candidate_phone_normalized = norm_p
             candidate_phone_hash = compute_phone_hash(norm_p)
+
+    # Check duplicate application for this job
+    from sqlalchemy import or_
+    filters = [Application.candidate_email == raw_email]
+    if candidate_phone_hash:
+        filters.append(Application.candidate_phone_hash == candidate_phone_hash)
+        
+    existing_app = db.query(Application).filter(
+        Application.job_id == job.id,
+        or_(*filters)
+    ).first()
+    if existing_app:
+        raise HTTPException(status_code=400, detail="Candidate already has an application for this job")
+        
+
             
     # Storage path
     resume_file_path = None

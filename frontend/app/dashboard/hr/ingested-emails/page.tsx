@@ -114,7 +114,7 @@ export default function IngestedEmailsPage() {
         q.set('skip', String((page - 1) * pageSize))
         if (debouncedSearch) q.set('search', debouncedSearch)
         if (statusFilter === 'mapped') q.set('processed', 'true')
-        // note: since skipped/unmapped are also marked processed=true, we filter logic in memory or via processed
+        if (statusFilter === 'unmapped') q.set('processed', 'false')
         return `/api/applications/ingested-emails?${q.toString()}`
     }, [page, pageSize, debouncedSearch, statusFilter])
 
@@ -125,19 +125,10 @@ export default function IngestedEmailsPage() {
 
     const allItems = data?.items ?? []
     
-    // Filter items based on mapped vs unmapped logic (mapped has application_id != null)
-    const filteredItems = useMemo(() => {
-        if (statusFilter === 'mapped') {
-            return allItems.filter(item => item.application_id !== null)
-        }
-        if (statusFilter === 'unmapped') {
-            return allItems.filter(item => item.application_id === null)
-        }
-        return allItems
-    }, [allItems, statusFilter])
+    const filteredItems = allItems;
 
-    const totalCount = statusFilter === 'all' ? (data?.total ?? 0) : filteredItems.length
-    const totalPages = data?.pages ?? 0
+    const totalCount = data?.total ?? 0;
+    const totalPages = data?.pages ?? 0;
 
     // Trigger Manual Email Ingestion via API
     const handleSync = async () => {
@@ -296,7 +287,7 @@ export default function IngestedEmailsPage() {
                         <div>
                             <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Auto-Mapped</div>
                             <div className="text-2xl font-black text-foreground mt-0.5 tabular-nums">
-                                {isLoading ? '...' : allItems.filter(item => item.application_id !== null).length}
+                                {isLoading ? '...' : (statusFilter === 'mapped' ? totalCount : '—')}
                             </div>
                         </div>
                     </CardContent>
@@ -310,7 +301,7 @@ export default function IngestedEmailsPage() {
                         <div>
                             <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Pending Assignment</div>
                             <div className="text-2xl font-black text-foreground mt-0.5 tabular-nums">
-                                {isLoading ? '...' : allItems.filter(item => item.application_id === null).length}
+                                {isLoading ? '...' : (statusFilter === 'unmapped' ? totalCount : '—')}
                             </div>
                         </div>
                     </CardContent>
@@ -511,7 +502,12 @@ export default function IngestedEmailsPage() {
             )}
 
             {/* Manual Assignment Modal */}
-            <Dialog open={selectedResume !== null} onOpenChange={(open) => !open && setSelectedResume(null)}>
+            <Dialog open={selectedResume !== null} onOpenChange={(open) => {
+                if (!open) {
+                    setSelectedResume(null)
+                    setTargetJobId('')
+                }
+            }}>
                 <DialogContent className="max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-lg font-black text-foreground flex items-center gap-2">
