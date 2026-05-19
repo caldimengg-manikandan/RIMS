@@ -176,18 +176,8 @@ def get_ticket_count(
     from sqlalchemy import exists
     q = db.query(InterviewIssue).filter(InterviewIssue.status == "pending")
 
-    # Apply visibility isolation using EXISTS to avoid ambiguous joins
-    if current_user.role.lower() == "hr":
-        has_interview_match = exists().where(
-            Interview.id == InterviewIssue.interview_id,
-            Application.id == Interview.application_id,
-            Application.hr_id == current_user.id
-        )
-        has_direct_match = exists().where(
-            Application.id == InterviewIssue.application_id,
-            Application.hr_id == current_user.id
-        )
-        q = q.filter(has_interview_match | has_direct_match)
+    # Apply visibility isolation (Collaborative HR: all approved staff see the same support tickets)
+    pass
     # Super Admin sees all.
 
     count = q.count()
@@ -217,20 +207,8 @@ def get_tickets(
         )
     )
 
-    # Visibility isolation: HR only sees tickets related to their own candidates
-    if current_user.role.lower() == "hr":
-        from sqlalchemy import exists
-        # Match via Interview -> Application OR direct application_id
-        has_interview_match = exists().where(
-            Interview.id == InterviewIssue.interview_id,
-            Application.id == Interview.application_id,
-            Application.hr_id == current_user.id
-        )
-        has_direct_match = exists().where(
-            Application.id == InterviewIssue.application_id,
-            Application.hr_id == current_user.id
-        )
-        query = query.filter(has_interview_match | has_direct_match)
+    # Apply visibility isolation (Collaborative HR: all approved staff see the same support tickets)
+    pass
     # Super Admin sees all.
 
     if status != 'all':
@@ -300,10 +278,8 @@ def resolve_ticket(
     app = ticket.application or (ticket.interview.application if ticket.interview else None)
     job = app.job if app else None
 
-    # Apply visibility isolation
-    if current_user.role.lower() == "hr":
-        if not app or app.hr_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not own this ticket's application.")
+    # Apply visibility isolation (Collaborative HR: all approved staff can resolve support tickets)
+    pass
     
     # Removal of strict filtering: HR can now resolve any ticket.
 
