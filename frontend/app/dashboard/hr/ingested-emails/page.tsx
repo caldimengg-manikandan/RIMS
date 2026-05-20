@@ -141,10 +141,10 @@ export default function IngestedEmailsPage() {
         const toastId = toast.loading('Connecting to recruiter mailbox and fetching new job application emails...')
 
         try {
-            const res = await APIClient.post('/api/applications/ingest-emails', {
+            const res = (await APIClient.post('/api/applications/ingest-emails', {
                 imap_user: imapUser.trim(),
                 imap_pass: imapPass.trim()
-            })
+            })) as any
 
             toast.success(
                 `Sync Successful! Fetched ${res.saved_count} new resumes. Auto-mapped & analyzed ${res.mapped_count} applications.`,

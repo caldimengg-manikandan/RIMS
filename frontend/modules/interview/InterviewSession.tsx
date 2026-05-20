@@ -51,7 +51,13 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
   const [isLoading, setIsLoading] = useState(true);    // first load spinner
   const [isFinished, setIsFinished] = useState(false);
   const [isTerminated, setIsTerminated] = useState(false);
-  const [focusStrikes, setFocusStrikes] = useState(0);
+  const [focusStrikes, setFocusStrikes] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem(`strikes_${sessionId}`);
+      return saved ? parseInt(saved, 10) : 0;
+    }
+    return 0;
+  });
   const sessionStartRef = useRef(Date.now());
 
   // ── question state ──
@@ -89,6 +95,7 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
   // ── video recording ──
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
   const videoChunksRef = useRef<Blob[]>([]);
+  const activeStreamRef = useRef<MediaStream | null>(null);
 
   // ─── SECURITY VIOLATION ────────────────────────────────────────────────────
   const terminationSentRef = useRef(false);
@@ -98,6 +105,9 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
 
     setFocusStrikes(prev => {
       const next = prev + 1;
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(`strikes_${interviewId}`, next.toString());
+      }
       if (next < 4) {
         toast.error(`Warning ${next}/4: ${reason}`, {
           description: 'Multiple violations will result in immediate session termination.',
@@ -325,12 +335,30 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
 
     const setup = async () => {
       try {
+        if (activeStreamRef.current) {
+          activeStreamRef.current.getTracks().forEach(t => t.stop());
+        }
+
         await tf.ready();
-        detectorRef.current = await blazeface.load();
+        if (!detectorRef.current) {
+          detectorRef.current = await blazeface.load();
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        activeStreamRef.current = stream;
         if (sessionVideoRef.current) sessionVideoRef.current.srcObject = stream;
 
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.onmute = () => handleStrike('Camera feed disabled/muted');
+          videoTrack.onended = () => handleStrike('Camera hardware disconnected');
+        }
+
         // Initialize session video recorder
+        if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+          try { videoRecorderRef.current.stop(); } catch (e) { console.error(e); }
+        }
+
         const types = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
         let selectedType = '';
         for (const t of types) { if (MediaRecorder.isTypeSupported(t)) { selectedType = t; break; } }
@@ -344,16 +372,35 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
         };
         vRecorder.start(10000); // chunk every 10s just in case
 
+        if (faceCheckIntervalRef.current) clearInterval(faceCheckIntervalRef.current);
         faceCheckIntervalRef.current = setInterval(async () => {
           if (!sessionVideoRef.current || !detectorRef.current) return;
-          const predictions = await detectorRef.current.estimateFaces(sessionVideoRef.current, false);
-          setIsFaceDetected(predictions.length > 0);
-          if (predictions.length === 0) handleStrike('Candidate not in frame');
-          if (predictions.length > 1) handleStrike('Multiple people detected');
+          try {
+            const predictions = await detectorRef.current.estimateFaces(sessionVideoRef.current, false);
+            setIsFaceDetected(predictions.length > 0);
+            if (predictions.length === 0) handleStrike('Candidate not in frame');
+            if (predictions.length > 1) handleStrike('Multiple people detected');
+          } catch (err) {
+            console.error('Face check error:', err);
+          }
         }, 3000);
-      } catch (e) { console.error('Video setup failed', e); }
+      } catch (e) {
+        console.error('Video setup failed', e);
+      }
     };
     setup();
+
+    const handleDeviceChange = async () => {
+      console.log('Media devices configuration changed');
+      const hasActiveVideo = activeStreamRef.current && activeStreamRef.current.getVideoTracks().some(t => t.readyState === 'live');
+      const hasActiveAudio = activeStreamRef.current && activeStreamRef.current.getAudioTracks().some(t => t.readyState === 'live');
+      if (!hasActiveVideo || !hasActiveAudio) {
+        toast.info('Media device updated. Re-acquiring camera and mic...');
+        await setup();
+      }
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
 
     const handleVisibility = () => {
       if (document.hidden) handleStrike('Tab switched');
@@ -366,9 +413,13 @@ export default function InterviewSession({ sessionId, token }: InterviewSessionP
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('blur', handleBlur);
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
       if (faceCheckIntervalRef.current) clearInterval(faceCheckIntervalRef.current);
       if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
-        videoRecorderRef.current.stop();
+        try { videoRecorderRef.current.stop(); } catch (e) {}
+      }
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach(t => t.stop());
       }
     };
   }, [isStarted, handleStrike, uploadVideo]);
