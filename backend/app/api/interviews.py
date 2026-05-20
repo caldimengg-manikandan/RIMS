@@ -2841,6 +2841,7 @@ async def upload_interview_video(
 @router.post("/{interview_id}/monitoring-events", response_model=MonitoringEventResponse)
 @limiter.limit("40/minute")
 async def create_monitoring_event(
+    request: Request,
     interview_id: int,
     event_data: MonitoringEventCreate,
     interview_session: Interview = Depends(get_current_interview_any_status),
