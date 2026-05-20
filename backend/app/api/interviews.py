@@ -1246,9 +1246,17 @@ async def get_all_questions(
                 }
             )
 
-    questions = db.query(InterviewQuestion).filter(
+    # Filter by stage to prevent leaking future questions to candidates
+    query = db.query(InterviewQuestion).filter(
         InterviewQuestion.interview_id == interview_id
-    ).order_by(InterviewQuestion.question_number).all()
+    )
+    if interview_session.status == "in_progress":
+        if interview_session.interview_stage == STAGE_APTITUDE:
+            query = query.filter(InterviewQuestion.question_type == "aptitude")
+        elif interview_session.interview_stage == STAGE_FIRST_LEVEL:
+            query = query.filter(InterviewQuestion.question_type != "aptitude")
+    
+    questions = query.order_by(InterviewQuestion.question_number).all()
 
     # Batch-load answered status
     question_ids = [q.id for q in questions]
@@ -1492,7 +1500,7 @@ async def evaluate_answer_task(
     else:
         try:
             numeric_answer_score = float(answer_score)
-            answer_score = max(0.0, min(100.0, numeric_answer_score))
+            answer_score = max(0.0, min(10.0, numeric_answer_score))
         except Exception:
             answer_score = 0.0
 
@@ -1600,22 +1608,22 @@ async def submit_answer(
             )
             
         # 3.5. Granular Validation of Answer Text
-         answer_len = len(data.answer_text or "")
-         if answer_len > 10000:
-             logger.warning(f"Extremely long answer detected for interview {interview_id}: {answer_len} chars")
-         
-         # Reject empty or purely whitespace answers for non-aptitude questions
-         if (current_question.question_type or "").lower() != "aptitude":
-             if not data.answer_text or not data.answer_text.strip():
-                 raise HTTPException(
-                     status_code=status.HTTP_400_BAD_REQUEST,
-                     detail="Answer cannot be empty. Please provide a response."
-                 )
-             if len(data.answer_text.strip()) < 3:
-                 raise HTTPException(
-                     status_code=status.HTTP_400_BAD_REQUEST,
-                     detail="Your answer is too short. Please provide a more detailed response."
-                 )
+        answer_len = len(data.answer_text or "")
+        if answer_len > 10000:
+            logger.warning(f"Extremely long answer detected for interview {interview_id}: {answer_len} chars")
+        
+        # Reject empty or purely whitespace answers for non-aptitude questions
+        if (current_question.question_type or "").lower() != "aptitude":
+            if not data.answer_text or not data.answer_text.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Answer cannot be empty. Please provide a response."
+                )
+            if len(data.answer_text.strip()) < 3:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Your answer is too short. Please provide a more detailed response."
+                )
         
         # Record monitoring event for answer submission
         try:
@@ -1768,9 +1776,17 @@ async def submit_answer(
             if current_question.question_type == "aptitude" and current_question.correct_answer is not None:
                 submitted_val = data.answer_text.strip()
                 is_correct = False
+                
+                # Resolve letter to index (A=0, B=1, ...) or direct digit
+                submitted_as_int = None
+                if submitted_val.isdigit():
+                    submitted_as_int = int(submitted_val)
+                elif len(submitted_val) == 1 and submitted_val.upper() in "ABCDEFGHIJ":
+                    submitted_as_int = ord(submitted_val.upper()) - ord("A")
+                
                 try:
                     # Check both index match and direct text match for maximum resilience
-                    if int(submitted_val) == int(current_question.correct_answer):
+                    if submitted_as_int is not None and submitted_as_int == int(current_question.correct_answer):
                         is_correct = True
                 except (ValueError, TypeError):
                     if current_question.options:
@@ -2456,6 +2472,8 @@ async def end_interview(
         db.commit()
 
     # 2. Mark state immediately so the frontend sees a finished interview right away.
+    if interview.status == "in_progress":
+        _set_interview_status(interview, "completed")
     interview.interview_stage = STAGE_COMPLETED
     if not interview.ended_at:
         interview.ended_at = get_ist_now()
