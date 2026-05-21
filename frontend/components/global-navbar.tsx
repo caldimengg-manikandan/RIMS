@@ -62,11 +62,11 @@ export const GlobalNavbar = React.memo(function GlobalNavbar() {
 
   return (
     <nav className="sticky top-0 w-full z-50 bg-sidebar/95 backdrop-blur-xl border-b border-border shadow-sm h-16 flex items-center shrink-0">
-      <div className="w-full px-4 md:px-8 flex items-center justify-between">
+      <div className="w-full px-4 flex items-center justify-between">
 
         {/* Left: Logo and Title */}
-        <Link href={logoLink} className="flex items-center gap-2 group">
-          <div className="bg-primary/10 p-1.5 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
+        <Link href={logoLink} className="flex items-center gap-3 group">
+          <div className="bg-primary/10 p-1 rounded-lg group-hover:scale-110 transition-transform border border-primary/20">
             <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain max-w-[150px] group-hover:scale-105 transition-transform" />
           </div>
           <span className="text-xl font-bold tracking-tight text-foreground hidden lg:block uppercase">
